@@ -18,6 +18,30 @@ const billingRoutes = require("./routes/billingRoutes");
 app.use(bodyParser.json());
 app.use(cors());
 
+// JWT authentication middleware
+function authenticateJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = payload;
+      return next();
+    } catch (err) {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+  }
+  return res.status(401).json({ message: 'Authorization token required' });
+}
+
+function authorizeRole(role) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+    if (req.user.role !== role) return res.status(403).json({ message: 'Forbidden' });
+    next();
+  };
+}
+
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)
@@ -156,7 +180,12 @@ app.get("/api/godowns", async (req, res) => {
 app.post("/api/godowns", async (req, res) => {
   try {
     const { name, address, email, password, city, state } = req.body;
-    const godown = new Godown({ name, address, email, password, city, state });
+    // Hash password before saving
+    let hashedPassword = undefined;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    const godown = new Godown({ name, address, email, password: hashedPassword, city, state });
     const savedGodown = await godown.save();
     res.status(201).json(savedGodown);
   } catch (error) {
@@ -173,9 +202,14 @@ app.post("/api/godowns", async (req, res) => {
 app.put("/api/godowns/:id", async (req, res) => {
   try {
     const { name, address, email, password, city, state } = req.body;
+    // Build update object and hash password only if provided
+    const update = { name, address, email, city, state };
+    if (password) {
+      update.password = await bcrypt.hash(password, 10);
+    }
     const updatedGodown = await Godown.findByIdAndUpdate(
       req.params.id,
-      { name, address, email, password, city, state },
+      update,
       { new: true, runValidators: true }
     );
     if (!updatedGodown)
@@ -333,13 +367,15 @@ app.post("/api/auth/login", async (req, res) => {
 // Admin Login Route
 app.post("/loginadmin", (req, res) => {
   const { username, password } = req.body;
-  if (
-    username === process.env.ADMIN_USERNAME &&
-    password === process.env.ADMIN_PASSWORD
-  ) {
-    return res.json({ success: true });
+  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+    // Issue a JWT token for admin with role claim
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT secret not configured' });
+    }
+    const token = jwt.sign({ role: 'admin', username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    return res.json({ success: true, token });
   }
-  return res.json({ success: false });
+  return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
 });
 
 // Godown Login Validation
@@ -361,40 +397,44 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/godown-login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const godown = await Godown.findOne({ email, password });
-    if (godown) {
-      res.json({
-        success: true,
-        message: "Login successful",
-        godown: {
-          _id: godown._id,
-          name: godown.name,
-          address: godown.address,
-          email: godown.email,
-          city: godown.city,
-          state: godown.state,
-        },
-      });
-    } else {
-      res.json({ success: false, message: "Invalid Email or Password" });
+    // Find by email and compare hashed password
+    const godown = await Godown.findOne({ email });
+    if (!godown) {
+      return res.json({ success: false, message: "Invalid Email or Password" });
     }
+    const isMatch = await bcrypt.compare(password, godown.password);
+    if (!isMatch) {
+      return res.json({ success: false, message: "Invalid Email or Password" });
+    }
+    res.json({
+      success: true,
+      message: "Login successful",
+      godown: {
+        _id: godown._id,
+        name: godown.name,
+        address: godown.address,
+        email: godown.email,
+        city: godown.city,
+        state: godown.state,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// User List API
-app.get("/api/users", async (req, res) => {
+// User List API (protected - admin only)
+app.get("/api/users", authenticateJWT, authorizeRole('admin'), async (req, res) => {
   try {
-    const users = await User.find();
+    const users = await User.find().select('-password');
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// User Deletion API
-app.delete("/api/users/:id", async (req, res) => {
+// User Deletion API (protected - admin only)
+app.delete("/api/users/:id", authenticateJWT, authorizeRole('admin'), async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {

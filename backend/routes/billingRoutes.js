@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { body } = require('express-validator');
 const Godown = require('../models/Godowns');
 const GodownInventory = require('../models/GodownInventory');
+const logger = require('../utils/logger');
+const validators = require('../utils/validators');
 
 // Customer Schema
 const customerSchema = new mongoose.Schema({
@@ -82,7 +85,8 @@ router.get('/customers/', async (req, res) => {
     const customers = await Customer.find().sort({ createdAt: -1 });
     res.json(customers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching customers', error);
+    res.status(500).json({ message: 'Unable to fetch customers' });
   }
 });
 
@@ -95,33 +99,60 @@ router.get('/customers/:id', async (req, res) => {
     }
     res.json(customer);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching customer', error);
+    res.status(500).json({ message: 'Unable to fetch customer' });
   }
 });
 
 // Add new customer
-router.post('/customers/add', async (req, res) => {
-  try {
-    const customer = new Customer(req.body);
-    const savedCustomer = await customer.save();
-    res.status(201).json(savedCustomer);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+router.post('/customers/add',
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  [
+    validators.string('name', 200),
+    validators.string('address', 500),
+    validators.string('city', 100),
+    validators.string('state', 100),
+    validators.gstNo('gstNo'),
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const customer = new Customer(req.body);
+      const savedCustomer = await customer.save();
+      res.status(201).json(savedCustomer);
+    } catch (error) {
+      logger.error('Error adding customer', error);
+      res.status(400).json({ message: 'Unable to add customer' });
+    }
   }
-});
+);
 
 // Update customer
-router.put('/customers/:id', async (req, res) => {
-  try {
-    const customer = await Customer.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+router.put('/customers/:id',
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  [
+    body('name').optional().isString().trim().isLength({ max: 200 }),
+    body('address').optional().isString().trim().isLength({ max: 500 }),
+    body('city').optional().isString().trim().isLength({ max: 100 }),
+    body('state').optional().isString().trim().isLength({ max: 100 }),
+    validators.gstNo('gstNo'),
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const customer = await Customer.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      if (!customer) {
+        return res.status(404).json({ message: 'Customer not found' });
+      }
+      res.json(customer);
+    } catch (error) {
+      logger.error('Error updating customer', error);
+      res.status(400).json({ message: 'Unable to update customer' });
     }
-    res.json(customer);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
   }
-});
+);
 
 // Delete customer
 router.delete('/customers/:id', async (req, res) => {
@@ -132,7 +163,8 @@ router.delete('/customers/:id', async (req, res) => {
     }
     res.json({ message: 'Customer deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error deleting customer', error);
+    res.status(500).json({ message: 'Unable to delete customer' });
   }
 });
 
@@ -142,81 +174,97 @@ router.delete('/customers/:id', async (req, res) => {
 router.get('/items/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    console.log('Fetching items for customer:', customerId);
+    logger.debug('Fetching items for customer', { customerId });
     
     // Check if customerId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(customerId)) {
-      console.log('Invalid customer ID format:', customerId);
+      logger.warn('Invalid customer ID format', { customerId });
       return res.status(400).json({ message: 'Invalid customer ID format' });
     }
     
     // First, let's check if there are any items in the database at all
     const totalItems = await BillingItem.countDocuments();
-    console.log('Total items in database:', totalItems);
+    logger.debug('Total items in database', { totalItems });
     
     // Check if there are any items for this customer
     const customerItemsCount = await BillingItem.countDocuments({ customerId });
-    console.log('Items count for this customer:', customerItemsCount);
+    logger.debug('Items count for this customer', { customerItemsCount });
     
     // Get all items for this customer
     const items = await BillingItem.find({ customerId: customerId }).sort({ srNo: 1 });
-    console.log('Found items:', items.length);
-    console.log('Items data:', items);
+    logger.debug('Found items for customer', { count: items.length });
     
     // Also try a more flexible search
     const allItems = await BillingItem.find({});
-    console.log('All items in database:', allItems);
+    logger.debug('All items in database count', { count: allItems.length });
     
     res.json(items);
   } catch (error) {
-    console.error('Error fetching items:', error);
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching items for customer', error);
+    res.status(500).json({ message: 'Unable to fetch items' });
   }
 });
 
 // Add new item
-router.post('/items/add', async (req, res) => {
-  try {
-    console.log('Adding new item:', req.body);
-    console.log('Customer ID in request:', req.body.customerId);
-    console.log('Customer ID type:', typeof req.body.customerId);
-    
-    // Convert customerId to ObjectId if it's a string
-    const itemData = {
-      ...req.body,
-      customerId: mongoose.Types.ObjectId.isValid(req.body.customerId) 
-        ? req.body.customerId 
-        : new mongoose.Types.ObjectId(req.body.customerId)
-    };
-    
-    console.log('Processed item data:', itemData);
-    
-    const item = new BillingItem(itemData);
-    console.log('Item object before save:', item);
-    
-    const savedItem = await item.save();
-    console.log('Item saved successfully:', savedItem._id);
-    console.log('Saved item data:', savedItem);
-    
-    res.status(201).json(savedItem);
-  } catch (error) {
-    console.error('Error adding item:', error);
-    res.status(400).json({ message: error.message });
-  }
-});
+router.post('/items/add',
+  validators.rejectUnknownFields(['customerId', 'srNo', 'name', 'price', 'masterPrice']),
+  [
+    validators.objectId('customerId'),
+    validators.string('srNo', 100),
+    validators.string('name', 500),
+    validators.price('price'),
+    validators.price('masterPrice')
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      logger.debug('Adding new item', { body: req.body });
 
-// Update item
-router.post('/items/update/:id', async (req, res) => {
-  try {
-    const item = await BillingItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
+      const itemData = {
+        ...req.body,
+        customerId: mongoose.Types.ObjectId.isValid(req.body.customerId) 
+          ? req.body.customerId 
+          : new mongoose.Types.ObjectId(req.body.customerId)
+      };
+
+      logger.debug('Processed item data', { itemData });
+
+      const item = new BillingItem(itemData);
+      logger.debug('Item object before save', { item: item.toObject ? item.toObject() : item });
+
+      const savedItem = await item.save();
+      logger.info('Item saved successfully', { id: savedItem._id });
+
+      res.status(201).json(savedItem);
+    } catch (error) {
+      logger.error('Error adding item', error);
+      res.status(400).json({ message: 'Unable to add item' });
     }
-    res.json(item);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
   }
-});
+);// Update item
+router.post('/items/update/:id',
+  validators.rejectUnknownFields(['srNo', 'name', 'price', 'masterPrice', 'customerId']),
+  [
+    body('srNo').optional().isString().trim(),
+    body('name').optional().isString().trim().isLength({ max: 500 }),
+    body('price').optional().isFloat({ min: 0 }),
+    body('masterPrice').optional().isFloat({ min: 0 }),
+    body('customerId').optional().isMongoId()
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const item = await BillingItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+      res.json(item);
+    } catch (error) {
+      logger.error('Error updating item', error);
+      res.status(400).json({ message: 'Unable to update item' });
+    }
+  }
+);
 
 // Delete item
 router.delete('/items/:id', async (req, res) => {
@@ -227,37 +275,45 @@ router.delete('/items/:id', async (req, res) => {
     }
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error deleting item', error);
+    res.status(500).json({ message: 'Unable to delete item' });
   }
 });
 
 // Bulk update items from Excel
-router.post('/items/bulk-update/:customerId', async (req, res) => {
-  try {
-    const { items } = req.body;
-    const customerId = req.params.customerId;
-    console.log('Bulk updating items for customer:', customerId, 'Items count:', items.length);
+router.post('/items/bulk-update/:customerId',
+  validators.rejectUnknownFields(['items']),
+  [
+    body('items').isArray({ min: 1 }).withMessage('Items must be a non-empty array')
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { items } = req.body;
+      const customerId = req.params.customerId;
+      logger.info('Bulk updating items for customer', { customerId, count: items.length });
 
-    // Delete existing items for this customer
-    const deletedCount = await BillingItem.deleteMany({ customerId });
-    console.log('Deleted existing items:', deletedCount.deletedCount);
+      // Delete existing items for this customer
+      const deletedCount = await BillingItem.deleteMany({ customerId });
+      logger.debug('Deleted existing items', { deleted: deletedCount.deletedCount });
 
-    // Add new items
-    const itemsToAdd = items.map(item => ({
-      ...item,
-      customerId,
-      price: Number(item.price) || 0,
-      masterPrice: Number(item.masterPrice) || 0
-    }));
+      // Add new items
+      const itemsToAdd = items.map(item => ({
+        ...item,
+        customerId,
+        price: Number(item.price) || 0,
+        masterPrice: Number(item.masterPrice) || 0
+      }));
 
-    const savedItems = await BillingItem.insertMany(itemsToAdd);
-    console.log('Saved new items:', savedItems.length);
-    res.json({ message: 'Items updated successfully', count: savedItems.length });
-  } catch (error) {
-    console.error('Error bulk updating items:', error);
-    res.status(400).json({ message: error.message });
+      const savedItems = await BillingItem.insertMany(itemsToAdd);
+      logger.info('Saved new items', { count: savedItems.length });
+      res.json({ message: 'Items updated successfully', count: savedItems.length });
+    } catch (error) {
+      logger.error('Error bulk updating items', error);
+      res.status(400).json({ message: 'Unable to bulk update items' });
+    }
   }
-});
+);
 
 // ==================== INVENTORY ROUTES ====================
 
@@ -267,7 +323,8 @@ router.get('/inventory/', async (req, res) => {
     const inventory = await BillingInventory.find().sort({ itemName: 1 });
     res.json(inventory);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching inventory', error);
+    res.status(500).json({ message: 'Unable to fetch inventory' });
   }
 });
 
@@ -285,8 +342,7 @@ router.post('/inventory/check-availability', async (req, res) => {
       return res.status(404).json({ message: 'Godown not found' });
     }
 
-    console.log('Checking inventory for godown:', godown.name);
-    console.log('Items to check:', items);
+    logger.debug('Checking inventory for godown', { godown: godown.name, itemsCount: items?.length || 0 });
 
     // Import Delevery1 model from server.js (we need to access it)
     const mongoose = require('mongoose');
@@ -314,11 +370,11 @@ router.post('/inventory/check-availability', async (req, res) => {
     }
 
     for (const item of items) {
-      console.log(`Checking item: ${item.itemName}`);
+      logger.debug(`Checking item`, { itemName: item.itemName });
 
       // Get first 3 digits as prefix for matching
       const itemPrefix = item.itemName.substring(0, 3);
-      console.log(`Using prefix: ${itemPrefix} for item: ${item.itemName}`);
+      logger.debug('Using prefix for item', { itemPrefix, itemName: item.itemName });
 
       // Check if item exists in delevery1 collection with matching godown using 3-digit prefix
       const delevery1Items = await Delevery1.find({
@@ -326,7 +382,7 @@ router.post('/inventory/check-availability', async (req, res) => {
         godownName: godown.name
       });
 
-      console.log(`Found ${delevery1Items.length} matching items in delevery1 for prefix ${itemPrefix}`);
+      logger.debug('Matching items found in delevery1', { prefix: itemPrefix, count: delevery1Items.length });
 
       // Calculate total available quantity in the selected godown
       const totalAvailableQuantity = delevery1Items.length;
@@ -366,11 +422,11 @@ router.post('/inventory/check-availability', async (req, res) => {
       });
     }
 
-    console.log('Availability results:', availability);
+    logger.debug('Availability results computed', { count: availability.length });
     res.json(availability);
   } catch (error) {
-    console.error('Error checking inventory availability:', error);
-    res.status(400).json({ message: error.message });
+    logger.error('Error checking inventory availability', error);
+    res.status(400).json({ message: 'Unable to check inventory availability' });
   }
 });
 
@@ -401,8 +457,8 @@ router.get('/godowns/:godownId/items', async (req, res) => {
       items: items
     });
   } catch (error) {
-    console.error('Error fetching godown items:', error);
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching godown items', error);
+    res.status(500).json({ message: 'Unable to fetch godown items' });
   }
 });
 
@@ -442,8 +498,8 @@ router.get('/godowns/sorted/:customerId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching sorted godowns:', error);
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching sorted godowns', error);
+    res.status(500).json({ message: 'Unable to fetch godowns' });
   }
 });
 
@@ -453,27 +509,27 @@ router.get('/godowns/sorted/:customerId', async (req, res) => {
 router.get('/bills/customer/:customerId/items', async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    console.log('Fetching items for billing customer:', customerId);
+    logger.debug('Fetching items for billing customer', { customerId });
 
     // Check if customerId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(customerId)) {
-      console.log('Invalid customer ID format:', customerId);
+      logger.warn('Invalid customer ID format for billing', { customerId });
       return res.status(400).json({ message: 'Invalid customer ID format' });
     }
 
     const items = await BillingItem.find({ customerId }).sort({ name: 1 });
-    console.log('Found items for billing:', items.length);
+    logger.debug('Found items for billing', { count: items.length });
     res.json(items);
   } catch (error) {
-    console.error('Error fetching items for billing:', error);
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching items for billing', error);
+    res.status(500).json({ message: 'Unable to fetch items for billing' });
   }
 });
 
 // Add new billing item for customer
 router.post('/bills/customer/items/add', async (req, res) => {
   try {
-    console.log('Adding new billing item:', req.body);
+    logger.debug('Adding new billing item', { body: req.body });
 
     const itemData = {
       name: req.body.name,
@@ -485,12 +541,12 @@ router.post('/bills/customer/items/add', async (req, res) => {
 
     const item = new BillingItem(itemData);
     const savedItem = await item.save();
-    console.log('Billing item saved successfully:', savedItem._id);
+    logger.info('Billing item saved successfully', { id: savedItem._id });
 
     res.status(201).json(savedItem);
   } catch (error) {
-    console.error('Error adding billing item:', error);
-    res.status(400).json({ message: error.message });
+    logger.error('Error adding billing item', error);
+    res.status(400).json({ message: 'Unable to add billing item' });
   }
 });
 
@@ -509,11 +565,11 @@ router.put('/bills/customer/items/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    console.log('Billing item updated successfully:', item._id);
+    logger.info('Billing item updated successfully', { id: item._id });
     res.json(item);
   } catch (error) {
-    console.error('Error updating billing item:', error);
-    res.status(400).json({ message: error.message });
+    logger.error('Error updating billing item', error);
+    res.status(400).json({ message: 'Unable to update billing item' });
   }
 });
 
@@ -527,11 +583,11 @@ router.delete('/bills/customer/items/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    console.log('Billing item deleted successfully:', item._id);
+    logger.info('Billing item deleted successfully', { id: item._id });
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
-    console.error('Error deleting billing item:', error);
-    res.status(500).json({ message: error.message });
+    logger.error('Error deleting billing item', error);
+    res.status(500).json({ message: 'Unable to delete billing item' });
   }
 });
 
@@ -542,17 +598,29 @@ router.get('/bills/customer/:customerId/bills', async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(bills);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching customer bills', error);
+    res.status(500).json({ message: 'Unable to fetch bills' });
   }
 });
 
 // Add new bill
-router.post('/bills/add', async (req, res) => {
-  try {
-    const { items, godownName } = req.body;
+router.post('/bills/add',
+  validators.rejectUnknownFields(['items', 'godownName', 'customerId', 'customerName', 'godownId', 'totalAmount', 'priceType']),
+  [
+    body('items').isArray({ min: 1 }).withMessage('Items must be a non-empty array'),
+    body('godownName').optional().isString().trim(),
+    body('customerId').optional().isMongoId(),
+    body('customerName').optional().isString().trim(),
+    body('godownId').optional().isMongoId(),
+    validators.price('totalAmount'),
+    body('priceType').optional().isIn(['price', 'masterPrice'])
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { items, godownName } = req.body;
 
-    console.log('Creating bill with items:', items);
-    console.log('Godown name:', godownName);
+    logger.debug('Creating bill', { itemsCount: items?.length || 0, godownName });
 
     // Get Delevery1 model
     let Delevery1;
@@ -583,7 +651,7 @@ router.post('/bills/add', async (req, res) => {
       billNumber
     });
     const savedBill = await bill.save();
-    console.log('Bill created successfully:', savedBill.billNumber);
+    logger.info('Bill created successfully', { billNumber: savedBill.billNumber });
 
     // Now delete items from delevery1 collection
     const deletionResults = [];
@@ -592,11 +660,11 @@ router.post('/bills/add', async (req, res) => {
       const itemName = item.itemName;
       const requestedQuantity = item.quantity;
 
-      console.log(`Processing item: ${itemName}, quantity: ${requestedQuantity}`);
+      logger.debug('Processing bill item', { itemName, requestedQuantity });
 
       // Get first 3 digits as prefix for matching
       const itemPrefix = itemName.substring(0, 3);
-      console.log(`Using prefix: ${itemPrefix} for item: ${itemName}`);
+      logger.debug('Using prefix for bill item', { itemPrefix, itemName });
 
       // Find matching items in delevery1 collection using 3-digit prefix
       const matchingItems = await Delevery1.find({
@@ -604,7 +672,7 @@ router.post('/bills/add', async (req, res) => {
         godownName: godownName
       }).limit(requestedQuantity);
 
-      console.log(`Found ${matchingItems.length} matching items in delevery1 for prefix ${itemPrefix}`);
+      logger.debug('Found matching items in delevery1', { prefix: itemPrefix, count: matchingItems.length });
 
       // Delete the found items
       const deletedItems = [];
@@ -613,7 +681,7 @@ router.post('/bills/add', async (req, res) => {
         await Delevery1.findByIdAndDelete(matchingItem._id);
         deletedItems.push(matchingItem._id);
         deletedItemValues.push(matchingItem.inputValue);
-        console.log(`Deleted item with ID: ${matchingItem._id}, inputValue: ${matchingItem.inputValue}`);
+        logger.debug('Deleted item from delevery1', { id: matchingItem._id, value: matchingItem.inputValue });
       }
 
       deletionResults.push({
@@ -627,7 +695,7 @@ router.post('/bills/add', async (req, res) => {
       });
     }
 
-    console.log('Deletion results:', deletionResults);
+    logger.debug('Deletion results', { deletionResultsCount: deletionResults.length });
 
     // Return success response with deletion details
     res.status(201).json({
@@ -637,8 +705,8 @@ router.post('/bills/add', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating bill:', error);
-    res.status(400).json({ message: error.message });
+    logger.error('Error creating bill', error);
+    res.status(400).json({ message: 'Unable to create bill' });
   }
 });
 
@@ -650,7 +718,8 @@ router.get('/bills/', async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(bills);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching bills', error);
+    res.status(500).json({ message: 'Unable to fetch bills' });
   }
 });
 
@@ -664,7 +733,8 @@ router.get('/bills/:id', async (req, res) => {
     }
     res.json(bill);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error('Error fetching bill', error);
+    res.status(500).json({ message: 'Unable to fetch bill' });
   }
 });
 
@@ -713,8 +783,8 @@ router.post('/godowns/:godownId/initialize-inventory', async (req, res) => {
       godownName: godown.name
     });
   } catch (error) {
-    console.error('Error initializing godown inventory:', error);
-    res.status(500).json({ message: 'Error initializing godown inventory', error: error.message });
+    logger.error('Error initializing godown inventory', error);
+    res.status(500).json({ message: 'Unable to initialize godown inventory' });
   }
 });
 
@@ -756,8 +826,8 @@ router.get('/godowns/:godownId/inventory-debug', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error getting debug info:', error);
-    res.status(500).json({ message: 'Error getting debug info', error: error.message });
+    logger.error('Error getting debug info', error);
+    res.status(500).json({ message: 'Unable to retrieve debug info' });
   }
 });
 
@@ -804,8 +874,8 @@ router.put('/godowns/:godownId/inventory/:itemName', async (req, res) => {
       godownName: godown.name
     });
   } catch (error) {
-    console.error('Error updating godown inventory:', error);
-    res.status(500).json({ message: 'Error updating godown inventory', error: error.message });
+    logger.error('Error updating godown inventory', error);
+    res.status(500).json({ message: 'Unable to update godown inventory' });
   }
 });
 

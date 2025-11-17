@@ -1,11 +1,18 @@
 require("dotenv").config();
 const express = require("express");
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-clean');
+const hpp = require('hpp');
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const logger = require("./utils/logger");
+const validators = require("./utils/validators");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -16,8 +23,112 @@ const excelRoutes = require("./routes/excelRoutes");
 const billingRoutes = require("./routes/billingRoutes");
 
 // Middleware
+// NOTE: Security middleware added below. After pulling these changes run in `backend`:
+//   npm install
+// This installs: helmet, express-rate-limit, express-validator, express-mongo-sanitize, xss-clean, hpp
+// Adjust `authLimiter` and `generalLimiter` settings as appropriate for your deployment.
+// Basic parsers
 app.use(bodyParser.json());
-app.use(cors());
+
+// Hardened CORS configuration: restrict to allowed origins from environment
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., mobile apps or Postman) only in development
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    if (origin && allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (!origin) {
+      callback(new Error('CORS policy: origin required'));
+    } else {
+      callback(new Error('CORS policy: origin not allowed'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
+
+// HTTPS enforcement middleware (redirect HTTP to HTTPS in production)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // Check for X-Forwarded-Proto header (set by reverse proxy like nginx, Azure App Service)
+    // or check req.secure directly (direct HTTPS connection)
+    if (req.header('x-forwarded-proto') !== 'https' && !req.secure) {
+      logger.warn('HTTP request received; redirecting to HTTPS', { 
+        url: req.originalUrl,
+        ip: req.ip 
+      });
+      return res.redirect(301, `https://${req.header('host')}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
+// Security middleware
+// Helmet with enhanced HSTS (HTTP Strict-Transport-Security) configuration
+const helmetOptions = {
+  hsts: {
+    maxAge: 63072000, // 2 years in seconds
+    includeSubDomains: true,
+    preload: true // allow domain to be included in HSTS preload list
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // adjust if needed
+      styleSrc: ["'self'", "'unsafe-inline'"], // adjust if needed
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"], // restrict API calls to same origin
+    }
+  }
+};
+app.use(helmet(helmetOptions)); // sets secure headers
+app.use(mongoSanitize()); // prevent NoSQL injection
+app.use(xss()); // basic XSS sanitization
+app.use(hpp()); // HTTP parameter pollution protection
+
+// Secure cookie middleware (set secure flags on cookies)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // Override res.cookie to add secure flags for production
+    const originalCookie = res.cookie;
+    res.cookie = function (name, val, options) {
+      if (!options) options = {};
+      // In production, enforce secure cookies (HTTPS only), httpOnly, and SameSite
+      if (process.env.NODE_ENV === 'production') {
+        options.secure = true; // only send over HTTPS
+        options.httpOnly = true; // prevent JavaScript from accessing cookie
+        options.sameSite = 'Strict'; // prevent CSRF attacks
+      }
+      return originalCookie.call(this, name, val, options);
+    };
+    next();
+  });
+}
+
+// Rate limiting - general (lightweight)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP to 200 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please try again later.' }
+});
+app.use(generalLimiter);
+
+// Rate limiting for auth endpoints (stricter)
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 6, // limit each IP to 6 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts, please try again later.' }
+});
 
 // JWT authentication middleware
 function authenticateJWT(req, res, next) {
@@ -164,7 +275,8 @@ app.get("/api/barcodes", async (req, res) => {
     const barcodes = await Barcode.find();
     res.json(barcodes);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching data", error });
+    logger.error("Error fetching barcodes:", error);
+    res.status(500).json({ message: "Error fetching data" });
   }
 });
 
@@ -174,57 +286,84 @@ app.get("/api/godowns", async (req, res) => {
     const godowns = await Godown.find();
     res.json(godowns);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error("Error fetching godowns:", error);
+    res.status(500).json({ message: "Error fetching godowns" });
   }
 });
 
-app.post("/api/godowns", async (req, res) => {
-  try {
-    const { name, address, email, password, city, state } = req.body;
-    // Hash password before saving
-    let hashedPassword = undefined;
-    if (password) {
-      hashedPassword = await bcrypt.hash(password, 10);
+app.post("/api/godowns",
+  validators.rejectUnknownFields(['name', 'address', 'email', 'password', 'city', 'state']),
+  [
+    validators.string('name', 200),
+    validators.string('address', 500),
+    validators.email(),
+    validators.password(),
+    validators.string('city', 100),
+    validators.string('state', 100)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { name, address, email, password, city, state } = req.body;
+      // Hash password before saving
+      let hashedPassword = undefined;
+      if (password) {
+        hashedPassword = await bcrypt.hash(password, 10);
+      }
+      const godown = new Godown({ name, address, email, password: hashedPassword, city, state });
+      const savedGodown = await godown.save();
+      res.status(201).json(savedGodown);
+    } catch (error) {
+      if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+        return res
+          .status(400)
+          .json({ message: "Email already exists (duplicate)" });
+      }
+      logger.error("Error creating/updating godown:", error);
+      res.status(400).json({ message: "Invalid godown data" });
     }
-    const godown = new Godown({ name, address, email, password: hashedPassword, city, state });
-    const savedGodown = await godown.save();
-    res.status(201).json(savedGodown);
-  } catch (error) {
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-      return res
-        .status(400)
-        .json({ message: "Email already exists (duplicate)" });
-    }
-    res.status(400).json({ message: error.message });
   }
-});
+);
 
 // Add PUT endpoint for editing godown
-app.put("/api/godowns/:id", async (req, res) => {
-  try {
-    const { name, address, email, password, city, state } = req.body;
-    // Build update object and hash password only if provided
-    const update = { name, address, email, city, state };
-    if (password) {
-      update.password = await bcrypt.hash(password, 10);
+app.put("/api/godowns/:id",
+  validators.rejectUnknownFields(['name', 'address', 'email', 'password', 'city', 'state']),
+  [
+    validators.string('name', 200),
+    validators.string('address', 500),
+    validators.email(),
+    body('password').optional().isString().isLength({ min: 6 }),
+    validators.string('city', 100),
+    validators.string('state', 100)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { name, address, email, password, city, state } = req.body;
+      // Build update object and hash password only if provided
+      const update = { name, address, email, city, state };
+      if (password) {
+        update.password = await bcrypt.hash(password, 10);
+      }
+      const updatedGodown = await Godown.findByIdAndUpdate(
+        req.params.id,
+        update,
+        { new: true, runValidators: true }
+      );
+      if (!updatedGodown)
+        return res.status(404).json({ message: "Godown not found" });
+      res.json(updatedGodown);
+    } catch (error) {
+      if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+        return res
+          .status(400)
+          .json({ message: "Email already exists (duplicate)" });
+      }
+      logger.error("Error updating godown:", error);
+      res.status(400).json({ message: "Invalid godown data" });
     }
-    const updatedGodown = await Godown.findByIdAndUpdate(
-      req.params.id,
-      update,
-      { new: true, runValidators: true }
-    );
-    if (!updatedGodown)
-      return res.status(404).json({ message: "Godown not found" });
-    res.json(updatedGodown);
-  } catch (error) {
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-      return res
-        .status(400)
-        .json({ message: "Email already exists (duplicate)" });
-    }
-    res.status(400).json({ message: error.message });
   }
-});
+);
 
 app.delete("/api/godowns/:id", async (req, res) => {
   try {
@@ -232,7 +371,8 @@ app.delete("/api/godowns/:id", async (req, res) => {
     if (!godown) return res.status(404).json({ message: "Godown not found" });
     res.json({ message: "Godown deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error("Error deleting godown:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 //5
@@ -245,52 +385,70 @@ app.get("/api/items/:godownId", async (req, res) => {
     const items = await Item.find({ godownId: req.params.godownId });
     res.json(items);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error("Error fetching items:", error);
+    res.status(500).json({ message: "Error fetching items" });
   }
 });
 //6
-app.post("/api/items", async (req, res) => {
-  try {
-    const { godownId, name } = req.body;
-    const item = new Item({ godownId, name });
-    const savedItem = await item.save();
-    res.status(201).json(savedItem);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+app.post("/api/items",
+  validators.rejectUnknownFields(['godownId', 'name']),
+  [
+    validators.objectId('godownId'),
+    validators.string('name', 500)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { godownId, name } = req.body;
+      const item = new Item({ godownId, name });
+      const savedItem = await item.save();
+      res.status(201).json(savedItem);
+    } catch (error) {
+      logger.error("Error creating item:", error);
+      res.status(400).json({ message: "Invalid item data" });
+    }
   }
-});
+);
 //7
 
 // Delivery Items API
-app.post("/api/checkAndAddItem", async (req, res) => {
-  const { input, godownName } = req.body;
+app.post("/api/checkAndAddItem",
+  validators.rejectUnknownFields(['input', 'godownName']),
+  [
+    validators.string('input', 500),
+    validators.string('godownName', 200)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { input, godownName } = req.body;
 
-  try {
-    const item = await Item.findOne({ name: input });
+    try {
+      const item = await Item.findOne({ name: input });
 
-    if (item) {
-      const newDeliveryItem = new DeliveryItem({
-        name: input,
-        godown: godownName,
-      });
-      await newDeliveryItem.save();
-      res.json({ success: true, message: "Item added successfully!" });
-    } else {
-      res.json({
-        success: false,
-        message: "No matching item found in the database.",
-      });
+      if (item) {
+        const newDeliveryItem = new DeliveryItem({
+          name: input,
+          godown: godownName,
+        });
+        await newDeliveryItem.save();
+        res.json({ success: true, message: "Item added successfully!" });
+      } else {
+        res.json({
+          success: false,
+          message: "No matching item found in the database.",
+        });
+      }
+    } catch (error) {
+      logger.error("Error in checkAndAddItem API:", error);
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "An error occurred. Please try again.",
+        });
     }
-  } catch (error) {
-    logger.error("Error in checkAndAddItem API:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "An error occurred. Please try again.",
-      });
   }
-});
+);
 //8
 
 app.get("/api/getDeliveryItems", async (req, res) => {
@@ -326,102 +484,162 @@ app.get("/api/getDeliveryItems", async (req, res) => {
 //9
 
 // User Authentication API
-app.post("/api/auth/signup", async (req, res) => {
-  const { username, email, password } = req.body;
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ message: "User already exists" });
+app.post("/api/auth/signup",
+  validators.rejectUnknownFields(['username', 'email', 'password']),
+  [
+    validators.string('username', 100),
+    validators.email(),
+    validators.password()
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { username, email, password } = req.body;
+    try {
+      const existingUser = await User.findOne({ email });
+      if (existingUser)
+        return res.status(400).json({ message: "User already exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, email, password: hashedPassword });
-    await newUser.save();
-    res.status(201).json({ message: "User created successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = new User({ username, email, password: hashedPassword });
+      await newUser.save();
+      res.status(201).json({ message: "User created successfully" });
+    } catch (error) {
+      logger.error('Error during signup:', error);
+      res.status(500).json({ message: "Server error" });
+    }
   }
-});
+);
 
 //10
 
 
-app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+app.post(
+  "/api/auth/login",
+  authLimiter,
+  [
+    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('password').isString().isLength({ min: 6 }).withMessage('Invalid password')
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      logger.warn('Auth login validation failed', { errors: errors.array() });
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
+    const { email, password } = req.body;
+    try {
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(400).json({ message: 'Invalid credentials' });
+      }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
-    res.json({ token });
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      res.json({ token });
+    } catch (error) {
+      logger.error('Error during auth login', error);
+      res.status(500).json({ message: 'Server error' });
+    }
   }
-});
+);
 
 // Admin Login Route
-app.post("/loginadmin", (req, res) => {
-  const { username, password } = req.body;
-  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-    // Issue a JWT token for admin with role claim
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ message: 'JWT secret not configured' });
+app.post(
+  '/loginadmin',
+  authLimiter,
+  [
+    body('username').isString().trim().notEmpty(),
+    body('password').isString().notEmpty()
+  ],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      logger.warn('Admin login validation failed', { errors: errors.array() });
+      return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
-    const token = jwt.sign({ role: 'admin', username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    return res.json({ success: true, token });
+
+    const { username, password } = req.body;
+    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+      if (!process.env.JWT_SECRET) {
+        logger.error('JWT secret missing for admin login');
+        return res.status(500).json({ message: 'Server configuration error' });
+      }
+      const token = jwt.sign({ role: 'admin', username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      return res.json({ success: true, token });
+    }
+    logger.warn('Invalid admin login attempt', { username });
+    return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
-  return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
-});
+);
 
 // Godown Login Validation
-app.post("/api/login", async (req, res) => {
-  const { name, address } = req.body;
-  try {
-    const godown = await Godown.findOne({ name, address });
-    if (godown) {
-      res.json({ success: true, message: "Login successful" });
-    } else {
-      res.json({ success: false, message: "Invalid Godown Name or Address" });
+app.post("/api/login",
+  validators.rejectUnknownFields(['name', 'address']),
+  [
+    validators.string('name', 200),
+    validators.string('address', 500)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { name, address } = req.body;
+    try {
+      const godown = await Godown.findOne({ name, address });
+      if (godown) {
+        res.json({ success: true, message: "Login successful" });
+      } else {
+        res.json({ success: false, message: "Invalid Godown Name or Address" });
+      }
+    } catch (err) {
+      logger.error("Error in godown login by name/address:", err);
+      res.status(500).json({ message: "Server error" });
     }
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
   }
-});
+);
 
 // Godown Login with Email and Password
-app.post("/api/godown-login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    // Find by email and compare hashed password
-    const godown = await Godown.findOne({ email });
-    if (!godown) {
-      return res.json({ success: false, message: "Invalid Email or Password" });
+app.post(
+  '/api/godown-login',
+  authLimiter,
+  [
+    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('password').isString().isLength({ min: 6 }).withMessage('Invalid password')
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      logger.warn('Godown login validation failed', { errors: errors.array() });
+      return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
-    const isMatch = await bcrypt.compare(password, godown.password);
-    if (!isMatch) {
-      return res.json({ success: false, message: "Invalid Email or Password" });
+
+    const { email, password } = req.body;
+    try {
+      const godown = await Godown.findOne({ email });
+      if (!godown) return res.json({ success: false, message: 'Invalid Email or Password' });
+
+      const isMatch = await bcrypt.compare(password, godown.password);
+      if (!isMatch) return res.json({ success: false, message: 'Invalid Email or Password' });
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        godown: {
+          _id: godown._id,
+          name: godown.name,
+          address: godown.address,
+          email: godown.email,
+          city: godown.city,
+          state: godown.state,
+        }
+      });
+    } catch (err) {
+      logger.error('Error in godown email login:', err);
+      res.status(500).json({ message: 'Server error' });
     }
-    res.json({
-      success: true,
-      message: "Login successful",
-      godown: {
-        _id: godown._id,
-        name: godown.name,
-        address: godown.address,
-        email: godown.email,
-        city: godown.city,
-        state: godown.state,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
   }
-});
+);
 
 // User List API (protected - admin only)
 app.get("/api/users", authenticateJWT, authorizeRole('admin'), async (req, res) => {
@@ -429,7 +647,8 @@ app.get("/api/users", authenticateJWT, authorizeRole('admin'), async (req, res) 
     const users = await User.find().select('-password');
     res.json(users);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -442,7 +661,8 @@ app.delete("/api/users/:id", authenticateJWT, authorizeRole('admin'), async (req
     }
     res.json({ message: "User deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error("Error deleting user:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -457,31 +677,42 @@ app.get("/api/deliveryItems", async (req, res) => {
 });
 
 // Add item to sales if it matches deliveryItems
-app.post("/api/sales", async (req, res) => {
-  const { name, userName, mobileNumber, godown } = req.body;
+app.post("/api/sales",
+  validators.rejectUnknownFields(['name', 'userName', 'mobileNumber', 'godown']),
+  [
+    validators.string('name', 500),
+    validators.string('userName', 200),
+    validators.phone('mobileNumber'),
+    validators.string('godown', 200)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { name, userName, mobileNumber, godown } = req.body;
 
-  try {
-    // Check if the item exists in the deliveryItems collection
-    const matchingItem = await DeliveryItem.findOne({ name: name.trim() });
+    try {
+      // Check if the item exists in the deliveryItems collection
+      const matchingItem = await DeliveryItem.findOne({ name: name.trim() });
 
-    if (!matchingItem) {
-      return res
-        .status(400)
-        .json({ error: "Item name does not exist in delivery items." });
+      if (!matchingItem) {
+        return res
+          .status(400)
+          .json({ error: "Item name does not exist in delivery items." });
+      }
+
+      // Add the item to the sales collection
+      const sale = new Sale({ name, userName, mobileNumber, godown });
+      await sale.save();
+
+      // Delete the item from the deliveryItems collection
+      await DeliveryItem.findByIdAndDelete(matchingItem._id);
+
+      res.status(201).json(sale);
+    } catch (error) {
+      logger.error('Error processing sale:', error);
+      res.status(500).json({ error: "Error processing the sale" });
     }
-
-    // Add the item to the sales collection
-    const sale = new Sale({ name, userName, mobileNumber, godown });
-    await sale.save();
-
-    // Delete the item from the deliveryItems collection
-    await DeliveryItem.findByIdAndDelete(matchingItem._id);
-
-    res.status(201).json(sale);
-  } catch (error) {
-    res.status(500).json({ error: "Error processing the sale" });
   }
-});
+);
 
 // Delete item from delivery items
 app.delete("/api/deliveryItems/:id", async (req, res) => {
@@ -530,38 +761,44 @@ app.get("/api/products", async (req, res) => {
 });
 
 // API to save input field data in 'select' collection
-app.post("/api/save", async (req, res) => {
-  try {
-    const { inputValue } = req.body;
-    if (!inputValue) {
-      return res.status(400).json({ message: "Input value is required" });
+app.post("/api/save",
+  validators.rejectUnknownFields(['inputValue']),
+  [
+    validators.string('inputValue', 500)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { inputValue } = req.body;
+      const newEntry = new Select({ inputValue });
+      await newEntry.save();
+      res.json({ message: "Data saved successfully" });
+    } catch (error) {
+      logger.error('Error saving data:', error);
+      res.status(500).json({ message: "Error saving data" });
     }
-
-    const newEntry = new Select({ inputValue });
-    await newEntry.save();
-
-    res.json({ message: "Data saved successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data" });
   }
-});
+);
 
 // API to save only input value (for SelectForm) - now same as /api/save
-app.post("/api/save-input", async (req, res) => {
-  try {
-    const { inputValue } = req.body;
-    if (!inputValue) {
-      return res.status(400).json({ message: "Input value is required" });
+app.post("/api/save-input",
+  validators.rejectUnknownFields(['inputValue']),
+  [
+    validators.string('inputValue', 500)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { inputValue } = req.body;
+      const newEntry = new Select({ inputValue });
+      await newEntry.save();
+      res.json({ message: "Data saved successfully" });
+    } catch (error) {
+      logger.error('Error saving input:', error);
+      res.status(500).json({ message: "Error saving data" });
     }
-
-    const newEntry = new Select({ inputValue });
-    await newEntry.save();
-
-    res.json({ message: "Data saved successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data" });
   }
-});
+);
 
 // API: Get All Select Options
 app.get("/api/products1", async (req, res) => {
@@ -574,45 +811,75 @@ app.get("/api/products1", async (req, res) => {
 });
 
 // API: Add Data After Checking Match & Delete from `selects`
-app.post("/api/save/select", async (req, res) => {
-  const { inputValue, godownName } = req.body;
+app.post("/api/save/select",
+  validators.rejectUnknownFields(['inputValue', 'godownName']),
+  [
+    validators.string('inputValue', 500),
+    validators.string('godownName', 200)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { inputValue, godownName } = req.body;
 
-  try {
-    const existingData = await Select.findOne({ inputValue });
+    try {
+      const existingData = await Select.findOne({ inputValue });
 
-    if (!existingData) {
-      return res
-        .status(400)
-        .json({ message: "No matching data found in selects" });
+      if (!existingData) {
+        return res
+          .status(400)
+          .json({ message: "No matching data found in selects" });
+      }
+
+      // Save to `despatch` collection with godown name
+      const newDespatch = new Despatch({
+        selectedOption: "default",
+        inputValue,
+        godownName,
+      });
+      await newDespatch.save();
+
+      // Delete from `selects` collection after adding
+      await Select.deleteOne({ _id: existingData._id });
+
+      res.json({ message: "Data saved in despatch and deleted from selects" });
+    } catch (error) {
+      logger.error("Error saving data from selects->despatch:", error);
+      res.status(500).json({ message: "Error saving data" });
     }
-
-    // Save to `despatch` collection with godown name
-    const newDespatch = new Despatch({
-      selectedOption: "default",
-      inputValue,
-      godownName,
-    });
-    await newDespatch.save();
-
-    // Delete from `selects` collection after adding
-    await Select.deleteOne({ _id: existingData._id });
-
-    res.json({ message: "Data saved in despatch and deleted from selects" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data", error });
   }
-});
+);
 
 // API to save data
-app.post("/api/saved", async (req, res) => {
-  try {
-    const newBarcode = new Barcode(req.body);
-    await newBarcode.save();
-    res.json({ message: "Data saved successfully!" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data", error });
+app.post("/api/saved",
+  validators.rejectUnknownFields(['product', 'packed', 'batch', 'shift', 'numberOfBarcodes', 'location', 'currentTime', 'rewinder', 'edge', 'winder', 'mixer', 'skuc', 'skun', 'batchNumbers']),
+  [
+    body('product').optional().isString().trim(),
+    body('packed').optional().isString().trim(),
+    body('batch').optional().isString().trim(),
+    body('shift').optional().isString().trim(),
+    body('numberOfBarcodes').optional().isInt(),
+    body('location').optional().isString().trim(),
+    body('currentTime').optional().isString().trim(),
+    body('rewinder').optional().isString().trim(),
+    body('edge').optional().isString().trim(),
+    body('winder').optional().isString().trim(),
+    body('mixer').optional().isString().trim(),
+    body('skuc').optional().isString().trim(),
+    body('skun').optional().isString().trim(),
+    body('batchNumbers').optional().isArray()
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const newBarcode = new Barcode(req.body);
+      await newBarcode.save();
+      res.json({ message: "Data saved successfully!" });
+    } catch (error) {
+      logger.error("Error saving barcode data:", error);
+      res.status(500).json({ message: "Error saving data" });
+    }
   }
-});
+);
 
 // API: Get All Despatch Options
 app.get("/api/products2", async (req, res) => {
@@ -625,34 +892,44 @@ app.get("/api/products2", async (req, res) => {
 });
 
 // API: Add Data After Checking Match & Delete from `despatch`
-app.post("/api/save/despatch", async (req, res) => {
-  const { selectedOption, inputValue, godownName } = req.body;
+app.post("/api/save/despatch",
+  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName']),
+  [
+    validators.string('selectedOption', 100),
+    validators.string('inputValue', 500),
+    validators.string('godownName', 200)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const { selectedOption, inputValue, godownName } = req.body;
 
-  try {
-    const existingData = await Despatch.findOne({ selectedOption, inputValue });
+    try {
+      const existingData = await Despatch.findOne({ selectedOption, inputValue });
 
-    if (!existingData) {
-      return res
-        .status(400)
-        .json({ message: "No matching data found in despatch" });
+      if (!existingData) {
+        return res
+          .status(400)
+          .json({ message: "No matching data found in despatch" });
+      }
+
+      // Save to `delevery1` collection with godown name
+      const newDelevery1 = new Delevery1({
+        selectedOption,
+        inputValue,
+        godownName,
+      });
+      await newDelevery1.save();
+
+      // Delete from `despatch` collection after adding
+      await Despatch.deleteOne({ _id: existingData._id });
+
+      res.json({ message: "Data saved in delevery1 and deleted from despatch" });
+    } catch (error) {
+      logger.error("Error saving despatch->delevery1 data:", error);
+      res.status(500).json({ message: "Error saving data" });
     }
-
-    // Save to `delevery1` collection with godown name
-    const newDelevery1 = new Delevery1({
-      selectedOption,
-      inputValue,
-      godownName,
-    });
-    await newDelevery1.save();
-
-    // Delete from `despatch` collection after adding
-    await Despatch.deleteOne({ _id: existingData._id });
-
-    res.json({ message: "Data saved in delevery1 and deleted from despatch" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data", error });
   }
-});
+);
 
 // API Route to get data
 app.get("/api/despatch", async (req, res) => {
@@ -688,72 +965,96 @@ app.get("/api/products3", async (req, res) => {
 });
 
 // API: Add Data to `delevery1`
-app.post("/api/add/delevery1", async (req, res) => {
-  const {
-    selectedOption,
-    inputValue,
-    godownName,
-    username,
-    mobileNumber,
-  } = req.body;
-  logger.debug("Add delevery1 request:", { selectedOption, inputValue, godownName });
-
-  try {
-    const newDelevery1 = new Delevery1({
+app.post("/api/add/delevery1",
+  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName', 'username', 'mobileNumber']),
+  [
+    validators.string('selectedOption', 100),
+    validators.string('inputValue', 500),
+    validators.string('godownName', 200),
+    body('username').optional().isString().trim(),
+    body('mobileNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const {
       selectedOption,
       inputValue,
       godownName,
       username,
       mobileNumber,
-    });
-    await newDelevery1.save();
-    res.json({ message: "Data added to delevery1" });
-  } catch (error) {
-    res.status(500).json({ message: "Error adding data", error });
+    } = req.body;
+    logger.debug("Add delevery1 request:", { selectedOption, inputValue, godownName });
+
+    try {
+      const newDelevery1 = new Delevery1({
+        selectedOption,
+        inputValue,
+        godownName,
+        username,
+        mobileNumber,
+      });
+      await newDelevery1.save();
+      res.json({ message: "Data added to delevery1" });
+    } catch (error) {
+      logger.error("Error adding delevery1 data:", error);
+      res.status(500).json({ message: "Error adding data" });
+    }
   }
-});
+);
 
 // API: Add Data After Checking Match & Delete from `delevery1`
-app.post("/api/save/delevery1", async (req, res) => {
-  const {
-    selectedOption,
-    inputValue,
-    godownName,
-    username,
-    mobileNumber,
-  } = req.body;
-
-  try {
-    // Check if matching data exists in `delevery1`
-    const existingData = await Delevery1.findOne({
-      selectedOption,
-      inputValue,
-    });
-
-    if (!existingData) {
-      return res
-        .status(400)
-        .json({ message: "No matching data found in delevery1" });
-    }
-
-    // Save to `dsale` collection with godown name, username, and mobile number
-    const newDsale = new Dsale({
+app.post("/api/save/delevery1",
+  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName', 'username', 'mobileNumber']),
+  [
+    validators.string('selectedOption', 100),
+    validators.string('inputValue', 500),
+    validators.string('godownName', 200),
+    body('username').optional().isString().trim(),
+    body('mobileNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    const {
       selectedOption,
       inputValue,
       godownName,
       username,
       mobileNumber,
-    });
-    await newDsale.save();
+    } = req.body;
 
-    // Delete from `delevery1` collection after adding to `dsale`
-    await Delevery1.deleteOne({ _id: existingData._id });
+    try {
+      // Check if matching data exists in `delevery1`
+      const existingData = await Delevery1.findOne({
+        selectedOption,
+        inputValue,
+      });
 
-    res.json({ message: "Data saved in dsale and deleted from delevery1" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving data", error });
+      if (!existingData) {
+        return res
+          .status(400)
+          .json({ message: "No matching data found in delevery1" });
+      }
+
+      // Save to `dsale` collection with godown name, username, and mobile number
+      const newDsale = new Dsale({
+        selectedOption,
+        inputValue,
+        godownName,
+        username,
+        mobileNumber,
+      });
+      await newDsale.save();
+
+      // Delete from `delevery1` collection after adding to `dsale`
+      await Delevery1.deleteOne({ _id: existingData._id });
+
+      res.json({ message: "Data saved in dsale and deleted from delevery1" });
+    } catch (error) {
+      logger.error("Error saving to delevery1/dsale:", error);
+      res.status(500).json({ message: "Error saving data" });
+    }
   }
-});
+);
 
 // Get all data
 app.get("/api/data", async (req, res) => {
@@ -766,30 +1067,50 @@ app.get("/api/data", async (req, res) => {
 });
 
 // API to save multiple select + input field data in 'select' collection
-app.post("/api/save-multiple", async (req, res) => {
-  try {
-    const { selectedOption, values } = req.body;
-    if (!selectedOption || !Array.isArray(values) || values.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Product and values are required" });
+app.post("/api/save-multiple",
+  validators.rejectUnknownFields(['selectedOption', 'values']),
+  [
+    validators.string('selectedOption', 200),
+    body('values').isArray({ min: 1 }).withMessage('Values must be a non-empty array')
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { selectedOption, values } = req.body;
+      // Validate each value is a string
+      if (!values.every(v => typeof v === 'string' && v.trim().length > 0)) {
+        return res.status(400).json({
+          message: 'Validation failed',
+          errors: [{ field: 'values', message: 'All values must be non-empty strings' }]
+        });
+      }
+      // Save all values
+      const entries = values.map((inputValue) => ({
+        selectedOption,
+        inputValue,
+      }));
+      await Select.insertMany(entries);
+      res.json({ message: "All values saved successfully" });
+    } catch (error) {
+      logger.error("Error saving multiple select values:", error);
+      res.status(500).json({ message: "Error saving values" });
     }
-    // Save all values
-    const entries = values.map((inputValue) => ({
-      selectedOption,
-      inputValue,
-    }));
-    await Select.insertMany(entries);
-    res.json({ message: "All values saved successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Error saving values", error });
   }
-});
+);
 
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
 
 // Start Server
+const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+const serverUrl = process.env.NODE_ENV === 'production' 
+  ? `https://${process.env.SERVER_HOST || 'your-domain.com'}:${PORT}` 
+  : `http://localhost:${PORT}`;
+
 app.listen(PORT, () => {
-  logger.info(`Server running at http://localhost:${PORT}`);
+  logger.info(`Server running at ${serverUrl}`, { 
+    port: PORT, 
+    env: process.env.NODE_ENV || 'development',
+    https: process.env.NODE_ENV === 'production'
+  });
 });

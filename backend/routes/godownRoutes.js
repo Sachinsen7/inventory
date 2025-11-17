@@ -19,9 +19,10 @@ router.post('/login', async (req, res) => {
       });
     }
   } catch (error) {
+    const logger = require('../utils/logger');
+    logger.error('Error in godown login route:', error);
     res.status(500).json({
       message: 'Server error',
-      error: error.message,
     });
   }
 });

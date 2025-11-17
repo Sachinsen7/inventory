@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const logger = require("./utils/logger");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -45,8 +46,8 @@ function authorizeRole(role) {
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.log("Error connecting to MongoDB:", err));
+  .then(() => logger.info("Connected to MongoDB"))
+  .catch((err) => logger.error("Error connecting to MongoDB:", err));
 
 // Schemas and Models
 const itemSchema = new mongoose.Schema({
@@ -281,13 +282,12 @@ app.post("/api/checkAndAddItem", async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Error in checkAndAddItem API:", error);
+    logger.error("Error in checkAndAddItem API:", error);
     res
       .status(500)
       .json({
         success: false,
         message: "An error occurred. Please try again.",
-        error: error.message,
       });
   }
 });
@@ -314,7 +314,7 @@ app.get("/api/getDeliveryItems", async (req, res) => {
 
     res.json({ success: true, data: deliveryItems });
   } catch (error) {
-    console.error("Error fetching delivery items:", error);
+    logger.error("Error fetching delivery items:", error);
     res
       .status(500)
       .json({
@@ -658,10 +658,10 @@ app.post("/api/save/despatch", async (req, res) => {
 app.get("/api/despatch", async (req, res) => {
   try {
     const data = await Despatch.find({});
-    console.log("Data Fetched: ", data); // Debugging: Check data in console
+    logger.debug("Despatch data fetched:", { count: data.length });
     res.json(data);
   } catch (err) {
-    console.error("Error fetching data:", err);
+    logger.error("Error fetching despatch data:", err);
     res.status(500).json({ error: "Failed to fetch data" });
   }
 });
@@ -672,7 +672,7 @@ app.get("/api/delevery1", async (req, res) => {
     const data = await Delevery1.find();
     res.json(data);
   } catch (error) {
-    console.error("Error fetching data:", error);
+    logger.error("Error fetching delevery1 data:", error);
     res.status(500).json({ message: "Error fetching data" });
   }
 });
@@ -696,7 +696,7 @@ app.post("/api/add/delevery1", async (req, res) => {
     username,
     mobileNumber,
   } = req.body;
-  console.log("Request Body:", req.body); // Debugging line
+  logger.debug("Add delevery1 request:", { selectedOption, inputValue, godownName });
 
   try {
     const newDelevery1 = new Delevery1({
@@ -791,5 +791,5 @@ app.use("/api", billingRoutes);
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  logger.info(`Server running at http://localhost:${PORT}`);
 });

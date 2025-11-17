@@ -94,19 +94,15 @@ const QRCreater = () => {
     const fetchExcelFile = async () => {
       try {
         const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
-        console.log("Fetching Excel file from:", `${backendUrl}/api/latest-excel-file`);
         
         const response = await fetch(`${backendUrl}/api/latest-excel-file`);
-        console.log("Response status:", response.status);
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("Response error:", errorText);
           throw new Error(`Failed to fetch Excel file: ${response.status} ${response.statusText}`);
         }
         
         const blob = await response.blob();
-        console.log("Blob received, size:", blob.size);
         
         const reader = new FileReader();
         reader.onload = (evt) => {
@@ -116,7 +112,6 @@ const QRCreater = () => {
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-            console.log("Raw Excel data:", data);
             
             // Assuming first row is header: [Sr No, Product Name, SKU Code No]
             const [header, ...rows] = data;

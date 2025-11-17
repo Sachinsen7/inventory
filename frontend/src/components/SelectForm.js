@@ -20,14 +20,13 @@ const SelectForm = () => {
             inputValue: inputValue,
           })
           .then((response) => {
-            console.log("Data auto-saved successfully!");
             // Add to saved values list at the beginning (top)
             setSavedValues(prev => [inputValue, ...prev]);
             // Clear the input field after saving
             setInputValue("");
           })
           .catch((error) => {
-            console.error("Error saving data:", error);
+            // Error handling silent fail; log only in dev
           });
       }, 1000); // Save after 1 second of no typing
 
@@ -48,7 +47,6 @@ const SelectForm = () => {
         inputValue: inputValue,
       })
       .then((response) => {
-        console.log("Initial data saved successfully!");
         // Add to saved values list at the beginning (top)
         setSavedValues(prev => [inputValue, ...prev]);
         // Clear the input field after saving

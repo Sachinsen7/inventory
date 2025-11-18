@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLocation } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 function Dgodowndetails() {
   const location = useLocation();
@@ -25,8 +26,18 @@ function Dgodowndetails() {
         );
         setData(filteredData);
       })
-      .catch(() => {
+      .catch((error) => {
         setMessage("Error fetching data.");
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching data';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   }, [godown]);
 
@@ -69,14 +80,26 @@ function Dgodowndetails() {
             godownName: godown.name
           });
           setMessage("Value matched and saved to despatch!");
+          showToast.success("Value matched and saved to despatch!");
           setInputValue("");
           // Focus the input field after clearing
           if (inputRef.current) inputRef.current.focus();
         } else {
           setMessage("Value not found in selects collection.");
+          showToast.warning("Value not found in selects collection.");
         }
       } catch (err) {
         setMessage("Error during save operation.");
+        const errorMsg = err.response?.data?.message || err.message || 'Error during save operation';
+        if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (err.response) {
+          showToast.error(`Backend error: ${err.response.status} - ${errorMsg}`);
+        } else if (err.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       }
       setIsSaving(false);
     }, 700);

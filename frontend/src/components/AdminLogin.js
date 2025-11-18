@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 const AdminLogin = () => {
   const [username, setUsername] = useState('');
@@ -20,12 +21,25 @@ const AdminLogin = () => {
       });
 
       if (response.data.success) {
+        showToast.success('Login successful!');
         navigate('/dashboard');
       } else {
-        setErrorMessage('Invalid credentials');
+        const errorMsg = response.data.message || 'Invalid credentials';
+        setErrorMessage(errorMsg);
+        showToast.error(errorMsg);
       }
     } catch (error) {
-      setErrorMessage('Error connecting to the server');
+      const errorMsg = error.response?.data?.message || error.message || 'Error connecting to the server';
+      setErrorMessage(errorMsg);
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 

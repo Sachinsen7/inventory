@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 import './CustomersList.css';
 
 const Customer = props => {
@@ -74,10 +75,23 @@ function CustomersList() {
         setCustomers(response.data);
         setFilteredCustomers(response.data);
         setLoading(false);
+        if (response.data.length === 0) {
+          showToast.info('No customers found');
+        }
       })
       .catch((error) => {
         console.log(error);
         setLoading(false);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching customers';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       })
   }, []);
 

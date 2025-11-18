@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 function Sale() {
   const [godowns, setGodowns] = useState([]);
@@ -12,9 +13,22 @@ function Sale() {
       .get(`${process.env.REACT_APP_BACKEND_URL}/api/godowns`)
       .then((response) => {
         setGodowns(response.data);
+        if (response.data.length === 0) {
+          showToast.info('No godowns available');
+        }
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching godowns';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   }, []);
 

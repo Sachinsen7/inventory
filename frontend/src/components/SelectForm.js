@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { showToast } from "../utils/toastNotifications";
 
 const SelectForm = () => {
   const [inputValue, setInputValue] = useState(""); // Input field value
@@ -26,7 +27,16 @@ const SelectForm = () => {
             setInputValue("");
           })
           .catch((error) => {
-            // Error handling silent fail; log only in dev
+            const errorMsg = error.response?.data?.message || error.message || 'Error saving data';
+            if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+              showToast.error('Connection timeout. Please check your internet connection.');
+            } else if (error.response) {
+              showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+            } else if (error.request) {
+              showToast.error('Unable to connect to the server. Please check if the backend is running.');
+            } else {
+              showToast.error(errorMsg);
+            }
           });
       }, 1000); // Save after 1 second of no typing
 
@@ -37,7 +47,7 @@ const SelectForm = () => {
   // Handle the start action - Start auto-saving
   const handleStart = () => {
     if (!inputValue) {
-      alert("Please enter a value first");
+      showToast.warning("Please enter a value first");
       return;
     }
     
@@ -53,11 +63,20 @@ const SelectForm = () => {
         setInputValue("");
         setIsSaving(true); // Start saving
         setIsStarted(true); // Mark that the "Start" button has been clicked
-        alert("Auto-saving started! Just type values and they will be saved automatically after 1 second.");
+        showToast.success("Auto-saving started! Just type values and they will be saved automatically after 1 second.");
       })
       .catch((error) => {
         console.error("Error saving data:", error);
-        alert("Error saving data. Please try again.");
+        const errorMsg = error.response?.data?.message || error.message || 'Error saving data';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   };
 
@@ -66,7 +85,7 @@ const SelectForm = () => {
     setIsSaving(false);
     setIsStarted(false);
     setSavedValues([]); // Clear saved values
-    alert("Auto-saving stopped");
+    showToast.info("Auto-saving stopped");
   };
 
   // Styles

@@ -1,6 +1,8 @@
 // src/App.js
-import React, { useState } from 'react';  // Only this import is needed
+import React, { useState, useEffect } from 'react';  // Only this import is needed
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import HomePage from './components/HomePage';
 import AdminLogin from './components/AdminLogin';
 import Dashboard from './components/Dashboard';
@@ -36,9 +38,24 @@ import CreateCustomer from './billing/CreateCustomer';
 import CustomersList from './billing/CustomersList';
 import CustomerDetails from './billing/CustomerDetails';
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated] = useState(false);
+  
+  // ToastContainer is configured and ready to use throughout the app
+  
   return (
     <Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        limit={3}
+      />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/loginadmin" element={<AdminLogin />} />

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
+import { showToast } from '../utils/toastNotifications';
 
 const InventoryPage = () => {
   const location = useLocation();
@@ -27,11 +28,24 @@ const InventoryPage = () => {
         );
         setData(filteredData);
         setLoading(false);
+        if (filteredData.length === 0) {
+          showToast.info('No inventory data found for this godown');
+        }
       })
       .catch((error) => {
         console.error("Error fetching data:", error);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching inventory data';
         setMessage("Error fetching data.");
         setLoading(false);
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   }, [godown]);
 

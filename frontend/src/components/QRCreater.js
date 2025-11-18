@@ -4,6 +4,7 @@ import axios from "axios";
 import { jsPDF } from "jspdf";
 import JsBarcode from 'jsbarcode';
 import * as XLSX from "xlsx";
+import { showToast } from "../utils/toastNotifications";
 
 const QRCreater = () => {
   const [product, setProduct] = useState("");
@@ -223,9 +224,9 @@ const QRCreater = () => {
     } catch (error) {
       console.error("Error generating PDF:", error);
       if (error.name === 'InvalidInputException') {
-         alert(`Failed to generate PDF. Invalid data for barcode: ${error.message}`);
+         showToast.error(`Failed to generate PDF. Invalid data for barcode: ${error.message}`);
       } else {
-         alert("Failed to generate PDF.");
+         showToast.error("Failed to generate PDF.");
       }
     } finally {
        setIsDownloading(false);
@@ -292,7 +293,7 @@ const QRCreater = () => {
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
       const response = await axios.post(`${backendUrl}/api/saved`, formData);
-      alert(response.data.message);
+      showToast.success(response.data.message);
       // Update last used number for this SKU
       if (skuc && barcodeNumbers.length > 0) {
         const lastNum = parseInt(barcodeNumbers[barcodeNumbers.length - 1].replace(skuc, ''));
@@ -300,7 +301,7 @@ const QRCreater = () => {
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      alert("Failed to save data.");
+      showToast.error("Failed to save data.");
     }
   };
 

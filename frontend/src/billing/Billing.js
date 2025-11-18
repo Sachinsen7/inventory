@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
+import { showToast } from '../utils/toastNotifications';
 import './Billing.css'; // Import the new stylesheet
 
 function Billing() {
@@ -41,6 +42,16 @@ function Billing() {
       })
       .catch((error) => {
         console.log(error);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching customers';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   }, []);
 
@@ -55,6 +66,8 @@ function Billing() {
         })
         .catch((error) => {
           console.log('Error fetching billing items:', error);
+          const errorMsg = error.response?.data?.message || error.message || 'Error fetching billing items';
+          showToast.error(`Error fetching items: ${errorMsg}`);
         });
 
       // Fetch godowns sorted by location matching
@@ -66,6 +79,8 @@ function Billing() {
         })
         .catch((error) => {
           console.log('Error fetching godowns:', error);
+          const errorMsg = error.response?.data?.message || error.message || 'Error fetching godowns';
+          showToast.error(`Error fetching godowns: ${errorMsg}`);
         });
     } else {
       setShowGodowns(false);
@@ -162,6 +177,16 @@ function Billing() {
     } catch (error) {
       console.error('Error fetching and matching items:', error);
       setAvailableItems([]);
+      const errorMsg = error.response?.data?.message || error.message || 'Error fetching and matching items';
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 
@@ -185,6 +210,16 @@ function Billing() {
         console.log('Error fetching godown items:', error);
         setGodownItems([]);
         setSelectedGodownData(null);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching godown items';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       }
     } else {
       setGodownItems([]);
@@ -251,12 +286,12 @@ function Billing() {
 
   const checkInventory = async () => {
     if (selectedItems.length === 0) {
-      alert('Please add items to the bill first');
+      showToast.warning('Please add items to the bill first');
       return;
     }
 
     if (!selectedGodown) {
-      alert('Please select a godown first');
+      showToast.warning('Please select a godown first');
       return;
     }
 
@@ -278,13 +313,22 @@ function Billing() {
       setShowInventoryStatus(true);
     } catch (error) {
       console.log(error);
-      alert('Error checking inventory');
+      const errorMsg = error.response?.data?.message || error.message || 'Error checking inventory';
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 
   const downloadPDF = async () => {
     if (selectedItems.length === 0) {
-      alert('Please add items to the bill first');
+      showToast.warning('Please add items to the bill first');
       return;
     }
 
@@ -415,13 +459,13 @@ function Billing() {
       
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF. Please try again.');
+      showToast.error('Error generating PDF. Please try again.');
     }
   };
 
   const shareQRCodeOnWhatsApp = async () => {
     if (!qrCodeImage) {
-      alert('Please generate a QR Code first.');
+      showToast.warning('Please generate a QR Code first.');
       return;
     }
 
@@ -443,17 +487,17 @@ function Billing() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        alert('Web Share API not supported. QR Code downloaded. Please share manually.');
+        showToast.info('Web Share API not supported. QR Code downloaded. Please share manually.');
       }
     } catch (error) {
       console.error('Error sharing QR Code:', error);
-      alert('Could not share QR Code.');
+      showToast.error('Could not share QR Code.');
     }
   };
 
   const generatePaymentQR = async () => {
     if (selectedItems.length === 0) {
-      alert('Please add items to the bill first');
+      showToast.warning('Please add items to the bill first');
       return;
     }
 
@@ -478,7 +522,7 @@ function Billing() {
     setShowQRCode(true);
     } catch (error) {
       console.error('Error generating QR code:', error);
-      alert('Error generating QR code. Please try again.');
+      showToast.error('Error generating QR code. Please try again.');
     } finally {
       setIsGeneratingQR(false);
     }
@@ -486,18 +530,18 @@ function Billing() {
 
   const handleSubmitBill = async () => {
     if (selectedItems.length === 0) {
-      alert('Please add items to the bill');
+      showToast.warning('Please add items to the bill');
       return;
     }
 
     if (!selectedGodown) {
-      alert('Please select a godown');
+      showToast.warning('Please select a godown');
       return;
     }
 
     // Check if inventory has been verified
     if (!showInventoryStatus) {
-      alert('Please check inventory availability first');
+      showToast.warning('Please check inventory availability first');
       return;
     }
 
@@ -505,7 +549,7 @@ function Billing() {
     const unavailableItems = inventoryStatus.filter(item => !item.isAvailableInSelectedGodown);
     if (unavailableItems.length > 0) {
       const unavailableItemNames = unavailableItems.map(item => item.itemName).join(', ');
-      alert(`Cannot generate bill. The following items are not available in the selected godown: ${unavailableItemNames}`);
+      showToast.error(`Cannot generate bill. The following items are not available in the selected godown: ${unavailableItemNames}`);
       return;
     }
 
@@ -531,15 +575,15 @@ function Billing() {
           `${result.itemName}: ${result.deletedItems} items removed`
         ).join('\n');
 
-        alert(`✅ Bill created successfully!\n\n📦 Items removed from inventory:\n${deletionSummary}\n\nTotal items removed: ${totalDeleted}`);
+        showToast.success(`✅ Bill created successfully!\n\n📦 Items removed from inventory:\n${deletionSummary}\n\nTotal items removed: ${totalDeleted}`);
       } else {
-        alert('✅ Bill created successfully! Items have been deducted from godown inventory.');
+        showToast.success('✅ Bill created successfully! Items have been deducted from godown inventory.');
       }
 
       navigate(`/customer/${selectedCustomer}`);
     } catch (error) {
       console.log(error);
-      alert('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
+      showToast.error('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -777,12 +821,21 @@ function Billing() {
                           onClick={async () => {
                             try {
                               await axios.post(`${backendUrl}/api/godowns/${selectedGodown}/initialize-inventory`);
-                              alert('Godown inventory initialized successfully!');
+                              showToast.success('Godown inventory initialized successfully!');
                               // Refresh godown items
                               handleGodownChange({ target: { value: selectedGodown } });
                             } catch (error) {
                               console.log(error);
-                              alert('Error initializing godown inventory');
+                              const errorMsg = error.response?.data?.message || error.message || 'Error initializing godown inventory';
+                              if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+                                showToast.error('Connection timeout. Please check your internet connection.');
+                              } else if (error.response) {
+                                showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+                              } else if (error.request) {
+                                showToast.error('Unable to connect to the server. Please check if the backend is running.');
+                              } else {
+                                showToast.error(errorMsg);
+                              }
                             }
                           }}
                         >
@@ -1220,7 +1273,7 @@ function Billing() {
                       className="btn btn-outline-primary btn-sm"
                       onClick={() => {
                         navigator.clipboard.writeText(qrCodeData);
-                        alert('Payment link copied to clipboard!');
+                        showToast.success('Payment link copied to clipboard!');
                       }}
                     >
                       Copy Payment Link

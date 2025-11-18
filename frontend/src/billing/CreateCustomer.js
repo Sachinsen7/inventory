@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 import './CreateCustomer.css';
 
 function CreateCustomer() {
@@ -77,11 +78,11 @@ function CreateCustomer() {
     try {
       const response = await axios.post(`${backendUrl}/api/customers/add`, formData);
       console.log('Customer created:', response.data);
-      alert('Customer created successfully!');
+      showToast.success('Customer created successfully!');
       navigate('/billing/customers-list');
     } catch (error) {
       console.error('Error creating customer:', error);
-      alert('Error creating customer. Please try again.');
+      showToast.error('Error creating customer. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

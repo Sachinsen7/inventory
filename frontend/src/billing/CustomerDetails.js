@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { showToast } from '../utils/toastNotifications';
 import * as XLSX from 'xlsx';
 
 // A component to display and edit a single item
@@ -134,7 +135,7 @@ const BillHistory = ({ bills, customer }) => {
             
         } catch (error) {
             console.error('Error generating PDF:', error);
-            alert('Error generating PDF. Please try again.');
+            showToast.error('Error generating PDF. Please try again.');
         }
     };
 
@@ -241,6 +242,16 @@ function CustomerDetails() {
     } catch (error) {
       console.log("Error fetching billing items", error);
       console.log("Error details:", error.response?.data);
+      const errorMsg = error.response?.data?.message || error.message || 'Error fetching billing items';
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   }, [customer]);
 
@@ -255,6 +266,16 @@ function CustomerDetails() {
       setFilteredBills(billsRes.data);
     } catch (error) {
       console.log("Error fetching bills", error);
+      const errorMsg = error.response?.data?.message || error.message || 'Error fetching bills';
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   }, [customer]);
 
@@ -269,6 +290,16 @@ function CustomerDetails() {
       } catch (error) {
         console.log('Error fetching customer details:', error);
         console.log('Error response:', error.response?.data);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching customer details';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       }
       setLoading(false);
     };
@@ -328,12 +359,12 @@ function CustomerDetails() {
             setName('');
             setPrice('');
             setMasterPrice('');
-            alert('Item added successfully!');
+            showToast.success('Item added successfully!');
         })
         .catch(err => {
             console.log('Error adding billing item:', err);
             console.log('Error response:', err.response?.data);
-            alert('Error adding item: ' + (err.response?.data?.message || err.message));
+            showToast.error('Error adding item: ' + (err.response?.data?.message || err.message));
         });
   };
 
@@ -343,11 +374,11 @@ function CustomerDetails() {
           .then(res => {
               console.log(res.data);
               fetchItems(); // Refetch
-              alert('Item deleted successfully!');
+              showToast.success('Item deleted successfully!');
           })
           .catch(err => {
               console.log(err);
-              alert('Error deleting item: ' + (err.response?.data?.message || err.message));
+              showToast.error('Error deleting item: ' + (err.response?.data?.message || err.message));
           });
     }
   };
@@ -361,11 +392,11 @@ function CustomerDetails() {
         .then(res => {
             console.log(res.data);
             fetchItems(); // Refetch
-            alert('Item updated successfully!');
+            showToast.success('Item updated successfully!');
         })
         .catch(err => {
             console.log(err);
-            alert('Error updating item: ' + (err.response?.data?.message || err.message));
+            showToast.error('Error updating item: ' + (err.response?.data?.message || err.message));
         });
   };
 
@@ -406,10 +437,19 @@ function CustomerDetails() {
       setExcelData([]);
       setExcelFileName('');
       await fetchItems();
-      alert('Items updated successfully!');
+      showToast.success('Items updated successfully!');
     } catch (err) {
       console.error('Error updating items from Excel:', err);
-      alert('Error updating items from Excel');
+      const errorMsg = err.response?.data?.message || err.message || 'Error updating items from Excel';
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (err.response) {
+        showToast.error(`Backend error: ${err.response.status} - ${errorMsg}`);
+      } else if (err.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 

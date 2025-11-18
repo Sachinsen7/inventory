@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -29,13 +30,13 @@ const Dashboard = () => {
                  file.type === 'text/csv')) {
       setSelectedFile(file);
     } else {
-      alert('Please select a valid Excel file (.xlsx, .xls, .csv)');
+      showToast.error('Please select a valid Excel file (.xlsx, .xls, .csv)');
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      alert('Please select a file first');
+      showToast.warning('Please select a file first');
       return;
     }
 
@@ -51,15 +52,15 @@ const Dashboard = () => {
 
       const data = await response.json();
       if (response.ok) {
-        alert('File uploaded successfully!');
+        showToast.success('File uploaded successfully!');
         setShowUploadModal(false);
         setSelectedFile(null);
         fetchExcelFiles();
       } else {
-        alert('Error uploading file: ' + data.message);
+        showToast.error('Error uploading file: ' + data.message);
       }
     } catch (error) {
-      alert('Error uploading file');
+      showToast.error('Error uploading file');
       console.error('Upload error:', error);
     } finally {
       setUploading(false);
@@ -80,10 +81,10 @@ const Dashboard = () => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        alert('Error downloading file');
+        showToast.error('Error downloading file');
       }
     } catch (error) {
-      alert('Error downloading file');
+      showToast.error('Error downloading file');
       console.error('Download error:', error);
     }
   };
@@ -96,13 +97,13 @@ const Dashboard = () => {
         });
 
         if (response.ok) {
-          alert('File deleted successfully!');
+          showToast.success('File deleted successfully!');
           fetchExcelFiles();
         } else {
-          alert('Error deleting file');
+          showToast.error('Error deleting file');
         }
       } catch (error) {
-        alert('Error deleting file');
+        showToast.error('Error deleting file');
         console.error('Delete error:', error);
       }
     }

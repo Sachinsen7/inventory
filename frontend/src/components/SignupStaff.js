@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { showToast } from "../utils/toastNotifications";
 
 const SignupStaff = () => {
     const [username, setUsername] = useState('');
@@ -23,6 +24,16 @@ const SignupStaff = () => {
             setUsers(response.data);
         } catch (err) {
             console.error("Error fetching users", err);
+            const errorMsg = err.response?.data?.message || err.message || 'Error fetching users';
+            if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+                showToast.error('Connection timeout. Please check your internet connection.');
+            } else if (err.response) {
+                showToast.error(`Backend error: ${err.response.status} - ${errorMsg}`);
+            } else if (err.request) {
+                showToast.error('Unable to connect to the server. Please check if the backend is running.');
+            } else {
+                showToast.error(errorMsg);
+            }
         }
     };
 
@@ -35,20 +46,40 @@ const SignupStaff = () => {
                 email,
                 password,
             });
-            alert('Signup successful');
+            showToast.success('Signup successful');
             fetchUsers();
         } catch (err) {
-            setError(err.response.data.message);
+            const errorMsg = err.response?.data?.message || err.message || 'Error during signup';
+            setError(errorMsg);
+            if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+                showToast.error('Connection timeout. Please check your internet connection.');
+            } else if (err.response) {
+                showToast.error(`Signup failed: ${errorMsg}`);
+            } else if (err.request) {
+                showToast.error('Unable to connect to the server. Please check if the backend is running.');
+            } else {
+                showToast.error(errorMsg);
+            }
         }
     };
 
     const handleDelete = async (userId) => {
         try {
             await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/api/users/${userId}`);
-            alert('User deleted');
+            showToast.success('User deleted');
             fetchUsers();
         } catch (err) {
             console.error("Error deleting user", err);
+            const errorMsg = err.response?.data?.message || err.message || 'Error deleting user';
+            if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+                showToast.error('Connection timeout. Please check your internet connection.');
+            } else if (err.response) {
+                showToast.error(`Delete failed: ${errorMsg}`);
+            } else if (err.request) {
+                showToast.error('Unable to connect to the server. Please check if the backend is running.');
+            } else {
+                showToast.error(errorMsg);
+            }
         }
     };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
+import { showToast } from "../utils/toastNotifications";
 
 const Dsale = () => {
   const [message, setMessage] = useState('');
@@ -28,7 +29,19 @@ const Dsale = () => {
         );
         setGodownNames(fetchedGodownNames);
       })
-      .catch((error) => console.error("Error fetching data:", error));
+      .catch((error) => {
+        console.error("Error fetching data:", error);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching products';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
+      });
   }, []);
 
   const isGodownNameMatched = () => {
@@ -55,13 +68,24 @@ const Dsale = () => {
           godownName: displayedGodownName,
         });
         setMessage("Data saved successfully!");
+        showToast.success("Data saved successfully!");
         setInputValue("");
         setUsername("");
         setMobileNumber("");
         // Focus the input field after clearing
         if (inputRef.current) inputRef.current.focus();
       } catch (error) {
+        const errorMsg = error.response?.data?.message || error.message || 'Error saving data';
         setMessage("Error saving data.");
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       }
       setIsSaving(false);
     }, 1500);
@@ -78,7 +102,7 @@ const Dsale = () => {
   // Start auto-save
   const handleStart = () => {
     if (!isGodownNameMatched()) {
-      alert("Godown Name does not match. Cannot start auto-save.");
+      showToast.error("Godown Name does not match. Cannot start auto-save.");
       return;
     }
     setIsStarted(true);

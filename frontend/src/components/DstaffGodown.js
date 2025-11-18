@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 function DstaffGodown() {
   const [godowns, setGodowns] = useState([]);
@@ -14,6 +15,16 @@ function DstaffGodown() {
       })
       .catch(error => {
         console.error('Error fetching data:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Error fetching godowns';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          showToast.error('Connection timeout. Please check your internet connection.');
+        } else if (error.response) {
+          showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        } else if (error.request) {
+          showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        } else {
+          showToast.error(errorMsg);
+        }
       });
   }, []);
 

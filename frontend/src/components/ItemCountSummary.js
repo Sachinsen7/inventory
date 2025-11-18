@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Link } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 const ItemCountSummary = () => {
   const [data, setData] = useState([]);
@@ -17,8 +18,21 @@ const ItemCountSummary = () => {
     try {
       const response = await axios.get(`${backendUrl}/selects`);
       setData(response.data);
+      if (response.data.length === 0) {
+        showToast.info('No item data available');
+      }
     } catch (error) {
       console.log("Error fetching data: ", error);
+      const errorMsg = error.response?.data?.message || error.message || 'Error fetching item data';
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 

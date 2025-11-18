@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { showToast } from '../utils/toastNotifications';
 
 const BarcodeTable = () => {
   const [barcodes, setBarcodes] = useState([]);
@@ -10,8 +11,16 @@ const BarcodeTable = () => {
   useEffect(() => {
     fetch(`${backendUrl}/api/barcodes`)
       .then((res) => res.json())
-      .then((data) => setBarcodes(data))
-      .catch((err) => console.error("Error fetching barcodes:", err));
+      .then((data) => {
+        setBarcodes(data);
+        if (data.length === 0) {
+          showToast.info('No barcode data available');
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching barcodes:", err);
+        showToast.error('Unable to fetch barcodes. Please check if the backend is running.');
+      });
   }, []);
 
   // 🔍 सर्च की गई लिस्ट

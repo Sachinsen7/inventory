@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { showToast } from '../utils/toastNotifications';
 
 const Godown = () => {
   const [godowns, setGodowns] = useState([]);
@@ -18,8 +19,13 @@ const Godown = () => {
       );
       const data = await response.json();
       setGodowns(data);
+      if (data.length === 0) {
+        showToast.info('No godowns available');
+      }
     } catch (error) {
       console.error("Error fetching godowns:", error);
+      const errorMsg = error.message || 'Error fetching godowns';
+      showToast.error(`Unable to fetch godowns: ${errorMsg}`);
     }
   };
 
@@ -32,7 +38,7 @@ const Godown = () => {
     if (newGodown.name && newGodown.address && newGodown.email && newGodown.password && newGodown.city && newGodown.state) {
       // Check for duplicate email
       if (godowns.some((g) => g.email === newGodown.email)) {
-        alert('Email already exists. Please use a unique email.');
+        showToast.error('Email already exists. Please use a unique email.');
         return;
       }
       try {
@@ -52,11 +58,16 @@ const Godown = () => {
           setGodowns([...godowns, data]);
           setNewGodown({ name: "", address: "", email: "", password: "", city: "", state: "" });
           console.log("Godown added to database", data);
+          showToast.success('Godown added successfully!');
         } else if (data && data.message && data.message.includes('duplicate')) {
-          alert('Email already exists. Please use a unique email.');
+          showToast.error('Email already exists. Please use a unique email.');
+        } else {
+          showToast.error(data?.message || 'Error adding godown');
         }
       } catch (error) {
         console.error("Error adding godown:", error);
+        const errorMsg = error.message || 'Error adding godown';
+        showToast.error(`Unable to add godown: ${errorMsg}`);
       }
     }
   };
@@ -73,9 +84,15 @@ const Godown = () => {
       if (response.ok) {
         setGodowns(godowns.filter((godown) => godown._id !== id));
         console.log("Godown removed from database");
+        showToast.success('Godown deleted successfully!');
+      } else {
+        const data = await response.json();
+        showToast.error(data?.message || 'Error deleting godown');
       }
     } catch (error) {
       console.error("Error deleting godown:", error);
+      const errorMsg = error.message || 'Error deleting godown';
+      showToast.error(`Unable to delete godown: ${errorMsg}`);
     }
   };
 
@@ -99,7 +116,7 @@ const Godown = () => {
   const handleSaveEdit = async (id) => {
     // Check for duplicate email (excluding the current editing godown)
     if (godowns.some((g) => g.email === editGodown.email && g._id !== id)) {
-      alert('Email already exists. Please use a unique email.');
+      showToast.error('Email already exists. Please use a unique email.');
       return;
     }
     try {
@@ -118,14 +135,19 @@ const Godown = () => {
         setGodowns(godowns.map((g) => (g._id === id ? updated : g)));
         setEditId(null);
         setEditGodown({ name: "", address: "", email: "", password: "", city: "", state: "" });
+        showToast.success('Godown updated successfully!');
       } else {
         const data = await response.json();
         if (data && data.message && data.message.includes('duplicate')) {
-          alert('Email already exists. Please use a unique email.');
+          showToast.error('Email already exists. Please use a unique email.');
+        } else {
+          showToast.error(data?.message || 'Error updating godown');
         }
       }
     } catch (error) {
       console.error("Error updating godown:", error);
+      const errorMsg = error.message || 'Error updating godown';
+      showToast.error(`Unable to update godown: ${errorMsg}`);
     }
   };
 

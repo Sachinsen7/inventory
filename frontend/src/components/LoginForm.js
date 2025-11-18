@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -18,12 +19,25 @@ const LoginForm = () => {
       const response = await axios.post(`${backendUrl}/api/godown-login`, { email, password });
 
       if (response.data.success) {
+        showToast.success('Login successful!');
         navigate('/godownpage', { state: { godown: response.data.godown } });
       } else {
-        setError(response.data.message);
+        const errorMsg = response.data.message || 'Invalid credentials';
+        setError(errorMsg);
+        showToast.error(errorMsg);
       }
     } catch (err) {
-      setError('Server error');
+      const errorMsg = err.response?.data?.message || err.message || 'Server error';
+      setError(errorMsg);
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (err.response) {
+        showToast.error(`Backend error: ${err.response.status} - ${errorMsg}`);
+      } else if (err.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 

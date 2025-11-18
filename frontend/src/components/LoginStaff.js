@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastNotifications';
 
 const LoginStaff = () => {
   const [email, setEmail] = useState('');
@@ -22,10 +23,20 @@ const LoginStaff = () => {
       console.log('JWT Token:', response.data.token);
 
       localStorage.setItem('token', response.data.token);
-
+      showToast.success('Login successful!');
       navigate('/ldashboard');
     } catch (error) {
-      setMessage(error.response?.data?.message || 'An error occurred');
+      const errorMsg = error.response?.data?.message || 'An error occurred';
+      setMessage(errorMsg);
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Login failed: ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 

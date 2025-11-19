@@ -23,9 +23,11 @@ const DeliveryPage = () => {
       .get(`${backendUrl}/api/products2`)
       .then((response) => {
         const fetchedGodownNames = Array.from(
-          new Set(response.data.map((item) => item.godownName))
+          new Set(response.data.map((item) => item.godownName).filter(Boolean))
         );
         setGodownNames(fetchedGodownNames);
+        console.log("Fetched godown names:", fetchedGodownNames);
+        console.log("Current godown name:", displayedGodownName);
       })
       .catch((error) => {
         console.error("Error fetching data:", error);
@@ -43,17 +45,22 @@ const DeliveryPage = () => {
   }, []);
 
   const isGodownNameMatched = () => {
-    return godownNames.includes(displayedGodownName);
+    // If no godown names are loaded yet, allow it (data might be loading)
+    if (godownNames.length === 0) {
+      return true;
+    }
+    // Check if godown name matches (case-insensitive, trimmed)
+    return godownNames.some(name => 
+      name && name.trim().toLowerCase() === displayedGodownName.trim().toLowerCase()
+    );
   };
 
   // Auto-check and save on input change (only when started)
   useEffect(() => {
-    if (!isStarted || inputValue.trim() === "") return;
+    if (!isStarted || inputValue.trim() === "" || isSaving) return;
     const timer = setTimeout(async () => {
-      if (!isGodownNameMatched()) {
-        setMessage("Godown Name does not match. Cannot save data.");
-        return;
-      }
+      // Note: We allow saving even if godown name doesn't match in local check
+      // The backend will handle validation
       
       setIsSaving(true);
       setMessage("");
@@ -95,12 +102,14 @@ const DeliveryPage = () => {
 
   // Start auto-save
   const handleStart = () => {
-    if (!isGodownNameMatched()) {
-      showToast.error("Godown Name does not match. Cannot start auto-save.");
-      return;
+    // Check if godown name matches, but allow if no data exists yet
+    if (godownNames.length > 0 && !isGodownNameMatched()) {
+      // Show warning but still allow - backend will validate
+      showToast.warning(`Warning: Godown name "${displayedGodownName}" may not match existing records. Data will still be saved.`);
     }
     setIsStarted(true);
     setMessage("Auto-saving is active. Type values and they will be saved automatically after 0.7 second.");
+    showToast.info("Auto-save started! You can now type values and they will be saved automatically.");
     // Focus the input field when auto-save starts
     setTimeout(() => {
       if (inputRef.current) inputRef.current.focus();
@@ -110,7 +119,8 @@ const DeliveryPage = () => {
   // Stop auto-save
   const handleStop = () => {
     setIsStarted(false);
-    setMessage("Auto-saving stopped");
+    setMessage("Auto-saving stopped. Click 'Start Auto-save' to enable automatic saving.");
+    showToast.info("Auto-save stopped. You can still type, but values won't be saved automatically.");
   };
 
   return (
@@ -127,6 +137,12 @@ const DeliveryPage = () => {
             <strong>Address:</strong> {godown.address}
           </p>
           
+          {!isStarted && (
+            <div style={{color: '#ffeb3b', fontWeight: 'bold', margin: '10px 0', fontSize: '1rem', backgroundColor: 'rgba(255, 235, 59, 0.2)', padding: '10px', borderRadius: '8px'}}>
+              ⚠️ Click "Start Auto-save" to enable automatic saving of values
+            </div>
+          )}
+          
           <input
             ref={inputRef}
             style={styles.input}
@@ -134,7 +150,7 @@ const DeliveryPage = () => {
             placeholder="Enter value"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            disabled={isSaving || !isStarted}
+            disabled={isSaving}
           />
 
           <button

@@ -273,6 +273,19 @@ const QRCreater = () => {
 
    // Function to handle saving data to the database
    const handleSaveToDatabase = async () => {
+    // Convert barcodeNumbers array to batchNumbers array (extract numeric parts)
+    // barcodeNumbers format: ["SKU001", "SKU002"] -> batchNumbers format: [1, 2]
+    const batchNumbers = barcodeNumbers.map(barcode => {
+      // Extract numeric part from barcode (remove SKU prefix)
+      if (skuc && barcode.startsWith(skuc)) {
+        const numericPart = barcode.replace(skuc, '');
+        return parseInt(numericPart) || 0;
+      }
+      // If no SKU prefix, try to extract any number from the barcode
+      const match = barcode.match(/\d+/);
+      return match ? parseInt(match[0]) : 0;
+    }).filter(num => num > 0); // Filter out invalid numbers
+
     const formData = {
       product,
       packed,
@@ -287,7 +300,7 @@ const QRCreater = () => {
       mixer,
       skuc,
       skun,
-      barcodeNumbers
+      batchNumbers // Send as batchNumbers instead of barcodeNumbers
     };
 
     try {
@@ -301,7 +314,19 @@ const QRCreater = () => {
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      showToast.error("Failed to save data.");
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to save data';
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors.map(e => e.message).join(', ');
+        showToast.error(`Validation error: ${validationErrors}`);
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (error.response) {
+        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+      } else if (error.request) {
+        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+      } else {
+        showToast.error(errorMsg);
+      }
     }
   };
 
@@ -457,7 +482,7 @@ const QRCreater = () => {
           style={styles.input}
         />
         </div>
-        {/* SKU Code No (auto-filled, readOnly) */}
+        {/* SKU Code No */}
         <div style={styles.inputGroup}>
           <label htmlFor="skuc" style={styles.label}>SKU Code No:</label>
           <input
@@ -468,7 +493,6 @@ const QRCreater = () => {
             onChange={(e) => setSku(e.target.value)}
             required
             style={styles.input}
-            readOnly
           />
         </div>
         {/* SKU Name (auto-filled, readOnly) */}

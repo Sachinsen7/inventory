@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { showToast } from '../utils/toastNotifications';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { showToast } from "../utils/toastNotifications";
 
 const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -15,53 +15,62 @@ const Dashboard = () => {
 
   const fetchExcelFiles = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/excel-files`);
+      const response = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/excel-files`
+      );
       const data = await response.json();
       setExcelFiles(data);
     } catch (error) {
-      console.error('Error fetching Excel files:', error);
+      console.error("Error fetching Excel files:", error);
     }
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file && (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-                 file.type === 'application/vnd.ms-excel' || 
-                 file.type === 'text/csv')) {
+    if (
+      file &&
+      (file.type ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.type === "application/vnd.ms-excel" ||
+        file.type === "text/csv")
+    ) {
       setSelectedFile(file);
     } else {
-      showToast.error('Please select a valid Excel file (.xlsx, .xls, .csv)');
+      showToast.error("Please select a valid Excel file (.xlsx, .xls, .csv)");
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      showToast.warning('Please select a file first');
+      showToast.warning("Please select a file first");
       return;
     }
 
     setUploading(true);
     const formData = new FormData();
-    formData.append('excelFile', selectedFile);
+    formData.append("excelFile", selectedFile);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/upload-excel`, {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/upload-excel`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       const data = await response.json();
       if (response.ok) {
-        showToast.success('File uploaded successfully!');
+        showToast.success("File uploaded successfully!");
         setShowUploadModal(false);
         setSelectedFile(null);
         fetchExcelFiles();
       } else {
-        showToast.error('Error uploading file: ' + data.message);
+        showToast.error("Error uploading file: " + data.message);
       }
     } catch (error) {
-      showToast.error('Error uploading file');
-      console.error('Upload error:', error);
+      showToast.error("Error uploading file");
+      console.error("Upload error:", error);
     } finally {
       setUploading(false);
     }
@@ -69,11 +78,13 @@ const Dashboard = () => {
 
   const handleDownload = async (fileId, fileName) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/download-excel/${fileId}`);
+      const response = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/download-excel/${fileId}`
+      );
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
@@ -81,40 +92,77 @@ const Dashboard = () => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        showToast.error('Error downloading file');
+        showToast.error("Error downloading file");
       }
     } catch (error) {
-      showToast.error('Error downloading file');
-      console.error('Download error:', error);
+      showToast.error("Error downloading file");
+      console.error("Download error:", error);
     }
   };
 
   const handleDelete = async (fileId) => {
-    if (window.confirm('Are you sure you want to delete this file?')) {
+    if (window.confirm("Are you sure you want to delete this file?")) {
       try {
-        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/delete-excel/${fileId}`, {
-          method: 'DELETE',
-        });
+        const response = await fetch(
+          `${process.env.REACT_APP_BACKEND_URL}/api/delete-excel/${fileId}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         if (response.ok) {
-          showToast.success('File deleted successfully!');
+          showToast.success("File deleted successfully!");
           fetchExcelFiles();
         } else {
-          showToast.error('Error deleting file');
+          showToast.error("Error deleting file");
         }
       } catch (error) {
-        showToast.error('Error deleting file');
-        console.error('Delete error:', error);
+        showToast.error("Error deleting file");
+        console.error("Delete error:", error);
       }
     }
   };
 
+  const handleDownloadTemplate = async (templateType) => {
+    try {
+      const endpoint =
+        templateType === "inventory"
+          ? "download-inventory-template"
+          : "download-billing-template";
+
+      const response = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/${endpoint}`
+      );
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download =
+          templateType === "inventory"
+            ? "inventory_template.xlsx"
+            : "billing_items_template.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showToast.success("Template downloaded successfully!");
+      } else {
+        showToast.error("Error downloading template");
+      }
+    } catch (error) {
+      showToast.error("Error downloading template");
+      console.error("Template download error:", error);
+    }
+  };
+
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   const formatDate = (dateString) => {
@@ -138,16 +186,13 @@ const Dashboard = () => {
         <Link to="/sales" style={styles.link}>
           <button style={styles.button}>Sale</button>
         </Link>
-        <button 
-          style={styles.button} 
-          onClick={() => setShowUploadModal(true)}
-        >
+        <Link to="/transit" style={styles.link}>
+          <button style={styles.button}>Transit</button>
+        </Link>
+        <button style={styles.button} onClick={() => setShowUploadModal(true)}>
           Excel Upload
         </button>
-        <button 
-          style={styles.button} 
-          onClick={() => setShowFilesModal(true)}
-        >
+        <button style={styles.button} onClick={() => setShowFilesModal(true)}>
           View Files
         </button>
       </div>
@@ -157,6 +202,30 @@ const Dashboard = () => {
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
             <h3 style={styles.modalHeader}>Upload Excel File</h3>
+
+            {/* Template Download Section */}
+            <div style={styles.templateSection}>
+              <p style={styles.templateText}>
+                📥 Don't have a template? Download one:
+              </p>
+              <div style={styles.templateButtons}>
+                <button
+                  onClick={() => handleDownloadTemplate("inventory")}
+                  style={styles.templateButton}
+                >
+                  📊 Inventory Template
+                </button>
+                <button
+                  onClick={() => handleDownloadTemplate("billing")}
+                  style={styles.templateButton}
+                >
+                  📄 Billing Items Template
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.divider}></div>
+
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -167,14 +236,14 @@ const Dashboard = () => {
               <p style={styles.fileInfo}>Selected: {selectedFile.name}</p>
             )}
             <div style={styles.modalButtons}>
-              <button 
-                onClick={handleUpload} 
+              <button
+                onClick={handleUpload}
                 disabled={uploading || !selectedFile}
                 style={styles.modalButton}
               >
-                {uploading ? 'Uploading...' : 'Upload'}
+                {uploading ? "Uploading..." : "Upload"}
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedFile(null);
@@ -202,18 +271,20 @@ const Dashboard = () => {
                     <div style={styles.fileInfo}>
                       <p style={styles.fileName}>{file.originalName}</p>
                       <p style={styles.fileDetails}>
-                        Size: {formatFileSize(file.size)} | 
-                        Uploaded: {formatDate(file.uploadDate)}
+                        Size: {formatFileSize(file.size)} | Uploaded:{" "}
+                        {formatDate(file.uploadDate)}
                       </p>
                     </div>
                     <div style={styles.fileActions}>
-                      <button 
-                        onClick={() => handleDownload(file._id, file.originalName)}
+                      <button
+                        onClick={() =>
+                          handleDownload(file._id, file.originalName)
+                        }
                         style={styles.actionButton}
                       >
                         Download
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(file._id)}
                         style={styles.deleteButton}
                       >
@@ -224,7 +295,7 @@ const Dashboard = () => {
                 ))
               )}
             </div>
-            <button 
+            <button
               onClick={() => setShowFilesModal(false)}
               style={styles.modalButton}
             >
@@ -239,163 +310,198 @@ const Dashboard = () => {
 
 const styles = {
   container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    background: 'linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)',
-    padding: '20px',
-    backgroundSize: '400% 400%',
-    animation: 'gradientAnimation 12s ease infinite',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "100vh",
+    background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
+    padding: "20px",
+    backgroundSize: "400% 400%",
+    animation: "gradientAnimation 12s ease infinite",
   },
   header: {
-    fontSize: '44px',
-    color: '#ffffff',
+    fontSize: "44px",
+    color: "#ffffff",
     fontFamily: "'Arial', sans-serif",
-    textAlign: 'center',
-    marginBottom: '30px',
-    textShadow: '2px 2px 4px rgba(0, 0, 0, 0.3)',
+    textAlign: "center",
+    marginBottom: "30px",
+    textShadow: "2px 2px 4px rgba(0, 0, 0, 0.3)",
   },
   buttonContainer: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '20px',
-    justifyContent: 'center',
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "20px",
+    justifyContent: "center",
   },
   button: {
-    padding: '15px 30px',
-    fontSize: '1.6rem',
-    backgroundColor: 'rgba(218, 216, 224, 0.8)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '28px',
-    cursor: 'pointer',
-    transition: 'background-color 0.3s ease, transform 0.3s ease',
-    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+    padding: "15px 30px",
+    fontSize: "1.6rem",
+    backgroundColor: "rgba(218, 216, 224, 0.8)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "28px",
+    cursor: "pointer",
+    transition: "background-color 0.3s ease, transform 0.3s ease",
+    boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
     fontFamily: "'Poppins', sans-serif",
-    letterSpacing: '0.5px',
+    letterSpacing: "0.5px",
   },
   buttonHover: {
-    backgroundColor: '#45a049',
-    transform: 'scale(1.1)',
+    backgroundColor: "#45a049",
+    transform: "scale(1.1)",
   },
   link: {
-    textDecoration: 'none',
-    color: 'inherit',
+    textDecoration: "none",
+    color: "inherit",
   },
   modalOverlay: {
-    position: 'fixed',
+    position: "fixed",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 1000,
   },
   modal: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '15px',
-    maxWidth: '500px',
-    width: '90%',
-    maxHeight: '80vh',
-    overflow: 'auto',
+    backgroundColor: "white",
+    padding: "30px",
+    borderRadius: "15px",
+    maxWidth: "500px",
+    width: "90%",
+    maxHeight: "80vh",
+    overflow: "auto",
   },
   modalHeader: {
-    textAlign: 'center',
-    marginBottom: '20px',
-    fontSize: '24px',
-    color: '#333',
+    textAlign: "center",
+    marginBottom: "20px",
+    fontSize: "24px",
+    color: "#333",
+  },
+  templateSection: {
+    marginBottom: "20px",
+    padding: "15px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "8px",
+    border: "1px solid #dee2e6",
+  },
+  templateText: {
+    textAlign: "center",
+    marginBottom: "15px",
+    fontSize: "16px",
+    color: "#495057",
+    fontWeight: "500",
+  },
+  templateButtons: {
+    display: "flex",
+    gap: "10px",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  templateButton: {
+    padding: "10px 20px",
+    backgroundColor: "#28a745",
+    color: "white",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+    fontSize: "14px",
+    transition: "background-color 0.3s ease",
+  },
+  divider: {
+    height: "1px",
+    backgroundColor: "#dee2e6",
+    margin: "20px 0",
   },
   fileInput: {
-    width: '100%',
-    padding: '10px',
-    marginBottom: '20px',
-    border: '2px dashed #ccc',
-    borderRadius: '8px',
+    width: "100%",
+    padding: "10px",
+    marginBottom: "20px",
+    border: "2px dashed #ccc",
+    borderRadius: "8px",
   },
   fileInfo: {
-    marginBottom: '20px',
-    padding: '10px',
-    backgroundColor: '#f0f0f0',
-    borderRadius: '5px',
-    textAlign: 'center',
+    marginBottom: "20px",
+    padding: "10px",
+    backgroundColor: "#f0f0f0",
+    borderRadius: "5px",
+    textAlign: "center",
   },
   modalButtons: {
-    display: 'flex',
-    gap: '10px',
-    justifyContent: 'center',
+    display: "flex",
+    gap: "10px",
+    justifyContent: "center",
   },
   modalButton: {
-    padding: '10px 20px',
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '16px',
+    padding: "10px 20px",
+    backgroundColor: "#007bff",
+    color: "white",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+    fontSize: "16px",
   },
   filesList: {
-    maxHeight: '400px',
-    overflow: 'auto',
-    marginBottom: '20px',
+    maxHeight: "400px",
+    overflow: "auto",
+    marginBottom: "20px",
   },
   noFiles: {
-    textAlign: 'center',
-    color: '#666',
-    fontStyle: 'italic',
+    textAlign: "center",
+    color: "#666",
+    fontStyle: "italic",
   },
   fileItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '15px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    marginBottom: '10px',
-    backgroundColor: '#f9f9f9',
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "15px",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    marginBottom: "10px",
+    backgroundColor: "#f9f9f9",
   },
   fileName: {
-    fontWeight: 'bold',
-    margin: '0 0 5px 0',
-    color: '#333',
+    fontWeight: "bold",
+    margin: "0 0 5px 0",
+    color: "#333",
   },
   fileDetails: {
-    margin: '0',
-    fontSize: '12px',
-    color: '#666',
+    margin: "0",
+    fontSize: "12px",
+    color: "#666",
   },
   fileActions: {
-    display: 'flex',
-    gap: '10px',
+    display: "flex",
+    gap: "10px",
   },
   actionButton: {
-    padding: '5px 10px',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    fontSize: '12px',
+    padding: "5px 10px",
+    backgroundColor: "#28a745",
+    color: "white",
+    border: "none",
+    borderRadius: "3px",
+    cursor: "pointer",
+    fontSize: "12px",
   },
   deleteButton: {
-    padding: '5px 10px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    fontSize: '12px',
+    padding: "5px 10px",
+    backgroundColor: "#dc3545",
+    color: "white",
+    border: "none",
+    borderRadius: "3px",
+    cursor: "pointer",
+    fontSize: "12px",
   },
-  '@keyframes fadeIn': {
-    '0%': {
+  "@keyframes fadeIn": {
+    "0%": {
       opacity: 0,
     },
-    '100%': {
+    "100%": {
       opacity: 1,
     },
   },

@@ -78,19 +78,19 @@ function secureCookieMiddleware() {
     const originalCookie = res.cookie;
     res.cookie = function (name, val, options) {
       if (!options) options = {};
-      
+
       // Enforce secure cookie flags for production
       options.secure = true; // only send over HTTPS
       options.httpOnly = true; // prevent JavaScript from accessing cookie
       options.sameSite = 'Strict'; // prevent CSRF attacks (or 'Lax' if needed for cross-site)
-      
-      logger.debug('Setting secure cookie', { 
-        name, 
-        secure: options.secure, 
+
+      logger.debug('Setting secure cookie', {
+        name,
+        secure: options.secure,
         httpOnly: options.httpOnly,
-        sameSite: options.sameSite 
+        sameSite: options.sameSite
       });
-      
+
       return originalCookie.call(this, name, val, options);
     };
     next();
@@ -105,7 +105,7 @@ function logHttpsStatus() {
   const protocol = env === 'production' ? 'HTTPS (enforced)' : 'HTTP (allowed in dev)';
   const hstsEnabled = env === 'production';
   const secureCookies = env === 'production';
-  
+
   logger.info('HTTPS Configuration Status', {
     nodeEnv: env,
     protocol,
@@ -113,7 +113,7 @@ function logHttpsStatus() {
     secureCookies,
     httpRedirect: env === 'production',
     serverHost: process.env.SERVER_HOST || 'not configured',
-    message: env === 'production' 
+    message: env === 'production'
       ? 'Production mode: HTTPS enforced, HSTS enabled, secure cookies configured'
       : 'Development mode: HTTP allowed, HSTS disabled, secure cookies disabled'
   });

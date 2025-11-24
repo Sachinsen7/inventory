@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Barcode from "react-barcode";
 import axios from "axios";
 import { jsPDF } from "jspdf";
-import JsBarcode from 'jsbarcode';
+import JsBarcode from "jsbarcode";
 import * as XLSX from "xlsx";
 import { showToast } from "../utils/toastNotifications";
 
@@ -60,7 +60,7 @@ const QRCreater = () => {
 
   // Helper to get and set last used number for a SKU Code No in localStorage
   const getLastUsedNumber = (sku) => {
-    const data = localStorage.getItem('barcode_last_number');
+    const data = localStorage.getItem("barcode_last_number");
     if (!data) return 0;
     try {
       const obj = JSON.parse(data);
@@ -70,20 +70,27 @@ const QRCreater = () => {
     }
   };
   const setLastUsedNumber = (sku, num) => {
-    const data = localStorage.getItem('barcode_last_number');
+    const data = localStorage.getItem("barcode_last_number");
     let obj = {};
     if (data) {
-      try { obj = JSON.parse(data); } catch { obj = {}; }
+      try {
+        obj = JSON.parse(data);
+      } catch {
+        obj = {};
+      }
     }
     obj[sku] = num;
-    localStorage.setItem('barcode_last_number', JSON.stringify(obj));
+    localStorage.setItem("barcode_last_number", JSON.stringify(obj));
   };
 
   // Update barcodeNumbers when SKU Code No or numberOfBarcodes changes
   useEffect(() => {
     if (skuc && numberOfBarcodes > 0) {
       const start = getLastUsedNumber(skuc) + 1;
-      const arr = Array.from({ length: Number(numberOfBarcodes) }, (_, i) => `${skuc}${start + i}`);
+      const arr = Array.from(
+        { length: Number(numberOfBarcodes) },
+        (_, i) => `${skuc}${start + i}`
+      );
       setBarcodeNumbers(arr);
     } else {
       setBarcodeNumbers([]);
@@ -94,17 +101,20 @@ const QRCreater = () => {
   useEffect(() => {
     const fetchExcelFile = async () => {
       try {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
-        
+        const backendUrl =
+          process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
         const response = await fetch(`${backendUrl}/api/latest-excel-file`);
-        
+
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Failed to fetch Excel file: ${response.status} ${response.statusText}`);
+          throw new Error(
+            `Failed to fetch Excel file: ${response.status} ${response.statusText}`
+          );
         }
-        
+
         const blob = await response.blob();
-        
+
         const reader = new FileReader();
         reader.onload = (evt) => {
           try {
@@ -113,7 +123,7 @@ const QRCreater = () => {
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-            
+
             // Assuming first row is header: [Sr No, Product Name, SKU Code No]
             const [header, ...rows] = data;
             const products = rows.map((row) => ({
@@ -158,7 +168,7 @@ const QRCreater = () => {
       };
 
       // Create a temporary canvas element
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
 
       for (let index = 0; index < barcodeNumbers.length; index++) {
         const currentBarcodeNumber = barcodeNumbers[index];
@@ -179,15 +189,23 @@ const QRCreater = () => {
 
         // Add Barcode Image (Scale width to fit, maintain aspect ratio)
         const barcodeImgWidth = 1.8; // Slightly increased width to accommodate text better potentially
-        const barcodeImgHeight = (canvas.height / canvas.width) * barcodeImgWidth;
-        doc.addImage(barcodeDataUrl, "PNG", margin, margin, barcodeImgWidth, barcodeImgHeight);
+        const barcodeImgHeight =
+          (canvas.height / canvas.width) * barcodeImgWidth;
+        doc.addImage(
+          barcodeDataUrl,
+          "PNG",
+          margin,
+          margin,
+          barcodeImgWidth,
+          barcodeImgHeight
+        );
 
         // Add Text Details below barcode
         const textStartY = margin + barcodeImgHeight + 0.4; // Increased gap to accommodate barcode text
         let currentY = textStartY;
-        const lineSpacing = 0.55;    // Base spacing between lines
-        const fontSize = 19;          // Font size for details
-        const availableWidth = pageW - (2 * margin); // Max width for text (pageWidth - leftMargin - rightMargin)
+        const lineSpacing = 0.55; // Base spacing between lines
+        const fontSize = 19; // Font size for details
+        const availableWidth = pageW - 2 * margin; // Max width for text (pageWidth - leftMargin - rightMargin)
 
         doc.setFontSize(fontSize);
         doc.setFont("helvetica", "bold");
@@ -196,20 +214,20 @@ const QRCreater = () => {
         const addTextLine = (text, y) => {
           const lines = doc.splitTextToSize(text, availableWidth);
           doc.text(lines, margin, y);
-          return y + (lines.length * fontSize * 1.15 / 72); // Update Y based on number of lines (adjust multiplier 1.15 if needed)
+          return y + (lines.length * fontSize * 1.15) / 72; // Update Y based on number of lines (adjust multiplier 1.15 if needed)
         };
 
         currentY = addTextLine(`Barcode No: ${currentBarcodeNumber}`, currentY);
-        currentY += (lineSpacing / 2); // Add a bit of spacing
+        currentY += lineSpacing / 2; // Add a bit of spacing
 
         currentY = addTextLine(`SKU code no: ${skuc}`, currentY);
-        currentY += (lineSpacing / 2);
+        currentY += lineSpacing / 2;
 
         currentY = addTextLine(`SKU Name: ${skun}`, currentY); // Wrap SKU Name
-        currentY += (lineSpacing / 2);
+        currentY += lineSpacing / 2;
 
         currentY = addTextLine(`Location: ${location}`, currentY); // Wrap Location
-        currentY += (lineSpacing / 2);
+        currentY += lineSpacing / 2;
 
         currentY = addTextLine(`Packing Date: ${currentTime}`, currentY);
 
@@ -220,16 +238,17 @@ const QRCreater = () => {
       }
 
       doc.save("barcodes.pdf");
-
     } catch (error) {
       console.error("Error generating PDF:", error);
-      if (error.name === 'InvalidInputException') {
-         showToast.error(`Failed to generate PDF. Invalid data for barcode: ${error.message}`);
+      if (error.name === "InvalidInputException") {
+        showToast.error(
+          `Failed to generate PDF. Invalid data for barcode: ${error.message}`
+        );
       } else {
-         showToast.error("Failed to generate PDF.");
+        showToast.error("Failed to generate PDF.");
       }
     } finally {
-       setIsDownloading(false);
+      setIsDownloading(false);
     }
   };
 
@@ -238,7 +257,7 @@ const QRCreater = () => {
     const content = document.getElementById("barcode-total");
 
     if (content) {
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      const printWindow = window.open("", "_blank", "width=800,height=600");
       printWindow.document.write(`
         <html>
           <head>
@@ -270,21 +289,52 @@ const QRCreater = () => {
     }
   };
 
+  // Function to handle saving data to the database
+  const handleSaveToDatabase = async () => {
+    const backendUrl =
+      process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-   // Function to handle saving data to the database
-   const handleSaveToDatabase = async () => {
+    // First, check if barcodes are unique
+    try {
+      showToast.info("Checking barcode uniqueness...");
+      const uniquenessResponse = await axios.post(
+        `${backendUrl}/api/barcodes/check-uniqueness`,
+        {
+          barcodeNumbers: barcodeNumbers,
+        }
+      );
+
+      if (!uniquenessResponse.data.isUnique) {
+        const duplicates = uniquenessResponse.data.duplicates;
+        showToast.error(
+          `⚠️ Duplicate barcodes found: ${duplicates.join(
+            ", "
+          )}. These barcodes already exist in the system!`
+        );
+        return; // Stop the save process
+      }
+
+      showToast.success("✓ All barcodes are unique!");
+    } catch (error) {
+      console.error("Error checking uniqueness:", error);
+      showToast.error("Error checking barcode uniqueness. Please try again.");
+      return;
+    }
+
     // Convert barcodeNumbers array to batchNumbers array (extract numeric parts)
     // barcodeNumbers format: ["SKU001", "SKU002"] -> batchNumbers format: [1, 2]
-    const batchNumbers = barcodeNumbers.map(barcode => {
-      // Extract numeric part from barcode (remove SKU prefix)
-      if (skuc && barcode.startsWith(skuc)) {
-        const numericPart = barcode.replace(skuc, '');
-        return parseInt(numericPart) || 0;
-      }
-      // If no SKU prefix, try to extract any number from the barcode
-      const match = barcode.match(/\d+/);
-      return match ? parseInt(match[0]) : 0;
-    }).filter(num => num > 0); // Filter out invalid numbers
+    const batchNumbers = barcodeNumbers
+      .map((barcode) => {
+        // Extract numeric part from barcode (remove SKU prefix)
+        if (skuc && barcode.startsWith(skuc)) {
+          const numericPart = barcode.replace(skuc, "");
+          return parseInt(numericPart) || 0;
+        }
+        // If no SKU prefix, try to extract any number from the barcode
+        const match = barcode.match(/\d+/);
+        return match ? parseInt(match[0]) : 0;
+      })
+      .filter((num) => num > 0);
 
     const formData = {
       product,
@@ -300,30 +350,43 @@ const QRCreater = () => {
       mixer,
       skuc,
       skun,
-      batchNumbers // Send as batchNumbers instead of barcodeNumbers
+      batchNumbers,
     };
 
     try {
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
       const response = await axios.post(`${backendUrl}/api/saved`, formData);
       showToast.success(response.data.message);
       // Update last used number for this SKU
       if (skuc && barcodeNumbers.length > 0) {
-        const lastNum = parseInt(barcodeNumbers[barcodeNumbers.length - 1].replace(skuc, ''));
+        const lastNum = parseInt(
+          barcodeNumbers[barcodeNumbers.length - 1].replace(skuc, "")
+        );
         setLastUsedNumber(skuc, lastNum);
       }
     } catch (error) {
       console.error("Error saving data:", error);
-      const errorMsg = error.response?.data?.message || error.message || 'Failed to save data';
+      const errorMsg =
+        error.response?.data?.message || error.message || "Failed to save data";
       if (error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors.map(e => e.message).join(', ');
+        const validationErrors = error.response.data.errors
+          .map((e) => e.message)
+          .join(", ");
         showToast.error(`Validation error: ${validationErrors}`);
-      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        showToast.error('Connection timeout. Please check your internet connection.');
+      } else if (
+        error.code === "ECONNABORTED" ||
+        error.message.includes("timeout")
+      ) {
+        showToast.error(
+          "Connection timeout. Please check your internet connection."
+        );
       } else if (error.response) {
-        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+        showToast.error(
+          `Backend error: ${error.response.status} - ${errorMsg}`
+        );
       } else if (error.request) {
-        showToast.error('Unable to connect to the server. Please check if the backend is running.');
+        showToast.error(
+          "Unable to connect to the server. Please check if the backend is running."
+        );
       } else {
         showToast.error(errorMsg);
       }
@@ -332,286 +395,318 @@ const QRCreater = () => {
 
   return (
     <div style={styles.container1}>
-          <style>{globalStyles}</style>
-    {/* Excel Upload input removed */}
-    <div style={styles.container}>
-      <h2 style={styles.heading}>Generate Barcodes</h2>
+      <style>{globalStyles}</style>
+      {/* Excel Upload input removed */}
+      <div style={styles.container}>
+        <h2 style={styles.heading}>Generate Barcodes</h2>
 
-      <div style={styles.form}>
-        {/* Product Name with autocomplete */}
-        <div style={{ ...styles.inputGroup, position: 'relative' }}>
-          <label htmlFor="product" style={styles.label}>Product Name:</label>
-          <input
-            id="product"
-            type="text"
-            placeholder="Product name"
-            value={product}
-            onChange={(e) => {
-              const value = e.target.value;
-              setProduct(value);
-              // Filter suggestions
-              if (value.length > 0 && excelData.length > 0) {
-                const suggestions = excelData.filter((item) =>
-                  item.productName && item.productName.toLowerCase().startsWith(value.toLowerCase())
-                );
-                setProductSuggestions(suggestions);
-                console.log("Suggestions:", suggestions); // Debug log
-              } else {
-                setProductSuggestions([]);
-                console.log("Suggestions: []"); // Debug log
-              }
+        <div style={styles.form}>
+          {/* Product Name with autocomplete */}
+          <div style={{ ...styles.inputGroup, position: "relative" }}>
+            <label htmlFor="product" style={styles.label}>
+              Product Name:
+            </label>
+            <input
+              id="product"
+              type="text"
+              placeholder="Product name"
+              value={product}
+              onChange={(e) => {
+                const value = e.target.value;
+                setProduct(value);
+                // Filter suggestions
+                if (value.length > 0 && excelData.length > 0) {
+                  const suggestions = excelData.filter(
+                    (item) =>
+                      item.productName &&
+                      item.productName
+                        .toLowerCase()
+                        .startsWith(value.toLowerCase())
+                  );
+                  setProductSuggestions(suggestions);
+                  console.log("Suggestions:", suggestions); // Debug log
+                } else {
+                  setProductSuggestions([]);
+                  console.log("Suggestions: []"); // Debug log
+                }
+              }}
+              required
+              style={styles.input}
+              autoComplete="off"
+            />
+            {/* Suggestions dropdown */}
+            {productSuggestions.length > 0 && (
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  background: "#fff",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  maxHeight: "120px",
+                  overflowY: "auto",
+                  position: "absolute",
+                  zIndex: 10,
+                  width: "100%",
+                }}
+              >
+                {productSuggestions.map((item, idx) => (
+                  <li
+                    key={idx}
+                    style={{ padding: "8px", cursor: "pointer" }}
+                    onClick={() => {
+                      setProduct(item.productName);
+                      setSku(item.skuCode);
+                      setProductSuggestions([]);
+                      // Do NOT setSKU here, so SKU Name is not auto-filled
+                    }}
+                  >
+                    {item.productName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {/* Packed By */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="packed" style={styles.label}>
+              Packed By:
+            </label>
+            <input
+              id="packed"
+              type="text"
+              placeholder="Packed by"
+              value={packed}
+              onChange={(e) => setPacked(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="batch" style={styles.label}>
+              Batch No:
+            </label>
+            <input
+              id="batch"
+              type="number"
+              placeholder="Batch no"
+              value={batch}
+              onChange={(e) => setBatch(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="shift" style={styles.label}>
+              Shift (Day/Night):
+            </label>
+            <input
+              id="shift"
+              type="text"
+              placeholder="Shift-Day/Night"
+              value={shift}
+              onChange={(e) => setShift(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="rewinder" style={styles.label}>
+              Rewinder Operator:
+            </label>
+            <input
+              id="rewinder"
+              type="text"
+              placeholder="Rewinder operator"
+              value={rewinder}
+              onChange={(e) => setRewinder(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="edge" style={styles.label}>
+              Edge Cut Operator:
+            </label>
+            <input
+              id="edge"
+              type="text"
+              placeholder="Edge Cut Operator"
+              value={edge}
+              onChange={(e) => setEdge(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="winder" style={styles.label}>
+              Winder Operator:
+            </label>
+            <input
+              id="winder"
+              type="text"
+              placeholder="Winder Operator"
+              value={winder}
+              onChange={(e) => setWinder(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="mixer" style={styles.label}>
+              Mixer Operator:
+            </label>
+            <input
+              id="mixer"
+              type="text"
+              placeholder="Mixer Operator"
+              value={mixer}
+              onChange={(e) => setMixer(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          {/* SKU Code No */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="skuc" style={styles.label}>
+              SKU Code No:
+            </label>
+            <input
+              id="skuc"
+              type="text"
+              placeholder="SKU code no"
+              value={skuc}
+              onChange={(e) => setSku(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          {/* SKU Name (auto-filled, readOnly) */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="skun" style={styles.label}>
+              SKU Name:
+            </label>
+            <input
+              id="skun"
+              type="text"
+              placeholder="SKU Name"
+              value={skun}
+              onChange={(e) => setSKU(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.inputGroup}>
+            <label htmlFor="numberOfBarcodes" style={styles.label}>
+              Number of Barcodes:
+            </label>
+            <input
+              id="numberOfBarcodes"
+              type="number"
+              placeholder="Number of Barcodes"
+              value={numberOfBarcodes}
+              onChange={(e) => setNumberOfBarcodes(e.target.value)}
+              required
+              style={styles.input}
+            />
+          </div>
+
+          <button
+            className="styled-button"
+            onClick={() => {
+              handleSaveToDatabase();
             }}
-            required
-            style={styles.input}
-            autoComplete="off"
-          />
-          {/* Suggestions dropdown */}
-          {productSuggestions.length > 0 && (
-            <ul style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              background: "#fff",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              maxHeight: "120px",
-              overflowY: "auto",
-              position: "absolute",
-              zIndex: 10,
-              width: "100%"
-            }}>
-              {productSuggestions.map((item, idx) => (
-                <li
-                  key={idx}
-                  style={{ padding: "8px", cursor: "pointer" }}
-                  onClick={() => {
-                    setProduct(item.productName);
-                    setSku(item.skuCode);
-                    setProductSuggestions([]);
-                    // Do NOT setSKU here, so SKU Name is not auto-filled
-                  }}
-                >
-                  {item.productName}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {/* Packed By */}
-        <div style={styles.inputGroup}>
-        <label htmlFor="packed" style={styles.label}>Packed By:</label>
-        <input
-          id="packed"
-          type="text"
-          placeholder="Packed by"
-          value={packed}
-          onChange={(e) => setPacked(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-        <div style={styles.inputGroup}>
-        <label htmlFor="batch" style={styles.label}>Batch No:</label>
-        <input
-          id="batch"
-          type="number"
-          placeholder="Batch no"
-          value={batch}
-          onChange={(e) => setBatch(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-        <div style={styles.inputGroup}>
-        <label htmlFor="shift" style={styles.label}>Shift (Day/Night):</label>
-        <input
-          id="shift"
-          type="text"
-          placeholder="Shift-Day/Night"
-          value={shift}
-          onChange={(e) => setShift(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-        <div style={styles.inputGroup}>
-        <label htmlFor="rewinder" style={styles.label}>Rewinder Operator:</label>
-        <input
-          id="rewinder"
-          type="text"
-          placeholder="Rewinder operator"
-          value={rewinder}
-          onChange={(e) => setRewinder(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-         <div style={styles.inputGroup}>
-         <label htmlFor="edge" style={styles.label}>Edge Cut Operator:</label>
-         <input
-          id="edge"
-          type="text"
-          placeholder="Edge Cut Operator"
-          value={edge}
-          onChange={(e) => setEdge(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-         <div style={styles.inputGroup}>
-         <label htmlFor="winder" style={styles.label}>Winder Operator:</label>
-         <input
-          id="winder"
-          type="text"
-          placeholder="Winder Operator"
-          value={winder}
-          onChange={(e) => setWinder(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-         <div style={styles.inputGroup}>
-         <label htmlFor="mixer" style={styles.label}>Mixer Operator:</label>
-         <input
-          id="mixer"
-          type="text"
-          placeholder="Mixer Operator"
-          value={mixer}
-          onChange={(e) => setMixer(e.target.value)}
-          required
-          style={styles.input}
-        />
-        </div>
-        {/* SKU Code No */}
-        <div style={styles.inputGroup}>
-          <label htmlFor="skuc" style={styles.label}>SKU Code No:</label>
-          <input
-            id="skuc"
-            type="text"
-            placeholder="SKU code no"
-            value={skuc}
-            onChange={(e) => setSku(e.target.value)}
-            required
-            style={styles.input}
-          />
-        </div>
-        {/* SKU Name (auto-filled, readOnly) */}
-        <div style={styles.inputGroup}>
-          <label htmlFor="skun" style={styles.label}>SKU Name:</label>
-          <input
-            id="skun"
-            type="text"
-            placeholder="SKU Name"
-            value={skun}
-            onChange={(e) => setSKU(e.target.value)}
-            required
-            style={styles.input}
-          />
-        </div>
-        <div style={styles.inputGroup}>
-        <label htmlFor="numberOfBarcodes" style={styles.label}>Number of Barcodes:</label>
-        <input
-          id="numberOfBarcodes"
-          type="number"
-          placeholder="Number of Barcodes"
-          value={numberOfBarcodes}
-          onChange={(e) => setNumberOfBarcodes(e.target.value)}
-          required
-          style={styles.input}
-        />
+          >
+            Add
+          </button>
+
+          {/* Download All Barcodes PDF button */}
+          <button
+            className="styled-button"
+            onClick={handleDownloadAllBarcodesPDF}
+            disabled={isDownloading}
+          >
+            {isDownloading ? "Downloading..." : "Download All Barcodes as PDF"}
+          </button>
+
+          {/* Print Final Barcode button */}
+          <button className="styled-button" onClick={handlePrint}>
+            Print Final Barcode
+          </button>
         </div>
 
-        <button
-          className="styled-button"
-          onClick={() => {
-            handleSaveToDatabase();
+        {/* Generate individual barcodes */}
+        {/* Add a flex container for barcode cards with gap */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: "32px",
+            flexWrap: "wrap",
+            marginBottom: "30px",
           }}
         >
-          Add
-        </button>
+          {Array.from({ length: barcodeNumbers.length }).map((_, index) => (
+            <div
+              id={`barcode-div-${index}`}
+              key={index}
+              style={styles.barcodeContainer}
+            >
+              {/* Barcode value is SKU Code No + running number */}
+              <Barcode
+                value={barcodeNumbers[index]}
+                width={2}
+                height={60}
+                fontSize={28}
+              />
+              <div style={styles.barcodeDetails}>
+                <p
+                  style={{
+                    color: "black",
+                    fontSize: "15px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  <p>Barcode No: {barcodeNumbers[index]}</p>
+                  <p>SKU code no: {skuc}</p>
+                  <p>SKU Name: {skun}</p>
+                  <p>Location: {location}</p>
+                  <p>Packing Date: {currentTime}</p>
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
 
-         {/* Download All Barcodes PDF button */}
-      <button
-        className="styled-button"
-        onClick={handleDownloadAllBarcodesPDF}
-        disabled={isDownloading}
-      >
-        {isDownloading ? "Downloading..." : "Download All Barcodes as PDF"}
-      </button>
+        {/* Final barcode with the start and end batch numbers */}
+        <div id="barcode-total" style={styles.finalBarcodeContainer}>
+          <h3 style={styles.finalBarcodeHeading}>Final Barcode</h3>
 
-
-      {/* Print Final Barcode button */}
-      <button
-        className="styled-button"
-        onClick={handlePrint}
-      >
-        Print Final Barcode
-      </button>
-
-      </div>
-
-
-
-      {/* Generate individual barcodes */}
-      {/* Add a flex container for barcode cards with gap */}
-      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', gap: '32px', flexWrap: 'wrap', marginBottom: '30px' }}>
-        {Array.from({ length: barcodeNumbers.length }).map((_, index) => (
-          <div
-            id={`barcode-div-${index}`}
-            key={index}
-            style={styles.barcodeContainer}
-          >
-            {/* Barcode value is SKU Code No + running number */}
+          {/* Final barcode value showing barcode number range */}
+          {barcodeNumbers.length > 0 && (
             <Barcode
-              value={barcodeNumbers[index]}
+              value={`${barcodeNumbers[0]}-${
+                barcodeNumbers[barcodeNumbers.length - 1]
+              }`}
               width={2}
               height={60}
               fontSize={28}
             />
-            <div style={styles.barcodeDetails}>
-              <p style={{color:"black", fontSize:"15px", fontWeight:"bold"}}>
-                <p>Barcode No: {barcodeNumbers[index]}</p>
-                <p>SKU code no: {skuc}</p>
-                <p>SKU Name: {skun}</p>
-                <p>Location: {location}</p>
-                <p>Packing Date: {currentTime}</p>
-              </p>
-            </div>
+          )}
+          <div style={styles.barcodeDetails}>
+            <p style={{ color: "black", fontSize: "15px" }}>
+              <h1>Start: {barcodeNumbers[0]}</h1>
+              <h1>End: {barcodeNumbers[barcodeNumbers.length - 1]}</h1>
+              <h1>SKU code no: {skuc}</h1>
+              <h1>SKU Name: {skun}</h1>
+              <h1>Location: {location}</h1>
+              <h1>Packing Date: {currentTime}</h1>
+            </p>
           </div>
-        ))}
-      </div>
-
-     
-
-      {/* Final barcode with the start and end batch numbers */}
-      <div
-        id="barcode-total"
-        style={styles.finalBarcodeContainer}
-      >
-        <h3 style={styles.finalBarcodeHeading}>Final Barcode</h3>
-
-        {/* Final barcode value showing barcode number range */}
-        {barcodeNumbers.length > 0 && (
-          <Barcode
-            value={`${barcodeNumbers[0]}-${barcodeNumbers[barcodeNumbers.length - 1]}`}
-            width={2}
-            height={60}
-            fontSize={28}
-          />
-        )}
-        <div style={styles.barcodeDetails}>
-          <p style={{color:"black", fontSize:"15px"}}>
-            <h1>Start: {barcodeNumbers[0]}</h1>
-            <h1>End: {barcodeNumbers[barcodeNumbers.length - 1]}</h1>
-            <h1>SKU code no: {skuc}</h1>
-            <h1>SKU Name: {skun}</h1>
-            <h1>Location: {location}</h1>
-            <h1>Packing Date: {currentTime}</h1>
-          </p>
         </div>
       </div>
-
-    </div>
     </div>
   );
 };
@@ -621,9 +716,9 @@ const styles = {
     textAlign: "center",
     padding: "30px",
     fontFamily: "'Arial', sans-serif",
-    background: 'linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)',
-    backgroundSize: '400% 400%',
-    animation: 'gradientAnimation 12s ease infinite',
+    background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
+    backgroundSize: "400% 400%",
+    animation: "gradientAnimation 12s ease infinite",
     borderRadius: "8px",
     boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
     maxWidth: "1500px",
@@ -633,7 +728,7 @@ const styles = {
     textAlign: "center",
     padding: "30px",
     fontFamily: "'Arial', sans-serif",
-    backgroundColor: 'rgba(218, 216, 224, 0.6)',
+    backgroundColor: "rgba(218, 216, 224, 0.6)",
     borderRadius: "8px",
     boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
     maxWidth: "800px",
@@ -651,21 +746,21 @@ const styles = {
     flexDirection: "column",
     gap: "15px",
     marginBottom: "30px",
-    alignItems: 'center',
+    alignItems: "center",
   },
   inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    width: '100%',
-    maxWidth: '400px',
-    marginBottom: '5px',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    width: "100%",
+    maxWidth: "400px",
+    marginBottom: "5px",
   },
   label: {
-    marginBottom: '5px',
-    fontSize: '20px',
-    color: 'white',
-    fontWeight: 'bold',
+    marginBottom: "5px",
+    fontSize: "20px",
+    color: "white",
+    fontWeight: "bold",
   },
   input: {
     padding: "12px 15px",
@@ -673,8 +768,8 @@ const styles = {
     border: "1px solid #ccc",
     borderRadius: "25px",
     width: "100%",
-    boxSizing: 'border-box',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    boxSizing: "border-box",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
   },
   barcodeContainer: {
     margin: "0 12px 24px 12px",

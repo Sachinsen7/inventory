@@ -1,11 +1,11 @@
 require("dotenv").config();
 const express = require("express");
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { body, validationResult } = require('express-validator');
-const mongoSanitize = require('express-mongo-sanitize');
-const xss = require('xss-clean');
-const hpp = require('hpp');
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const { body, validationResult } = require("express-validator");
+const mongoSanitize = require("express-mongo-sanitize");
+const xss = require("xss-clean");
+const hpp = require("hpp");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -15,7 +15,7 @@ const logger = require("./utils/logger");
 const validators = require("./utils/validators");
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 const Godown = require("./models/Godowns");
 const GodownInventory = require("./models/GodownInventory");
@@ -31,39 +31,44 @@ const billingRoutes = require("./routes/billingRoutes");
 app.use(bodyParser.json());
 
 // Hardened CORS configuration: restrict to allowed origins from environment
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
+  .split(",")
+  .map((o) => o.trim());
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (e.g., mobile apps or Postman) only in development
-    if (!origin && process.env.NODE_ENV !== 'production') {
+    if (!origin && process.env.NODE_ENV !== "production") {
       return callback(null, true);
     }
     if (origin && allowedOrigins.includes(origin)) {
       callback(null, true);
     } else if (!origin) {
-      callback(new Error('CORS policy: origin required'));
+      callback(new Error("CORS policy: origin required"));
     } else {
-      callback(new Error('CORS policy: origin not allowed'));
+      callback(new Error("CORS policy: origin not allowed"));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 200,
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 app.use(cors(corsOptions));
 
 // HTTPS enforcement middleware (redirect HTTP to HTTPS in production)
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   app.use((req, res, next) => {
     // Check for X-Forwarded-Proto header (set by reverse proxy like nginx, Azure App Service)
     // or check req.secure directly (direct HTTPS connection)
-    if (req.header('x-forwarded-proto') !== 'https' && !req.secure) {
-      logger.warn('HTTP request received; redirecting to HTTPS', { 
+    if (req.header("x-forwarded-proto") !== "https" && !req.secure) {
+      logger.warn("HTTP request received; redirecting to HTTPS", {
         url: req.originalUrl,
-        ip: req.ip 
+        ip: req.ip,
       });
-      return res.redirect(301, `https://${req.header('host')}${req.originalUrl}`);
+      return res.redirect(
+        301,
+        `https://${req.header("host")}${req.originalUrl}`
+      );
     }
     next();
   });
@@ -75,17 +80,17 @@ const helmetOptions = {
   hsts: {
     maxAge: 63072000, // 2 years in seconds
     includeSubDomains: true,
-    preload: true // allow domain to be included in HSTS preload list
+    preload: true, // allow domain to be included in HSTS preload list
   },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"], // adjust if needed
       styleSrc: ["'self'", "'unsafe-inline'"], // adjust if needed
-      imgSrc: ["'self'", 'data:', 'https:'],
+      imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'"], // restrict API calls to same origin
-    }
-  }
+    },
+  },
 };
 app.use(helmet(helmetOptions)); // sets secure headers
 app.use(mongoSanitize()); // prevent NoSQL injection
@@ -93,17 +98,17 @@ app.use(xss()); // basic XSS sanitization
 app.use(hpp()); // HTTP parameter pollution protection
 
 // Secure cookie middleware (set secure flags on cookies)
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   app.use((req, res, next) => {
     // Override res.cookie to add secure flags for production
     const originalCookie = res.cookie;
     res.cookie = function (name, val, options) {
       if (!options) options = {};
       // In production, enforce secure cookies (HTTPS only), httpOnly, and SameSite
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === "production") {
         options.secure = true; // only send over HTTPS
         options.httpOnly = true; // prevent JavaScript from accessing cookie
-        options.sameSite = 'Strict'; // prevent CSRF attacks
+        options.sameSite = "Strict"; // prevent CSRF attacks
       }
       return originalCookie.call(this, name, val, options);
     };
@@ -117,7 +122,7 @@ const generalLimiter = rateLimit({
   max: 200, // limit each IP to 200 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many requests, please try again later.' }
+  message: { message: "Too many requests, please try again later." },
 });
 app.use(generalLimiter);
 
@@ -127,29 +132,30 @@ const authLimiter = rateLimit({
   max: 6, // limit each IP to 6 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many login attempts, please try again later.' }
+  message: { message: "Too many login attempts, please try again later." },
 });
 
 // JWT authentication middleware
 function authenticateJWT(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
     try {
       const payload = jwt.verify(token, process.env.JWT_SECRET);
       req.user = payload;
       return next();
     } catch (err) {
-      return res.status(401).json({ message: 'Invalid or expired token' });
+      return res.status(401).json({ message: "Invalid or expired token" });
     }
   }
-  return res.status(401).json({ message: 'Authorization token required' });
+  return res.status(401).json({ message: "Authorization token required" });
 }
 
 function authorizeRole(role) {
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
-    if (req.user.role !== role) return res.status(403).json({ message: 'Forbidden' });
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    if (req.user.role !== role)
+      return res.status(403).json({ message: "Forbidden" });
     next();
   };
 }
@@ -221,6 +227,24 @@ const barcodeSchema = new mongoose.Schema({
 // Create Model
 const Barcode = mongoose.model("Barcode", barcodeSchema);
 
+// Transit Schema - for items in transit between factory and godowns
+const transitSchema = new mongoose.Schema({
+  inputValue: String,
+  sourceLocation: { type: String, default: "Factory" }, // Where item is coming from
+  destinationGodown: String, // Where item is going
+  dispatchDate: { type: Date, default: Date.now },
+  estimatedArrival: Date,
+  status: {
+    type: String,
+    default: "In Transit",
+    enum: ["In Transit", "Delivered", "Cancelled"],
+  },
+  quantity: { type: Number, default: 1 },
+  notes: String,
+});
+
+const Transit = mongoose.model("Transit", transitSchema, "transits");
+
 // Routes
 
 const despatchSchema = new mongoose.Schema({
@@ -291,15 +315,37 @@ app.get("/api/godowns", async (req, res) => {
   }
 });
 
-app.post("/api/godowns",
-  validators.rejectUnknownFields(['name', 'address', 'email', 'password', 'city', 'state']),
+// Get single godown by ID
+app.get("/api/godowns/:id", async (req, res) => {
+  try {
+    const godown = await Godown.findById(req.params.id);
+    if (!godown) {
+      return res.status(404).json({ message: "Godown not found" });
+    }
+    res.json(godown);
+  } catch (error) {
+    logger.error("Error fetching godown by ID:", error);
+    res.status(500).json({ message: "Error fetching godown" });
+  }
+});
+
+app.post(
+  "/api/godowns",
+  validators.rejectUnknownFields([
+    "name",
+    "address",
+    "email",
+    "password",
+    "city",
+    "state",
+  ]),
   [
-    validators.string('name', 200),
-    validators.string('address', 500),
+    validators.string("name", 200),
+    validators.string("address", 500),
     validators.email(),
     validators.password(),
-    validators.string('city', 100),
-    validators.string('state', 100)
+    validators.string("city", 100),
+    validators.string("state", 100),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -310,7 +356,14 @@ app.post("/api/godowns",
       if (password) {
         hashedPassword = await bcrypt.hash(password, 10);
       }
-      const godown = new Godown({ name, address, email, password: hashedPassword, city, state });
+      const godown = new Godown({
+        name,
+        address,
+        email,
+        password: hashedPassword,
+        city,
+        state,
+      });
       const savedGodown = await godown.save();
       res.status(201).json(savedGodown);
     } catch (error) {
@@ -326,15 +379,23 @@ app.post("/api/godowns",
 );
 
 // Add PUT endpoint for editing godown
-app.put("/api/godowns/:id",
-  validators.rejectUnknownFields(['name', 'address', 'email', 'password', 'city', 'state']),
+app.put(
+  "/api/godowns/:id",
+  validators.rejectUnknownFields([
+    "name",
+    "address",
+    "email",
+    "password",
+    "city",
+    "state",
+  ]),
   [
-    validators.string('name', 200),
-    validators.string('address', 500),
+    validators.string("name", 200),
+    validators.string("address", 500),
     validators.email(),
-    body('password').optional().isString().isLength({ min: 6 }),
-    validators.string('city', 100),
-    validators.string('state', 100)
+    body("password").optional().isString().isLength({ min: 6 }),
+    validators.string("city", 100),
+    validators.string("state", 100),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -390,12 +451,10 @@ app.get("/api/items/:godownId", async (req, res) => {
   }
 });
 //6
-app.post("/api/items",
-  validators.rejectUnknownFields(['godownId', 'name']),
-  [
-    validators.objectId('godownId'),
-    validators.string('name', 500)
-  ],
+app.post(
+  "/api/items",
+  validators.rejectUnknownFields(["godownId", "name"]),
+  [validators.objectId("godownId"), validators.string("name", 500)],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
@@ -412,12 +471,10 @@ app.post("/api/items",
 //7
 
 // Delivery Items API
-app.post("/api/checkAndAddItem",
-  validators.rejectUnknownFields(['input', 'godownName']),
-  [
-    validators.string('input', 500),
-    validators.string('godownName', 200)
-  ],
+app.post(
+  "/api/checkAndAddItem",
+  validators.rejectUnknownFields(["input", "godownName"]),
+  [validators.string("input", 500), validators.string("godownName", 200)],
   validators.handleValidationErrors,
   async (req, res) => {
     const { input, godownName } = req.body;
@@ -440,12 +497,10 @@ app.post("/api/checkAndAddItem",
       }
     } catch (error) {
       logger.error("Error in checkAndAddItem API:", error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "An error occurred. Please try again.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "An error occurred. Please try again.",
+      });
     }
   }
 );
@@ -473,23 +528,22 @@ app.get("/api/getDeliveryItems", async (req, res) => {
     res.json({ success: true, data: deliveryItems });
   } catch (error) {
     logger.error("Error fetching delivery items:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "An error occurred while fetching data.",
-      });
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching data.",
+    });
   }
 });
 //9
 
 // User Authentication API
-app.post("/api/auth/signup",
-  validators.rejectUnknownFields(['username', 'email', 'password']),
+app.post(
+  "/api/auth/signup",
+  validators.rejectUnknownFields(["username", "email", "password"]),
   [
-    validators.string('username', 100),
+    validators.string("username", 100),
     validators.email(),
-    validators.password()
+    validators.password(),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -504,7 +558,7 @@ app.post("/api/auth/signup",
       await newUser.save();
       res.status(201).json({ message: "User created successfully" });
     } catch (error) {
-      logger.error('Error during signup:', error);
+      logger.error("Error during signup:", error);
       res.status(500).json({ message: "Server error" });
     }
   }
@@ -512,76 +566,90 @@ app.post("/api/auth/signup",
 
 //10
 
-
 app.post(
   "/api/auth/login",
   authLimiter,
   [
-    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('password').isString().isLength({ min: 6 }).withMessage('Invalid password')
+    body("email").isEmail().withMessage("Invalid email").normalizeEmail(),
+    body("password")
+      .isString()
+      .isLength({ min: 6 })
+      .withMessage("Invalid password"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      logger.warn('Auth login validation failed', { errors: errors.array() });
-      return res.status(400).json({ message: 'Invalid credentials' });
+      logger.warn("Auth login validation failed", { errors: errors.array() });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const { email, password } = req.body;
     try {
       const user = await User.findOne({ email });
       if (!user) {
-        return res.status(400).json({ message: 'Invalid credentials' });
+        return res.status(400).json({ message: "Invalid credentials" });
       }
 
       const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+      if (!isMatch)
+        return res.status(400).json({ message: "Invalid credentials" });
 
-      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
       res.json({ token });
     } catch (error) {
-      logger.error('Error during auth login', error);
-      res.status(500).json({ message: 'Server error' });
+      logger.error("Error during auth login", error);
+      res.status(500).json({ message: "Server error" });
     }
   }
 );
 
 // Admin Login Route
 app.post(
-  '/loginadmin',
+  "/loginadmin",
   authLimiter,
   [
-    body('username').isString().trim().notEmpty(),
-    body('password').isString().notEmpty()
+    body("username").isString().trim().notEmpty(),
+    body("password").isString().notEmpty(),
   ],
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      logger.warn('Admin login validation failed', { errors: errors.array() });
-      return res.status(400).json({ success: false, message: 'Invalid credentials' });
+      logger.warn("Admin login validation failed", { errors: errors.array() });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid credentials" });
     }
 
     const { username, password } = req.body;
-    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+    if (
+      username === process.env.ADMIN_USERNAME &&
+      password === process.env.ADMIN_PASSWORD
+    ) {
       if (!process.env.JWT_SECRET) {
-        logger.error('JWT secret missing for admin login');
-        return res.status(500).json({ message: 'Server configuration error' });
+        logger.error("JWT secret missing for admin login");
+        return res.status(500).json({ message: "Server configuration error" });
       }
-      const token = jwt.sign({ role: 'admin', username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      const token = jwt.sign(
+        { role: "admin", username },
+        process.env.JWT_SECRET,
+        { expiresIn: "1h" }
+      );
       return res.json({ success: true, token });
     }
-    logger.warn('Invalid admin login attempt', { username });
-    return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    logger.warn("Invalid admin login attempt", { username });
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid credentials" });
   }
 );
 
 // Godown Login Validation
-app.post("/api/login",
-  validators.rejectUnknownFields(['name', 'address']),
-  [
-    validators.string('name', 200),
-    validators.string('address', 500)
-  ],
+app.post(
+  "/api/login",
+  validators.rejectUnknownFields(["name", "address"]),
+  [validators.string("name", 200), validators.string("address", 500)],
   validators.handleValidationErrors,
   async (req, res) => {
     const { name, address } = req.body;
@@ -601,30 +669,43 @@ app.post("/api/login",
 
 // Godown Login with Email and Password
 app.post(
-  '/api/godown-login',
+  "/api/godown-login",
   authLimiter,
   [
-    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
-    body('password').isString().isLength({ min: 6 }).withMessage('Invalid password')
+    body("email").isEmail().withMessage("Invalid email").normalizeEmail(),
+    body("password")
+      .isString()
+      .isLength({ min: 6 })
+      .withMessage("Invalid password"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      logger.warn('Godown login validation failed', { errors: errors.array() });
-      return res.status(400).json({ success: false, message: 'Invalid credentials' });
+      logger.warn("Godown login validation failed", { errors: errors.array() });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid credentials" });
     }
 
     const { email, password } = req.body;
     try {
       const godown = await Godown.findOne({ email });
-      if (!godown) return res.json({ success: false, message: 'Invalid Email or Password' });
+      if (!godown)
+        return res.json({
+          success: false,
+          message: "Invalid Email or Password",
+        });
 
       const isMatch = await bcrypt.compare(password, godown.password);
-      if (!isMatch) return res.json({ success: false, message: 'Invalid Email or Password' });
+      if (!isMatch)
+        return res.json({
+          success: false,
+          message: "Invalid Email or Password",
+        });
 
       res.json({
         success: true,
-        message: 'Login successful',
+        message: "Login successful",
         godown: {
           _id: godown._id,
           name: godown.name,
@@ -632,39 +713,49 @@ app.post(
           email: godown.email,
           city: godown.city,
           state: godown.state,
-        }
+        },
       });
     } catch (err) {
-      logger.error('Error in godown email login:', err);
-      res.status(500).json({ message: 'Server error' });
+      logger.error("Error in godown email login:", err);
+      res.status(500).json({ message: "Server error" });
     }
   }
 );
 
 // User List API (protected - admin only)
-app.get("/api/users", authenticateJWT, authorizeRole('admin'), async (req, res) => {
-  try {
-    const users = await User.find().select('-password');
-    res.json(users);
-  } catch (error) {
-    logger.error("Error fetching users:", error);
-    res.status(500).json({ message: "Server error" });
+app.get(
+  "/api/users",
+  authenticateJWT,
+  authorizeRole("admin"),
+  async (req, res) => {
+    try {
+      const users = await User.find().select("-password");
+      res.json(users);
+    } catch (error) {
+      logger.error("Error fetching users:", error);
+      res.status(500).json({ message: "Server error" });
+    }
   }
-});
+);
 
 // User Deletion API (protected - admin only)
-app.delete("/api/users/:id", authenticateJWT, authorizeRole('admin'), async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+app.delete(
+  "/api/users/:id",
+  authenticateJWT,
+  authorizeRole("admin"),
+  async (req, res) => {
+    try {
+      const user = await User.findByIdAndDelete(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      logger.error("Error deleting user:", error);
+      res.status(500).json({ message: "Server error" });
     }
-    res.json({ message: "User deleted successfully" });
-  } catch (error) {
-    logger.error("Error deleting user:", error);
-    res.status(500).json({ message: "Server error" });
   }
-});
+);
 
 // Get all delivery items
 app.get("/api/deliveryItems", async (req, res) => {
@@ -677,13 +768,19 @@ app.get("/api/deliveryItems", async (req, res) => {
 });
 
 // Add item to sales if it matches deliveryItems
-app.post("/api/sales",
-  validators.rejectUnknownFields(['name', 'userName', 'mobileNumber', 'godown']),
+app.post(
+  "/api/sales",
+  validators.rejectUnknownFields([
+    "name",
+    "userName",
+    "mobileNumber",
+    "godown",
+  ]),
   [
-    validators.string('name', 500),
-    validators.string('userName', 200),
-    validators.phone('mobileNumber'),
-    validators.string('godown', 200)
+    validators.string("name", 500),
+    validators.string("userName", 200),
+    validators.phone("mobileNumber"),
+    validators.string("godown", 200),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -708,7 +805,7 @@ app.post("/api/sales",
 
       res.status(201).json(sale);
     } catch (error) {
-      logger.error('Error processing sale:', error);
+      logger.error("Error processing sale:", error);
       res.status(500).json({ error: "Error processing the sale" });
     }
   }
@@ -761,11 +858,10 @@ app.get("/api/products", async (req, res) => {
 });
 
 // API to save input field data in 'select' collection
-app.post("/api/save",
-  validators.rejectUnknownFields(['inputValue']),
-  [
-    validators.string('inputValue', 500)
-  ],
+app.post(
+  "/api/save",
+  validators.rejectUnknownFields(["inputValue"]),
+  [validators.string("inputValue", 500)],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
@@ -774,18 +870,17 @@ app.post("/api/save",
       await newEntry.save();
       res.json({ message: "Data saved successfully" });
     } catch (error) {
-      logger.error('Error saving data:', error);
+      logger.error("Error saving data:", error);
       res.status(500).json({ message: "Error saving data" });
     }
   }
 );
 
 // API to save only input value (for SelectForm) - now same as /api/save
-app.post("/api/save-input",
-  validators.rejectUnknownFields(['inputValue']),
-  [
-    validators.string('inputValue', 500)
-  ],
+app.post(
+  "/api/save-input",
+  validators.rejectUnknownFields(["inputValue"]),
+  [validators.string("inputValue", 500)],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
@@ -794,7 +889,7 @@ app.post("/api/save-input",
       await newEntry.save();
       res.json({ message: "Data saved successfully" });
     } catch (error) {
-      logger.error('Error saving input:', error);
+      logger.error("Error saving input:", error);
       res.status(500).json({ message: "Error saving data" });
     }
   }
@@ -811,12 +906,10 @@ app.get("/api/products1", async (req, res) => {
 });
 
 // API: Add Data After Checking Match & Delete from `selects`
-app.post("/api/save/select",
-  validators.rejectUnknownFields(['inputValue', 'godownName']),
-  [
-    validators.string('inputValue', 500),
-    validators.string('godownName', 200)
-  ],
+app.post(
+  "/api/save/select",
+  validators.rejectUnknownFields(["inputValue", "godownName"]),
+  [validators.string("inputValue", 500), validators.string("godownName", 200)],
   validators.handleValidationErrors,
   async (req, res) => {
     const { inputValue, godownName } = req.body;
@@ -838,6 +931,17 @@ app.post("/api/save/select",
       });
       await newDespatch.save();
 
+      // Add to Transit tracking
+      const transitItem = new Transit({
+        inputValue,
+        sourceLocation: "Factory",
+        destinationGodown: godownName,
+        quantity: 1,
+        status: "In Transit",
+      });
+      await transitItem.save();
+      logger.info("Item added to transit tracking", { inputValue, godownName });
+
       // Delete from `selects` collection after adding
       await Select.deleteOne({ _id: existingData._id });
 
@@ -849,24 +953,114 @@ app.post("/api/save/select",
   }
 );
 
+// Transit API Endpoints
+
+// Get all transit items
+app.get("/api/transits", async (req, res) => {
+  try {
+    const transitItems = await Transit.find({ status: "In Transit" }).sort({
+      dispatchDate: -1,
+    });
+    res.json(transitItems);
+  } catch (error) {
+    logger.error("Error fetching transit items:", error);
+    res.status(500).json({ message: "Error fetching transit items" });
+  }
+});
+
+// Get transit summary
+app.get("/api/transits/summary", async (req, res) => {
+  try {
+    const transitItems = await Transit.find({ status: "In Transit" });
+    const totalInTransit = transitItems.length;
+
+    // Group by godown
+    const byGodown = {};
+    transitItems.forEach((item) => {
+      const godownName = item.destinationGodown || "Unknown";
+      if (!byGodown[godownName]) {
+        byGodown[godownName] = {
+          godownName,
+          itemCount: 0,
+        };
+      }
+      byGodown[godownName].itemCount += 1;
+    });
+
+    res.json({
+      totalInTransit,
+      byGodown: Object.values(byGodown),
+    });
+  } catch (error) {
+    logger.error("Error fetching transit summary:", error);
+    res.status(500).json({ message: "Error fetching transit summary" });
+  }
+});
+
+// Update transit status
+app.put(
+  "/api/transits/:id/status",
+  validators.rejectUnknownFields(["status"]),
+  [body("status").isIn(["In Transit", "Delivered", "Cancelled"])],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const transitItem = await Transit.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+
+      if (!transitItem) {
+        return res.status(404).json({ message: "Transit item not found" });
+      }
+
+      logger.info("Transit status updated", { id, status });
+      res.json({ message: "Status updated successfully", item: transitItem });
+    } catch (error) {
+      logger.error("Error updating transit status:", error);
+      res.status(500).json({ message: "Error updating status" });
+    }
+  }
+);
+
 // API to save data
-app.post("/api/saved",
-  validators.rejectUnknownFields(['product', 'packed', 'batch', 'shift', 'numberOfBarcodes', 'location', 'currentTime', 'rewinder', 'edge', 'winder', 'mixer', 'skuc', 'skun', 'batchNumbers']),
+app.post(
+  "/api/saved",
+  validators.rejectUnknownFields([
+    "product",
+    "packed",
+    "batch",
+    "shift",
+    "numberOfBarcodes",
+    "location",
+    "currentTime",
+    "rewinder",
+    "edge",
+    "winder",
+    "mixer",
+    "skuc",
+    "skun",
+    "batchNumbers",
+  ]),
   [
-    body('product').optional().isString().trim(),
-    body('packed').optional().isString().trim(),
-    body('batch').optional().isString().trim(),
-    body('shift').optional().isString().trim(),
-    body('numberOfBarcodes').optional().isInt(),
-    body('location').optional().isString().trim(),
-    body('currentTime').optional().isString().trim(),
-    body('rewinder').optional().isString().trim(),
-    body('edge').optional().isString().trim(),
-    body('winder').optional().isString().trim(),
-    body('mixer').optional().isString().trim(),
-    body('skuc').optional().isString().trim(),
-    body('skun').optional().isString().trim(),
-    body('batchNumbers').optional().isArray()
+    body("product").optional().isString().trim(),
+    body("packed").optional().isString().trim(),
+    body("batch").optional().isString().trim(),
+    body("shift").optional().isString().trim(),
+    body("numberOfBarcodes").optional().isInt(),
+    body("location").optional().isString().trim(),
+    body("currentTime").optional().isString().trim(),
+    body("rewinder").optional().isString().trim(),
+    body("edge").optional().isString().trim(),
+    body("winder").optional().isString().trim(),
+    body("mixer").optional().isString().trim(),
+    body("skuc").optional().isString().trim(),
+    body("skun").optional().isString().trim(),
+    body("batchNumbers").optional().isArray(),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -892,19 +1086,27 @@ app.get("/api/products2", async (req, res) => {
 });
 
 // API: Add Data After Checking Match & Delete from `despatch`
-app.post("/api/save/despatch",
-  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName']),
+app.post(
+  "/api/save/despatch",
+  validators.rejectUnknownFields([
+    "selectedOption",
+    "inputValue",
+    "godownName",
+  ]),
   [
-    validators.string('selectedOption', 100),
-    validators.string('inputValue', 500),
-    validators.string('godownName', 200)
+    validators.string("selectedOption", 100),
+    validators.string("inputValue", 500),
+    validators.string("godownName", 200),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
     const { selectedOption, inputValue, godownName } = req.body;
 
     try {
-      const existingData = await Despatch.findOne({ selectedOption, inputValue });
+      const existingData = await Despatch.findOne({
+        selectedOption,
+        inputValue,
+      });
 
       if (!existingData) {
         return res
@@ -923,7 +1125,9 @@ app.post("/api/save/despatch",
       // Delete from `despatch` collection after adding
       await Despatch.deleteOne({ _id: existingData._id });
 
-      res.json({ message: "Data saved in delevery1 and deleted from despatch" });
+      res.json({
+        message: "Data saved in delevery1 and deleted from despatch",
+      });
     } catch (error) {
       logger.error("Error saving despatch->delevery1 data:", error);
       res.status(500).json({ message: "Error saving data" });
@@ -965,25 +1169,33 @@ app.get("/api/products3", async (req, res) => {
 });
 
 // API: Add Data to `delevery1`
-app.post("/api/add/delevery1",
-  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName', 'username', 'mobileNumber']),
+app.post(
+  "/api/add/delevery1",
+  validators.rejectUnknownFields([
+    "selectedOption",
+    "inputValue",
+    "godownName",
+    "username",
+    "mobileNumber",
+  ]),
   [
-    validators.string('selectedOption', 100),
-    validators.string('inputValue', 500),
-    validators.string('godownName', 200),
-    body('username').optional().isString().trim(),
-    body('mobileNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    validators.string("selectedOption", 100),
+    validators.string("inputValue", 500),
+    validators.string("godownName", 200),
+    body("username").optional().isString().trim(),
+    body("mobileNumber")
+      .optional()
+      .matches(/^[0-9\s\-\+\(\)]+$/),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
-    const {
+    const { selectedOption, inputValue, godownName, username, mobileNumber } =
+      req.body;
+    logger.debug("Add delevery1 request:", {
       selectedOption,
       inputValue,
       godownName,
-      username,
-      mobileNumber,
-    } = req.body;
-    logger.debug("Add delevery1 request:", { selectedOption, inputValue, godownName });
+    });
 
     try {
       const newDelevery1 = new Delevery1({
@@ -1003,24 +1215,28 @@ app.post("/api/add/delevery1",
 );
 
 // API: Add Data After Checking Match & Delete from `delevery1`
-app.post("/api/save/delevery1",
-  validators.rejectUnknownFields(['selectedOption', 'inputValue', 'godownName', 'username', 'mobileNumber']),
+app.post(
+  "/api/save/delevery1",
+  validators.rejectUnknownFields([
+    "selectedOption",
+    "inputValue",
+    "godownName",
+    "username",
+    "mobileNumber",
+  ]),
   [
-    validators.string('selectedOption', 100),
-    validators.string('inputValue', 500),
-    validators.string('godownName', 200),
-    body('username').optional().isString().trim(),
-    body('mobileNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    validators.string("selectedOption", 100),
+    validators.string("inputValue", 500),
+    validators.string("godownName", 200),
+    body("username").optional().isString().trim(),
+    body("mobileNumber")
+      .optional()
+      .matches(/^[0-9\s\-\+\(\)]+$/),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
-    const {
-      selectedOption,
-      inputValue,
-      godownName,
-      username,
-      mobileNumber,
-    } = req.body;
+    const { selectedOption, inputValue, godownName, username, mobileNumber } =
+      req.body;
 
     try {
       // Check if matching data exists in `delevery1`
@@ -1067,21 +1283,29 @@ app.get("/api/data", async (req, res) => {
 });
 
 // API to save multiple select + input field data in 'select' collection
-app.post("/api/save-multiple",
-  validators.rejectUnknownFields(['selectedOption', 'values']),
+app.post(
+  "/api/save-multiple",
+  validators.rejectUnknownFields(["selectedOption", "values"]),
   [
-    validators.string('selectedOption', 200),
-    body('values').isArray({ min: 1 }).withMessage('Values must be a non-empty array')
+    validators.string("selectedOption", 200),
+    body("values")
+      .isArray({ min: 1 })
+      .withMessage("Values must be a non-empty array"),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
       const { selectedOption, values } = req.body;
       // Validate each value is a string
-      if (!values.every(v => typeof v === 'string' && v.trim().length > 0)) {
+      if (!values.every((v) => typeof v === "string" && v.trim().length > 0)) {
         return res.status(400).json({
-          message: 'Validation failed',
-          errors: [{ field: 'values', message: 'All values must be non-empty strings' }]
+          message: "Validation failed",
+          errors: [
+            {
+              field: "values",
+              message: "All values must be non-empty strings",
+            },
+          ],
         });
       }
       // Save all values
@@ -1098,19 +1322,341 @@ app.post("/api/save-multiple",
   }
 );
 
+// ==================== COMPREHENSIVE INVENTORY TRACKING ====================
+
+app.get("/api/inventory/comprehensive-summary", async (req, res) => {
+  try {
+    logger.info("Fetching comprehensive inventory summary");
+
+    const godowns = await Godown.find();
+
+    const godownInventories = await GodownInventory.find().populate(
+      "godownId",
+      "name"
+    );
+
+    // Get items in select collection (factory inventory)
+    const factoryItems = await Select.find();
+
+    // Get items in delevery1 collection (in transit)
+    const inTransitItems = await Delevery1.find();
+
+    // Aggregate data by item name (using first 3 characters)
+    const inventoryMap = new Map();
+
+    // Process factory items
+    factoryItems.forEach((item) => {
+      if (item.inputValue && item.inputValue.length >= 3) {
+        const itemCode = item.inputValue.substring(0, 3);
+        if (!inventoryMap.has(itemCode)) {
+          inventoryMap.set(itemCode, {
+            itemName: itemCode,
+            factoryInventory: 0,
+            inTransit: 0,
+            totalQuantity: 0,
+            godowns: {},
+          });
+        }
+        inventoryMap.get(itemCode).factoryInventory += 1;
+        inventoryMap.get(itemCode).totalQuantity += 1;
+      }
+    });
+
+    // Process in-transit items
+    inTransitItems.forEach((item) => {
+      if (item.inputValue && item.inputValue.length >= 3) {
+        const itemCode = item.inputValue.substring(0, 3);
+        if (!inventoryMap.has(itemCode)) {
+          inventoryMap.set(itemCode, {
+            itemName: itemCode,
+            factoryInventory: 0,
+            inTransit: 0,
+            totalQuantity: 0,
+            godowns: {},
+          });
+        }
+        inventoryMap.get(itemCode).inTransit += 1;
+        inventoryMap.get(itemCode).totalQuantity += 1;
+      }
+    });
+
+    // Process godown inventories
+    godownInventories.forEach((item) => {
+      const itemCode =
+        item.itemName.length >= 3
+          ? item.itemName.substring(0, 3)
+          : item.itemName;
+      const godownName = item.godownId ? item.godownId.name : "Unknown";
+
+      if (!inventoryMap.has(itemCode)) {
+        inventoryMap.set(itemCode, {
+          itemName: itemCode,
+          factoryInventory: 0,
+          inTransit: 0,
+          totalQuantity: 0,
+          godowns: {},
+        });
+      }
+
+      const inventoryItem = inventoryMap.get(itemCode);
+      if (!inventoryItem.godowns[godownName]) {
+        inventoryItem.godowns[godownName] = 0;
+      }
+      inventoryItem.godowns[godownName] += item.quantity;
+      inventoryItem.totalQuantity += item.quantity;
+    });
+
+    // Convert map to array and sort by item name
+    const inventorySummary = Array.from(inventoryMap.values()).sort((a, b) =>
+      a.itemName.localeCompare(b.itemName)
+    );
+
+    // Get list of all godown names for consistent columns
+    const godownNames = godowns.map((g) => g.name).sort();
+
+    res.json({
+      inventory: inventorySummary,
+      godownNames: godownNames,
+      summary: {
+        totalItems: inventorySummary.length,
+        totalQuantity: inventorySummary.reduce(
+          (sum, item) => sum + item.totalQuantity,
+          0
+        ),
+        totalFactory: inventorySummary.reduce(
+          (sum, item) => sum + item.factoryInventory,
+          0
+        ),
+        totalInTransit: inventorySummary.reduce(
+          (sum, item) => sum + item.inTransit,
+          0
+        ),
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching comprehensive inventory summary:", error);
+    res
+      .status(500)
+      .json({ message: "Error fetching inventory data", error: error.message });
+  }
+});
+
+// ==================== BARCODE UNIQUENESS VALIDATION ====================
+
+// API: Check if barcode numbers already exist
+app.post("/api/barcodes/check-uniqueness", async (req, res) => {
+  try {
+    const { barcodeNumbers } = req.body;
+
+    if (!barcodeNumbers || !Array.isArray(barcodeNumbers)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid request: barcodeNumbers array required" });
+    }
+
+    // Check in Barcode collection
+    const existingBarcodes = await Barcode.find({
+      batchNumbers: { $in: barcodeNumbers.map(Number) },
+    });
+
+    // Check in Select collection (factory inventory)
+    const existingInSelect = await Select.find({
+      inputValue: { $in: barcodeNumbers },
+    });
+
+    // Check in Delevery1 collection (in transit)
+    const existingInDelevery = await Delevery1.find({
+      inputValue: { $in: barcodeNumbers },
+    });
+
+    // Check in Despatch collection
+    const existingInDespatch = await Despatch.find({
+      inputValue: { $in: barcodeNumbers },
+    });
+
+    const duplicates = new Set();
+
+    existingBarcodes.forEach((barcode) => {
+      if (barcode.batchNumbers) {
+        barcode.batchNumbers.forEach((num) => duplicates.add(String(num)));
+      }
+    });
+
+    existingInSelect.forEach((item) => duplicates.add(item.inputValue));
+    existingInDelevery.forEach((item) => duplicates.add(item.inputValue));
+    existingInDespatch.forEach((item) => duplicates.add(item.inputValue));
+
+    const duplicatesList = Array.from(duplicates);
+
+    res.json({
+      isUnique: duplicatesList.length === 0,
+      duplicates: duplicatesList,
+      message:
+        duplicatesList.length > 0
+          ? `Found ${duplicatesList.length} duplicate barcode(s)`
+          : "All barcodes are unique",
+    });
+  } catch (error) {
+    logger.error("Error checking barcode uniqueness:", error);
+    res.status(500).json({ message: "Error checking barcode uniqueness" });
+  }
+});
+
+// ==================== TRANSIT TRACKING ====================
+
+// API: Get all transit items
+app.get("/api/transits", async (req, res) => {
+  try {
+    const transits = await Transit.find({ status: "In Transit" }).sort({
+      dispatchDate: -1,
+    });
+    res.json(transits);
+  } catch (error) {
+    logger.error("Error fetching transit items:", error);
+    res.status(500).json({ message: "Error fetching transit items" });
+  }
+});
+
+// API: Get transit items by destination godown
+app.get("/api/transits/godown/:godownName", async (req, res) => {
+  try {
+    const { godownName } = req.params;
+    const transits = await Transit.find({
+      destinationGodown: godownName,
+      status: "In Transit",
+    }).sort({ dispatchDate: -1 });
+    res.json(transits);
+  } catch (error) {
+    logger.error("Error fetching transit items for godown:", error);
+    res.status(500).json({ message: "Error fetching transit items" });
+  }
+});
+
+// API: Add item to transit
+app.post(
+  "/api/transits/add",
+  validators.rejectUnknownFields([
+    "inputValue",
+    "sourceLocation",
+    "destinationGodown",
+    "estimatedArrival",
+    "quantity",
+    "notes",
+  ]),
+  [
+    validators.string("inputValue", 100),
+    validators.string("destinationGodown", 200),
+    body("sourceLocation").optional().isString().trim(),
+    body("quantity").optional().isInt({ min: 1 }),
+    body("notes").optional().isString().trim(),
+  ],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const {
+        inputValue,
+        sourceLocation,
+        destinationGodown,
+        estimatedArrival,
+        quantity,
+        notes,
+      } = req.body;
+
+      const transitItem = new Transit({
+        inputValue,
+        sourceLocation: sourceLocation || "Factory",
+        destinationGodown,
+        estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : null,
+        quantity: quantity || 1,
+        notes,
+      });
+
+      await transitItem.save();
+      logger.info("Transit item added", { inputValue, destinationGodown });
+      res.json({ message: "Item added to transit", transit: transitItem });
+    } catch (error) {
+      logger.error("Error adding transit item:", error);
+      res.status(500).json({ message: "Error adding transit item" });
+    }
+  }
+);
+
+// API: Update transit status (mark as delivered/cancelled)
+app.put(
+  "/api/transits/:id/status",
+  validators.rejectUnknownFields(["status"]),
+  [body("status").isIn(["In Transit", "Delivered", "Cancelled"])],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const transit = await Transit.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+
+      if (!transit) {
+        return res.status(404).json({ message: "Transit item not found" });
+      }
+
+      logger.info("Transit status updated", { id, status });
+      res.json({ message: "Transit status updated", transit });
+    } catch (error) {
+      logger.error("Error updating transit status:", error);
+      res.status(500).json({ message: "Error updating transit status" });
+    }
+  }
+);
+
+// API: Get transit summary statistics
+app.get("/api/transits/summary", async (req, res) => {
+  try {
+    const totalInTransit = await Transit.countDocuments({
+      status: "In Transit",
+    });
+    const transitByGodown = await Transit.aggregate([
+      { $match: { status: "In Transit" } },
+      {
+        $group: {
+          _id: "$destinationGodown",
+          count: { $sum: 1 },
+          totalQuantity: { $sum: "$quantity" },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    res.json({
+      totalInTransit,
+      byGodown: transitByGodown.map((g) => ({
+        godownName: g._id,
+        itemCount: g.count,
+        totalQuantity: g.totalQuantity,
+      })),
+    });
+  } catch (error) {
+    logger.error("Error fetching transit summary:", error);
+    res.status(500).json({ message: "Error fetching transit summary" });
+  }
+});
+
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
 
 // Start Server
-const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-const serverUrl = process.env.NODE_ENV === 'production' 
-  ? `https://${process.env.SERVER_HOST || 'your-domain.com'}:${PORT}` 
-  : `http://localhost:${PORT}`;
+const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+const serverUrl =
+  process.env.NODE_ENV === "production"
+    ? `https://${process.env.SERVER_HOST || "your-domain.com"}:${PORT}`
+    : `http://localhost:${PORT}`;
 
 app.listen(PORT, () => {
-  logger.info(`Server running at ${serverUrl}`, { 
-    port: PORT, 
-    env: process.env.NODE_ENV || 'development',
-    https: process.env.NODE_ENV === 'production'
+  logger.info(`Server running at ${serverUrl}`, {
+    port: PORT,
+    env: process.env.NODE_ENV || "development",
+    https: process.env.NODE_ENV === "production",
   });
 });

@@ -729,6 +729,6 @@ function Dgodowndetails() {
       </div>
     </div>
   );
-}
+} 
 
 export default Dgodowndetails;

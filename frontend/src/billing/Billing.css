@@ -4,112 +4,283 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    border-radius: 15px;
-    background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 h2, h5 {
+    color: white;
     text-align: center;
-    color: #f8f9fa;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+h2 {
+    margin-bottom: 30px;
 }
 
 /* Card Styling */
 .card {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
     margin-bottom: 20px;
     transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .card:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-5px);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
 .card-header {
-    background: rgba(0, 0, 0, 0.2);
+    background: transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
-    font-weight: bold;
+    padding: 20px 24px;
+}
+
+.card-header h5 {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin: 0;
+    text-align: left;
 }
 
 .card-body {
-    color: #f1f1f1;
+    color: white;
+    padding: 24px;
+}
+
+.card-body .row {
+    align-items: center;
+}
+
+.card-body small {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
 }
 
 /* Form Elements */
 .form-select, .form-control {
-    background-color: rgba(0, 0, 0, 0.3);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #333;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 16px;
+    transition: all 0.3s ease;
+    text-align: left;
+    width: 100%;
 }
 
 .form-select:focus, .form-control:focus {
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    box-shadow: 0 0 10px rgba(252, 185, 0, 0.5);
-    border-color: #fcb900;
+    background-color: white;
+    color: #333;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: none;
+    outline: none;
+}
+
+.form-select:hover, .form-control:hover {
+    background-color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.form-label {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    display: block;
+    text-align: left;
+}
+
+/* Date Input Specific Styling */
+input[type="date"].form-control {
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #333;
+    border: none;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    max-width: 280px;
+    padding: 10px 14px;
+}
+
+input[type="date"].form-control:hover {
+    background-color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+input[type="date"].form-control:focus {
+    background-color: white;
+    color: #333;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: none;
+    outline: none;
+}
+
+/* Date input calendar icon styling */
+input[type="date"].form-control::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+input[type="date"].form-control:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+}
+
+/* Date input column spacing */
+.card-body .col-md-6:has(input[type="date"]) {
+    padding-right: 20px;
+    padding-left: 20px;
+}
+
+/* Invalid date input styling */
+input[type="date"].form-control.is-invalid {
+    border-color: #dc3545 !important;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+input[type="date"].form-control.is-invalid:focus {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
 }
 
 .form-check-label {
     color: white;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+/* Price Type Button Styling */
+.price-type-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 16px 24px;
+    color: white;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.price-type-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.price-type-btn.active {
+    background: rgba(139, 92, 246, 0.4);
+    border-color: #8b5cf6;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.price-type-btn div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Initialize Button Styling */
+.initialize-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.initialize-btn:hover {
+    background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
 }
 
 /* Button Styling */
 .btn {
-    border-radius: 20px;
-    padding: 8px 20px;
+    border-radius: 12px;
+    padding: 12px 24px;
     border: none;
     transition: all 0.3s ease;
-    font-weight: bold;
+    font-weight: 600;
     margin: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .btn-primary {
-    background: #007bff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
 }
 
-.btn-primary:hover {
-    background: #0056b3;
-    transform: scale(1.05);
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
 }
 
 .btn-outline-info {
-    border: 2px solid #17a2b8;
-    color: #17a2b8;
-    background: transparent;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    color: white;
+    border: none;
 }
 
 .btn-outline-info:hover {
-    background: #17a2b8;
+    background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
     color: white;
 }
-
-/* Add similar styles for other buttons: btn-danger, btn-warning, etc. */
 
 /* Godown Selection Styling */
 .form-select optgroup {
     font-weight: bold;
-    color: #fcb900;
-    background-color: rgba(0, 0, 0, 0.3);
+    color: #333;
+    background-color: #f3f4f6;
 }
 
 .form-select option {
-    color: white;
-    background-color: rgba(0, 0, 0, 0.5);
+    color: #333;
+    background-color: white;
     padding: 8px;
-}
-
-.form-select option[style*="font-weight: bold"] {
-    color: #28a745 !important;
-    background-color: rgba(40, 167, 69, 0.2);
 }
 
 /* Location Info Styling */
@@ -121,40 +292,135 @@ h2, h5 {
 .card-header small {
     display: block;
     margin-top: 5px;
-}
-
-.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #218838;
-    transform: scale(1.05);
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .btn-success:disabled {
-    background: #6c757d;
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
     opacity: 0.6;
     cursor: not-allowed;
 }
 
 /* Table Styling */
 .table {
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
     color: white;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .table th, .table td {
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.15);
+    padding: 12px;
+    text-align: left;
+    vertical-align: middle;
 }
 
 .table thead th {
-    background-color: rgba(0, 0, 0, 0.4);
+    background-color: rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-align: left;
+}
+
+.table .text-center {
+    text-align: center !important;
+}
+
+.table .text-right {
+    text-align: right !important;
+}
+
+/* Utility Classes */
+.d-flex {
+    display: flex;
+}
+
+.gap-3 {
+    gap: 1rem;
+}
+
+.flex-fill {
+    flex: 1 1 auto;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.justify-content-center {
+    justify-content: center;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+/* Bootstrap Grid System Support */
+.card-body .row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    margin-right: -15px;
+    margin-left: -15px;
+    width: 100%;
+}
+
+.card-body .col-md-6 {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+    padding-right: 15px;
+    padding-left: 15px;
+    box-sizing: border-box;
+}
+
+.card-body .col-md-8 {
+    flex: 0 0 66.666667% !important;
+    max-width: 66.666667% !important;
+    padding-right: 15px;
+    padding-left: 15px;
+    box-sizing: border-box;
+}
+
+.card-body .col-md-4 {
+    flex: 0 0 33.333333% !important;
+    max-width: 33.333333% !important;
+    padding-right: 15px;
+    padding-left: 15px;
+    box-sizing: border-box;
+}
+
+.card-body .col-md-12 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+    padding-right: 15px;
+    padding-left: 15px;
+    box-sizing: border-box;
+}
+
+.mb-4 {
+    margin-bottom: 1.5rem;
+}
+
+.mt-3 {
+    margin-top: 1rem;
+}
+
+.mt-4 {
+    margin-top: 1.5rem;
 }
 
 /* Responsive Design */
@@ -168,55 +434,76 @@ h2, h5 {
         margin-bottom: 10px;
     }
 
-    .col-md-4, .col-md-8, .col-md-12 {
-        padding-left: 5px;
-        padding-right: 5px;
+    .card-body .col-md-4, 
+    .card-body .col-md-6, 
+    .card-body .col-md-8, 
+    .card-body .col-md-12 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        padding-left: 10px;
+        padding-right: 10px;
+        margin-bottom: 15px;
     }
 
     h2 {
         font-size: 1.5rem;
     }
+
+    .price-type-btn {
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+
+    .card-body .row {
+        margin-right: -10px;
+        margin-left: -10px;
+    }
 }
 
 .inventory-status-table {
-    background: rgba(0, 0, 0, 0.3) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
     color: #fff;
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
     margin: 0;
 }
 
 .inventory-status-table th, .inventory-status-table td {
-    background: rgba(0, 0, 0, 0.3) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 10px;
 }
 
 .inventory-status-table th {
-    background: rgba(0, 0, 0, 0.5) !important;
-    font-weight: bold;
+    background: rgba(255, 255, 255, 0.1) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
 }
 
 /* Badge styling for inventory status */
 .badge {
-    font-size: 0.8em;
-    padding: 4px 8px;
+    font-size: 0.75em;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 600;
 }
 
 .bg-success {
-    background-color: #28a745 !important;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
 }
 
 .bg-danger {
-    background-color: #dc3545 !important;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
 }
 
 .bg-warning {
-    background-color: #ffc107 !important;
-    color: #212529 !important;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: white !important;
 }
 
 .bg-info {
-    background-color: #17a2b8 !important;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
 } 

@@ -128,7 +128,7 @@ const BillHistory = ({ bills, customer }) => {
                             ).toLocaleDateString()}</p>
                             <p style="margin: 5px 0;"><strong>Price Type:</strong> ${
                               bill.priceType === "masterPrice"
-                                ? "Master Price"
+                                ? "Special Price"
                                 : "Regular Price"
                             }</p>
                         </div>
@@ -217,71 +217,57 @@ const BillHistory = ({ bills, customer }) => {
 
   if (bills.length === 0) {
     return (
-      <div className="card">
-        <div className="card-header">
-          <h3>Bill History</h3>
-        </div>
-        <div className="card-body">
-          <p className="text-muted">
-            No bills generated yet for this customer.
-          </p>
-        </div>
+      <div style={{ textAlign: "center", padding: "40px", opacity: 0.7 }}>
+        <p>No bills generated yet for this customer.</p>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3>Bill History</h3>
-      </div>
-      <div className="card-body">
-        <div className="table-responsive">
-          <table className="table table-striped">
-            <thead>
-              <tr>
-                <th>Bill Number</th>
-                <th>Date</th>
-                <th>Items Count</th>
-                <th>Total Amount</th>
-                <th>Price Type</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.map((bill) => (
-                <tr key={bill._id}>
-                  <td>{bill.billNumber}</td>
-                  <td>{new Date(bill.createdAt).toLocaleDateString()}</td>
-                  <td>{bill.items.length}</td>
-                  <td>₹{bill.totalAmount}</td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        bill.priceType === "masterPrice"
-                          ? "bg-warning"
-                          : "bg-info"
-                      }`}
-                    >
-                      {bill.priceType === "masterPrice"
-                        ? "Master Price"
-                        : "Regular Price"}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => downloadBillPDF(bill)}
-                    >
-                      Download PDF
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div className="table-responsive">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>BILL NUMBER</th>
+            <th>DATE</th>
+            <th>ITEMS COUNT</th>
+            <th>TOTAL AMOUNT</th>
+            <th>PRICE TYPE</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bills.map((bill) => (
+            <tr key={bill._id}>
+              <td>{bill.billNumber}</td>
+              <td>{new Date(bill.createdAt).toLocaleDateString()}</td>
+              <td>{bill.items.length}</td>
+              <td>₹{bill.totalAmount}</td>
+              <td>
+                <span
+                  className={`badge ${
+                    bill.priceType === "masterPrice"
+                      ? "bg-warning"
+                      : "bg-info"
+                  }`}
+                >
+                  {bill.priceType === "masterPrice"
+                    ? "Special Price"
+                    : "Regular Price"}
+                </span>
+              </td>
+              <td>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => downloadBillPDF(bill)}
+                >
+                  Download PDF
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -636,71 +622,59 @@ function CustomerDetails() {
     alignItems: "center",
     justifyContent: "flex-start",
     minHeight: "100vh",
-    background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
-    backgroundSize: "400% 400%",
-    animation: "gradientAnimation 10s ease infinite",
-    padding: "20px",
+    background: "linear-gradient(135deg, #a855f7 0%, #c084fc 50%, #d8b4fe 100%)",
+    padding: "40px 20px",
     color: "white",
     fontSize: "16px",
   };
 
   const cardStyle = {
-    backgroundColor: "rgba(218, 216, 224, 0.6)",
-    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
     backdropFilter: "blur(10px)",
-    borderRadius: "15px",
-    padding: "20px",
-    margin: "10px 0",
+    borderRadius: "20px",
+    padding: "30px",
+    margin: "15px 0",
     border: "1px solid rgba(255, 255, 255, 0.2)",
     width: "100%",
-    maxWidth: "1200px",
+    maxWidth: "1000px",
     transition: "all 0.3s ease",
   };
 
   const searchInputStyle = {
     width: "100%",
-    padding: "10px 15px",
+    padding: "10px 16px",
     fontSize: "14px",
-    borderRadius: "20px",
-    border: "2px solid rgba(255, 255, 255, 0.3)",
-    backgroundColor: "rgba(218, 216, 224, 0.6)",
-    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)",
-    color: "white",
-    marginBottom: "15px",
+    borderRadius: "12px",
+    border: "none",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+    color: "#333",
+    marginBottom: "20px",
     outline: "none",
-    backdropFilter: "blur(10px)",
     transition: "all 0.3s ease",
   };
 
   const buttonStyle = {
-    backgroundColor: "rgba(218, 216, 224, 0.6)",
-    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)",
+    backgroundColor: "rgba(139, 92, 246, 0.8)",
+    boxShadow: "0 4px 12px rgba(139, 92, 246, 0.3)",
     color: "white",
-    border: "2px solid rgba(255, 255, 255, 0.3)",
-    padding: "8px 16px",
-    borderRadius: "20px",
+    border: "none",
+    padding: "10px 20px",
+    borderRadius: "12px",
     fontSize: "14px",
+    fontWeight: "600",
     cursor: "pointer",
     margin: "5px",
     transition: "all 0.3s ease",
-    backdropFilter: "blur(10px)",
   };
 
   if (loading) {
     return (
       <div style={containerStyle}>
-        <style>
-          {`
-            @keyframes gradientAnimation {
-              0% { background-position: 0% 50%; }
-              25% { background-position: 50% 100%; }
-              50% { background-position: 100% 50%; }
-              75% { background-position: 50% 0%; }
-              100% { background-position: 0% 50%; }
-            }
-          `}
-        </style>
-        <p style={{ fontSize: "24px", textAlign: "center" }}>Loading...</p>
+        <div style={{...cardStyle, textAlign: "center"}}>
+          <p style={{ fontSize: "20px", margin: 0 }}>Loading...</p>
+        </div>
       </div>
     );
   }
@@ -708,20 +682,11 @@ function CustomerDetails() {
   if (!customer) {
     return (
       <div style={containerStyle}>
-        <style>
-          {`
-            @keyframes gradientAnimation {
-              0% { background-position: 0% 50%; }
-              25% { background-position: 50% 100%; }
-              50% { background-position: 100% 50%; }
-              75% { background-position: 50% 0%; }
-              100% { background-position: 0% 50%; }
-            }
-          `}
-        </style>
-        <p style={{ fontSize: "24px", textAlign: "center" }}>
-          Customer not found.
-        </p>
+        <div style={{...cardStyle, textAlign: "center"}}>
+          <p style={{ fontSize: "20px", margin: 0 }}>
+            Customer not found.
+          </p>
+        </div>
       </div>
     );
   }
@@ -730,110 +695,162 @@ function CustomerDetails() {
     <div style={containerStyle}>
       <style>
         {`
-          @keyframes gradientAnimation {
-            0% { background-position: 0% 50%; }
-            25% { background-position: 50% 100%; }
-            50% { background-position: 100% 50%; }
-            75% { background-position: 50% 0%; }
-            100% { background-position: 0% 50%; }
-          }
-
           .search-input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+            color: #999;
           }
 
           .search-input:focus {
-            border-color: rgba(255, 255, 255, 0.6);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-            transform: scale(1.02);
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
 
           .custom-btn:hover {
-            background-color: rgba(218, 216, 224, 0.8);
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            background-color: rgba(124, 58, 237, 0.9);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
           }
 
           .table-responsive {
-            background-color: rgba(218, 216, 224, 0.6);
-            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)";
-            border-radius: 10px;
-            padding: 15px;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-          }
-
-          .table-responsive:hover {
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-            transform: translateY(-2px);
+            background-color: transparent;
+            border-radius: 12px;
+            padding: 0;
+            overflow-x: auto;
           }
 
           .table {
             color: white;
+            margin-bottom: 0;
           }
 
           .table th {
-            border-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
             background-color: rgba(255, 255, 255, 0.1);
+            padding: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
           }
 
           .table td {
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.1);
+            padding: 16px;
+          }
+
+          .table tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+          }
+
+          .btn {
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+          }
+
+          .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+          }
+
+          .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+          }
+
+          .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+          }
+
+          .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+          }
+
+          .badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 12px;
+          }
+
+          .bg-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+            color: white;
+          }
+
+          .bg-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+            color: white;
           }
         `}
       </style>
 
-      <div style={{ width: "100%", maxWidth: "1200px" }}>
+      <div style={{ width: "100%", maxWidth: "1000px" }}>
         {/* Customer Information */}
         <div style={cardStyle}>
-          <h2
-            style={{
-              textAlign: "center",
-              marginBottom: "20px",
-              fontSize: "2.5rem",
-              textShadow: "2px 2px 4px rgba(0, 0, 0, 0.3)",
-            }}
-          >
-            👤 {customer.name}
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "15px",
-            }}
-          >
-            <p>
-              <strong>📍 Address:</strong> {customer.address}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "20px" }}>
+            <div style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "30px",
+              boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
+            }}>
+              👤
+            </div>
+            <div>
+              <h2 style={{
+                margin: 0,
+                fontSize: "2rem",
+                fontWeight: "bold",
+                textShadow: "2px 2px 4px rgba(0, 0, 0, 0.2)",
+              }}>
+                {customer.name}
+              </h2>
+            </div>
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "15px",
+            fontSize: "14px"
+          }}>
+            <p style={{ margin: "8px 0" }}>
+              <span style={{ opacity: 0.8 }}>📍 Address:</span> {customer.address}
             </p>
-            <p>
-              <strong>🏙️ City:</strong> {customer.city}
+            <p style={{ margin: "8px 0" }}>
+              <span style={{ opacity: 0.8 }}>🏙️ City:</span> {customer.city}
             </p>
-            <p>
-              <strong>🗺️ State:</strong> {customer.state}
+            <p style={{ margin: "8px 0" }}>
+              <span style={{ opacity: 0.8 }}>🗺️ State:</span> {customer.state}
             </p>
-            <p>
-              <strong>🏢 GST No:</strong> {customer.gstNo || "N/A"}
+            <p style={{ margin: "8px 0" }}>
+              <span style={{ opacity: 0.8 }}>🏢 GST No:</span> {customer.gstNo || "N/A"}
             </p>
-            <p>
-              <strong>📞 Phone:</strong> {customer.phoneNumber || "N/A"}
+            <p style={{ margin: "8px 0" }}>
+              <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
             </p>
           </div>
         </div>
 
         {/* Excel Download/Upload Buttons */}
         <div style={cardStyle}>
-          <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-            📊 Data Management
-          </h3>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              flexWrap: "wrap",
-              gap: "10px",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
+            <span style={{ fontSize: "24px" }}>📊</span>
+            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+              Data Management
+            </h3>
+          </div>
+          <div style={{
+            display: "flex",
+            justifyContent: "flex-start",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}>
             <button
               style={buttonStyle}
               className="custom-btn"
@@ -849,7 +866,7 @@ function CustomerDetails() {
             >
               📋 Download Template
             </button>
-            <label style={buttonStyle} className="custom-btn">
+            <label style={{...buttonStyle, display: "inline-block"}} className="custom-btn">
               📤 Upload Excel
               <input
                 type="file"
@@ -859,12 +876,11 @@ function CustomerDetails() {
               />
             </label>
             {excelFileName && (
-              <span
-                style={{
-                  color: "rgba(255, 255, 255, 0.8)",
-                  marginLeft: "10px",
-                }}
-              >
+              <span style={{
+                color: "rgba(255, 255, 255, 0.9)",
+                alignSelf: "center",
+                fontSize: "14px"
+              }}>
                 {excelFileName}
               </span>
             )}
@@ -918,63 +934,96 @@ function CustomerDetails() {
 
         {/* Add New Item Section */}
         <div style={cardStyle}>
-          <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-            ➕ Add New Item
-          </h3>
-          <form
-            onSubmit={handleAddItem}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "15px",
-              justifyContent: "center",
-            }}
-          >
-            <input
-              type="text"
-              placeholder="Item Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              style={{
-                ...searchInputStyle,
-                flex: "1",
-                minWidth: "200px",
-                marginBottom: "0",
-              }}
-              className="search-input"
-            />
-            <input
-              type="number"
-              placeholder="Price"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              step="0.01"
-              required
-              style={{
-                ...searchInputStyle,
-                flex: "1",
-                minWidth: "150px",
-                marginBottom: "0",
-              }}
-              className="search-input"
-            />
-            <input
-              type="number"
-              placeholder="Master Price"
-              value={masterPrice}
-              onChange={(e) => setMasterPrice(e.target.value)}
-              step="0.01"
-              required
-              style={{
-                ...searchInputStyle,
-                flex: "1",
-                minWidth: "150px",
-                marginBottom: "0",
-              }}
-              className="search-input"
-            />
-            <button type="submit" style={buttonStyle} className="custom-btn">
+          <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
+            <span style={{ fontSize: "24px" }}>➕</span>
+            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+              Add New Item
+            </h3>
+          </div>
+          <form onSubmit={handleAddItem} style={{ padding: "0 20px" }}>
+            <div style={{ display: "flex", gap: "30px", marginBottom: "15px", alignItems: "flex-end" }}>
+              <div style={{ flex: "0 0 280px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
+                  Item Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Item Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    color: "#333",
+                    marginBottom: "0",
+                    outline: "none",
+                    transition: "all 0.3s ease",
+                  }}
+                  className="search-input"
+                />
+              </div>
+              <div style={{ flex: "0 0 150px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
+                  Price
+                </label>
+                <input
+                  type="number"
+                  placeholder="Price"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  step="0.01"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    color: "#333",
+                    marginBottom: "0",
+                    outline: "none",
+                    transition: "all 0.3s ease",
+                  }}
+                  className="search-input"
+                />
+              </div>
+              <div style={{ flex: "0 0 150px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
+                  Special Price
+                </label>
+                <input
+                  type="number"
+                  placeholder="Special Price"
+                  value={masterPrice}
+                  onChange={(e) => setMasterPrice(e.target.value)}
+                  step="0.01"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    color: "#333",
+                    marginBottom: "0",
+                    outline: "none",
+                    transition: "all 0.3s ease",
+                  }}
+                  className="search-input"
+                />
+              </div>
+            </div>
+            <button type="submit" style={{...buttonStyle, width: "auto"}} className="custom-btn">
               ➕ Add Item
             </button>
           </form>
@@ -982,14 +1031,17 @@ function CustomerDetails() {
 
         {/* Items Table */}
         <div style={cardStyle}>
-          <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-            📦 Items
-          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
+            <span style={{ fontSize: "24px" }}>📦</span>
+            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+              Items
+            </h3>
+          </div>
 
           {/* Items Search */}
           <input
             type="text"
-            placeholder="🔍 Search items by name, price, or master price..."
+            placeholder="🔍 Search items by name, price, or special price..."
             value={itemSearchTerm}
             onChange={(e) => setItemSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -997,13 +1049,13 @@ function CustomerDetails() {
           />
 
           <div className="table-responsive">
-            <table className="table table-striped">
+            <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Price</th>
-                  <th>Master Price</th>
-                  <th>Actions</th>
+                  <th>NAME</th>
+                  <th>PRICE</th>
+                  <th>SPECIAL PRICE</th>
+                  <th>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -1020,7 +1072,7 @@ function CustomerDetails() {
                   <tr>
                     <td
                       colSpan="4"
-                      style={{ textAlign: "center", padding: "20px" }}
+                      style={{ textAlign: "center", padding: "40px", opacity: 0.7 }}
                     >
                       {itemSearchTerm
                         ? `No items found matching "${itemSearchTerm}"`
@@ -1035,9 +1087,12 @@ function CustomerDetails() {
 
         {/* Bill History Section */}
         <div style={cardStyle}>
-          <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-            📄 Bill History
-          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
+            <span style={{ fontSize: "24px" }}>📄</span>
+            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+              Bill History
+            </h3>
+          </div>
 
           {/* Bills Search */}
           <input

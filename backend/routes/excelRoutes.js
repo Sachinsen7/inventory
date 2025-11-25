@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const XLSX = require("xlsx");
 const logger = require("../utils/logger");
 
 // Ensure uploads directory exists
@@ -284,7 +285,7 @@ router.get("/download-inventory-template", (req, res) => {
 // Download Excel template for billing items
 router.get("/download-billing-template", (req, res) => {
   try {
-    const XLSX = require("xlsx");
+    logger.info("Generating billing items template");
 
     // Sample data structure for billing items
     const templateData = [

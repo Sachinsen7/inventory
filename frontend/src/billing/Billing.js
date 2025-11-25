@@ -28,11 +28,74 @@ function Billing() {
   const [godownItems, setGodownItems] = useState([]);
   const [selectedGodownData, setSelectedGodownData] = useState(null);
   const [availableItems, setAvailableItems] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [dateRangeError, setDateRangeError] = useState({ startDate: '', endDate: '' });
   const navigate = useNavigate();
   const billRef = useRef();
 
   // Backend URL from environment variable
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+  // Date validation functions
+  const validateStartDate = (dateValue) => {
+    if (!dateValue) {
+      setDateRangeError(prev => ({ ...prev, startDate: '' }));
+      return true;
+    }
+
+    const selectedDate = new Date(dateValue);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+
+    if (selectedDate > today) {
+      setDateRangeError(prev => ({ ...prev, startDate: 'Start date cannot be in the future' }));
+      return false;
+    }
+
+    setDateRangeError(prev => ({ ...prev, startDate: '' }));
+    return true;
+  };
+
+  const validateEndDate = (dateValue) => {
+    if (!dateValue) {
+      setDateRangeError(prev => ({ ...prev, endDate: '' }));
+      return true;
+    }
+
+    if (!startDate) {
+      setDateRangeError(prev => ({ ...prev, endDate: '' }));
+      return true;
+    }
+
+    const selectedEndDate = new Date(dateValue);
+    const selectedStartDate = new Date(startDate);
+
+    if (selectedEndDate < selectedStartDate) {
+      setDateRangeError(prev => ({ ...prev, endDate: 'End date must be after start date' }));
+      return false;
+    }
+
+    setDateRangeError(prev => ({ ...prev, endDate: '' }));
+    return true;
+  };
+
+  const handleStartDateChange = (e) => {
+    const dateValue = e.target.value;
+    setStartDate(dateValue);
+    validateStartDate(dateValue);
+    
+    // Re-validate end date if it exists
+    if (endDate) {
+      validateEndDate(endDate);
+    }
+  };
+
+  const handleEndDateChange = (e) => {
+    const dateValue = e.target.value;
+    setEndDate(dateValue);
+    validateEndDate(dateValue);
+  };
 
   // Fetch all customers
   useEffect(() => {
@@ -372,8 +435,9 @@ function Billing() {
             </div>
             <div style="text-align: right;">
               <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-              <p style="margin: 5px 0;"><strong>Price Type:</strong> ${priceType === 'masterPrice' ? 'Master Price' : 'Regular Price'}</p>
+              <p style="margin: 5px 0;"><strong>Price Type:</strong> ${priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}</p>
               ${selectedGodownData ? `<p style="margin: 5px 0;"><strong>Godown:</strong> ${selectedGodownData.name}</p>` : ''}
+              ${startDate || endDate ? `<p style="margin: 5px 0;"><strong>Date Range:</strong> ${startDate ? new Date(startDate).toLocaleDateString() : 'N/A'} - ${endDate ? new Date(endDate).toLocaleDateString() : 'N/A'}</p>` : ''}
             </div>
           </div>
         </div>
@@ -556,7 +620,7 @@ function Billing() {
     const selectedCustomerData = customers.find(c => c._id === selectedCustomer);
 
     try {
-      const response = await axios.post(`${backendUrl}/api/bills/add`, {
+      const billData = {
         customerId: selectedCustomer,
         customerName: selectedCustomerData.name,
         godownId: selectedGodown,
@@ -564,7 +628,17 @@ function Billing() {
         items: selectedItems,
         totalAmount: totalAmount,
         priceType: priceType
-      });
+      };
+
+      // Include date range in bill metadata if dates are selected
+      if (startDate || endDate) {
+        billData.dateRange = {
+          startDate: startDate || null,
+          endDate: endDate || null
+        };
+      }
+
+      const response = await axios.post(`${backendUrl}/api/bills/add`, billData);
 
       console.log('Bill creation response:', response.data);
 
@@ -593,23 +667,22 @@ function Billing() {
     alignItems: "center",
     justifyContent: "flex-start",
     minHeight: "100vh",
-    background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
-    backgroundSize: "400% 400%",
-    animation: "gradientAnimation 10s ease infinite",
-    padding: "20px",
+    background: "linear-gradient(135deg, #a855f7 0%, #c084fc 50%, #d8b4fe 100%)",
+    padding: "40px 20px",
     color: 'white',
     fontSize: '16px',
   };
 
   const cardStyle = {
-    backgroundColor: 'rgba(218, 216, 224, 0.6)',
-    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)",
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
     backdropFilter: 'blur(10px)',
-    borderRadius: '15px',
-    padding: '20px',
-    margin: '10px 0',
+    borderRadius: '20px',
+    padding: '30px',
+    margin: '15px 0',
     border: '1px solid rgba(255, 255, 255, 0.2)',
     width: '100%',
+    maxWidth: '900px',
     transition: 'all 0.3s ease',
   };
 
@@ -617,14 +690,6 @@ function Billing() {
     <div style={containerStyle}>
       <style>
         {`
-          @keyframes gradientAnimation {
-            0% { background-position: 0% 50%; }
-            25% { background-position: 50% 100%; }
-            50% { background-position: 100% 50%; }
-            75% { background-position: 50% 0%; }
-            100% { background-position: 0% 50%; }
-          }
-
           .table {
             color: white;
           }
@@ -639,94 +704,229 @@ function Billing() {
           }
 
           .form-select, .form-control {
-            background-color: rgba(218, 216, 224, 0.6);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            color: white;
+            background-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: none;
+            border-radius: 12px;
+            color: #333;
+            padding: 12px 16px;
             transition: all 0.3s ease;
           }
 
           .form-select:focus, .form-control:focus {
-            background-color: rgba(218, 216, 224, 0.8);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-            transform: scale(1.02);
-            border-color: rgba(255, 255, 255, 0.6);
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: none;
+            outline: none;
+          }
+
+          .form-control:hover {
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+          }
+
+          .form-control.is-invalid {
+            border: 2px solid #dc3545 !important;
+            background-color: rgba(220, 53, 69, 0.05);
+          }
+
+          .form-control.is-invalid:focus {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+          }
+
+          .form-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
           }
 
           .form-select option {
-            background-color: rgba(218, 216, 224, 0.9);
-            color: white;
+            background-color: white;
+            color: #333;
           }
 
           .btn {
-            background-color: rgba(218, 216, 224, 0.6);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 600;
             transition: all 0.3s ease;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            border: none;
           }
 
           .btn:hover {
-            background-color: rgba(218, 216, 224, 0.8);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-            transform: translateY(-3px) scale(1.05);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+          }
+
+          .btn-outline-info {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            color: white;
+            border: none;
+          }
+
+          .btn-outline-info:hover {
+            background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+            color: white;
           }
 
           .card {
-            background-color: rgba(218, 216, 224, 0.6);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            background-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
             transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
           }
 
           .card:hover {
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
             transform: translateY(-2px);
+          }
+
+          .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px 24px;
+          }
+
+          .card-header h5 {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            margin: 0;
+          }
+
+          .card-body {
+            padding: 24px;
+          }
+
+          .form-check-input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background-color: transparent;
+          }
+
+          .form-check-input[type="radio"]:checked {
+            background-color: #8b5cf6;
+            border-color: #8b5cf6;
+          }
+
+          .form-check-label {
+            color: white;
+            font-weight: 500;
+            margin-left: 8px;
+          }
+
+          .price-type-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 16px 24px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-align: center;
+          }
+
+          .price-type-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+          }
+
+          .price-type-btn.active {
+            background: rgba(139, 92, 246, 0.4);
+            border-color: #8b5cf6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+          }
+
+          .initialize-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+          }
+
+          .initialize-btn:hover {
+            background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
           }
         `}
       </style>
 
-      <div style={{ width: '100%', maxWidth: '1400px' }}>
-        <h2 style={{
+      <div style={{ width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+        <div style={{
           textAlign: 'center',
-          marginBottom: '30px',
-          fontSize: '3rem',
-          fontWeight: 'bold',
-          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.3)'
+          marginBottom: '40px'
         }}>
-          💰 Create New Bill
-        </h2>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px',
+            boxShadow: '0 8px 24px rgba(251, 191, 36, 0.4)'
+          }}>
+            <span style={{ fontSize: '40px' }}>💰</span>
+          </div>
+          <h2 style={{
+            fontSize: '2.5rem',
+            fontWeight: 'bold',
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.2)',
+            margin: 0
+          }}>
+            Create New Bill
+          </h2>
+        </div>
 
         <div style={{ width: '100%' }}>
           {/* Customer Selection */}
-          <div className="card mb-4">
+          <div className="card mb-4" style={cardStyle}>
             <div className="card-header">
               <h5>Select Customer</h5>
             </div>
             <div className="card-body">
-              <div className="row align-items-center justify-content-center">
-                <div className="col-md-6">
-              <select
-                className="form-select"
-                value={selectedCustomer}
-                onChange={handleCustomerChange}
-                style={{ fontSize: '16px', padding: '12px' }}
-              >
-                <option value="">Choose a customer...</option>
-                {customers.map(customer => (
-                  <option key={customer._id} value={customer._id}>
-                    {customer.name} - {customer.city}, {customer.state} - {customer.gstNo || 'No GST'}
-                  </option>
-                ))}
-              </select>
+              <div className="row align-items-center">
+                <div className="col-md-8">
+                  <select
+                    className="form-select"
+                    value={selectedCustomer}
+                    onChange={handleCustomerChange}
+                  >
+                    <option value="">Choose a customer...</option>
+                    {customers.map(customer => (
+                      <option key={customer._id} value={customer._id}>
+                        👤 {customer.name} - {customer.city}, {customer.state} - {customer.gstNo || 'No GST'}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCustomer && customers.find(c => c._id === selectedCustomer) && (
+                    <small style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: '8px', display: 'block' }}>
+                      Customer Location: {customers.find(c => c._id === selectedCustomer).city}, {customers.find(c => c._id === selectedCustomer).state}
+                    </small>
+                  )}
                 </div>
-                <div className="col-md-6 text-center">
+                <div className="col-md-4 text-center">
                   {selectedCustomer && (
                     <button 
-                      className="btn btn-outline-info"
+                      className="btn btn-outline-info w-100"
                       onClick={() => navigate(`/customer/${selectedCustomer}`)}
                     >
-                      View Bill History
+                      🔄 View Bill History
                     </button>
                   )}
                 </div>
@@ -734,137 +934,170 @@ function Billing() {
             </div>
           </div>
 
-          {/* Price Type Selection */}
+          {/* Price Type and Godown Selection - Combined Row */}
           {selectedCustomer && (
-            <div className="card mb-4">
-              <div className="card-header">
-                <h5>Select Price Type</h5>
-              </div>
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-body">
-                <div className="form-check form-check-inline">
-                  <input
-                    className="form-check-input"
-                    type="radio"
-                    name="priceType"
-                    id="regularPrice"
-                    value="price"
-                    checked={priceType === 'price'}
-                    onChange={handlePriceTypeChange}
-                  />
-                  <label className="form-check-label" htmlFor="regularPrice">
-                    Regular Price
-                  </label>
-                </div>
-                <div className="form-check form-check-inline">
-                  <input
-                    className="form-check-input"
-                    type="radio"
-                    name="priceType"
-                    id="masterPrice"
-                    value="masterPrice"
-                    checked={priceType === 'masterPrice'}
-                    onChange={handlePriceTypeChange}
-                  />
-                  <label className="form-check-label" htmlFor="masterPrice">
-                    Master Price
-                  </label>
+                <div className="row">
+                  {/* Price Type Selection */}
+                  <div className="col-md-6">
+                    <label className="form-label">Select Price Type</label>
+                    <div className="d-flex gap-3">
+                      <div 
+                        className={`price-type-btn flex-fill ${priceType === 'price' ? 'active' : ''}`}
+                        onClick={() => handlePriceTypeChange({ target: { value: 'price' } })}
+                      >
+                        <input
+                          className="form-check-input"
+                          type="radio"
+                          name="priceType"
+                          id="regularPrice"
+                          value="price"
+                          checked={priceType === 'price'}
+                          onChange={handlePriceTypeChange}
+                          style={{ display: 'none' }}
+                        />
+                        <div>⭕ Regular Price</div>
+                      </div>
+                      <div 
+                        className={`price-type-btn flex-fill ${priceType === 'masterPrice' ? 'active' : ''}`}
+                        onClick={() => handlePriceTypeChange({ target: { value: 'masterPrice' } })}
+                      >
+                        <input
+                          className="form-check-input"
+                          type="radio"
+                          name="priceType"
+                          id="masterPrice"
+                          value="masterPrice"
+                          checked={priceType === 'masterPrice'}
+                          onChange={handlePriceTypeChange}
+                          style={{ display: 'none' }}
+                        />
+                        <div>⭕ Special Price</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Godown Selection */}
+                  {showGodowns && (
+                    <div className="col-md-6">
+                      <label className="form-label">Select Godown</label>
+                      <select
+                        className="form-select"
+                        value={selectedGodown}
+                        onChange={handleGodownChange}
+                      >
+                        <option value="">Choose a godown...</option>
+                        
+                        {/* Matching Godowns (Top Priority) */}
+                        {godowns.matchingGodowns.length > 0 && (
+                          <optgroup label={`📍 Matching Location (${godowns.customerLocation?.city}, ${godowns.customerLocation?.state})`}>
+                            {godowns.matchingGodowns.map(godown => (
+                              <option key={godown._id} value={godown._id}>
+                                🏢 {godown.name} - {godown.city}, {godown.state}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        
+                        {/* Non-Matching Godowns */}
+                        {godowns.nonMatchingGodowns.length > 0 && (
+                          <optgroup label="🏢 Other Godowns">
+                            {godowns.nonMatchingGodowns.map(godown => (
+                              <option key={godown._id} value={godown._id}>
+                                {godown.name} - {godown.city}, {godown.state}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Godown Selection */}
-          {showGodowns && (
-            <div className="card mb-4">
+          {/* Date Range Selector */}
+          {selectedCustomer && (
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
-                <h5>Select Godown</h5>
+                <h5>Select Date Range (Optional)</h5>
               </div>
               <div className="card-body">
-                <div className="row align-items-center justify-content-center">
+                <div className="row">
                   <div className="col-md-6">
-                    <select
-                      className="form-select"
-                      value={selectedGodown}
-                      onChange={handleGodownChange}
-                      style={{ fontSize: '16px', padding: '12px' }}
-                    >
-                      <option value="">Choose a godown...</option>
-                      
-                      {/* Matching Godowns (Top Priority) */}
-                      {godowns.matchingGodowns.length > 0 && (
-                        <optgroup label={`📍 Matching Location (${godowns.customerLocation?.city}, ${godowns.customerLocation?.state})`}>
-                          {godowns.matchingGodowns.map(godown => (
-                            <option key={godown._id} value={godown._id} style={{ fontWeight: 'bold', color: '#28a745' }}>
-                              🏢 {godown.name} - {godown.city}, {godown.state}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      
-                      {/* Non-Matching Godowns */}
-                      {godowns.nonMatchingGodowns.length > 0 && (
-                        <optgroup label="🏢 Other Godowns">
-                          {godowns.nonMatchingGodowns.map(godown => (
-                            <option key={godown._id} value={godown._id}>
-                              {godown.name} - {godown.city}, {godown.state}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                    <label htmlFor="startDate" className="form-label">Start Date</label>
+                    <input
+                      type="date"
+                      className={`form-control ${dateRangeError.startDate ? 'is-invalid' : ''}`}
+                      id="startDate"
+                      value={startDate}
+                      onChange={handleStartDateChange}
+                    />
+                    {dateRangeError.startDate && (
+                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
+                        ⚠️ {dateRangeError.startDate}
+                      </div>
+                    )}
                   </div>
-                  <div className="col-md-6 text-center">
-                    {selectedGodown && (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-outline-warning"
-                          onClick={async () => {
-                            try {
-                              await axios.post(`${backendUrl}/api/godowns/${selectedGodown}/initialize-inventory`);
-                              showToast.success('Godown inventory initialized successfully!');
-                              // Refresh godown items
-                              handleGodownChange({ target: { value: selectedGodown } });
-                            } catch (error) {
-                              console.log(error);
-                              const errorMsg = error.response?.data?.message || error.message || 'Error initializing godown inventory';
-                              if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-                                showToast.error('Connection timeout. Please check your internet connection.');
-                              } else if (error.response) {
-                                showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
-                              } else if (error.request) {
-                                showToast.error('Unable to connect to the server. Please check if the backend is running.');
-                              } else {
-                                showToast.error(errorMsg);
-                              }
-                            }
-                          }}
-                        >
-                          Initialize Inventory
-                        </button>
-
+                  <div className="col-md-6">
+                    <label htmlFor="endDate" className="form-label">End Date</label>
+                    <input
+                      type="date"
+                      className={`form-control ${dateRangeError.endDate ? 'is-invalid' : ''}`}
+                      id="endDate"
+                      value={endDate}
+                      onChange={handleEndDateChange}
+                    />
+                    {dateRangeError.endDate && (
+                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
+                        ⚠️ {dateRangeError.endDate}
                       </div>
                     )}
                   </div>
                 </div>
-                
-                {/* Location Info */}
-                {godowns.customerLocation && (
-                  <div className="mt-3">
-                    <small className="text-muted">
-                      <strong>Customer Location:</strong> {godowns.customerLocation.city}, {godowns.customerLocation.state}
-                    </small>
-                  </div>
-                )}
               </div>
+            </div>
+          )}
+
+          {/* Initialize Inventory Button */}
+          {selectedGodown && (
+            <div className="text-center mb-4">
+              <button
+                className="initialize-btn"
+                onClick={async () => {
+                  try {
+                    await axios.post(`${backendUrl}/api/godowns/${selectedGodown}/initialize-inventory`);
+                    showToast.success('Godown inventory initialized successfully!');
+                    // Refresh godown items
+                    handleGodownChange({ target: { value: selectedGodown } });
+                  } catch (error) {
+                    console.log(error);
+                    const errorMsg = error.response?.data?.message || error.message || 'Error initializing godown inventory';
+                    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+                      showToast.error('Connection timeout. Please check your internet connection.');
+                    } else if (error.response) {
+                      showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
+                    } else if (error.request) {
+                      showToast.error('Unable to connect to the server. Please check if the backend is running.');
+                    } else {
+                      showToast.error(errorMsg);
+                    }
+                  }
+                }}
+              >
+                📦 Initialize Inventory
+              </button>
             </div>
           )}
 
           {/* Godown Items */}
           {selectedGodownData && godownItems.length > 0 && (
-            <div className="card mb-4">
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>🏢 {selectedGodownData.name} - Available Items</h5>
-                <small className="text-muted">
+                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                   Location: {selectedGodownData.city}, {selectedGodownData.state}
                 </small>
               </div>
@@ -878,7 +1111,7 @@ function Billing() {
                           <p className="card-text">
                             <strong>Quantity:</strong> {item.quantity}<br/>
                             <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Master Price:</strong> ₹{item.masterPrice}<br/>
+                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
                             <strong>Category:</strong> {item.category || 'N/A'}
                           </p>
                           <button 
@@ -899,10 +1132,10 @@ function Billing() {
 
           {/* Matched Items Based on 3-Digit Prefix */}
           {selectedCustomer && selectedGodown && availableItems.length > 0 && (
-            <div className="card mb-4">
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>🔍 Matched Items (3-Digit Prefix Matching)</h5>
-                <small className="text-muted">
+                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                   Items matched between billing and inventory based on first 3 digits
                 </small>
               </div>
@@ -918,7 +1151,7 @@ function Billing() {
                           </h6>
                           <p className="card-text">
                             <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Master Price:</strong> ₹{item.masterPrice}<br/>
+                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
                             <strong>Available Quantity:</strong>
                             <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} ms-1`}>
                               {item.availableQuantity}
@@ -953,10 +1186,10 @@ function Billing() {
 
           {/* Original Customer Items (when no godown selected) */}
           {selectedCustomer && !selectedGodown && (
-            <div className="card mb-4">
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>Available Items</h5>
-                <small className="text-muted">Select a godown to see matched inventory</small>
+                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Select a godown to see matched inventory</small>
               </div>
               <div className="card-body">
                 <div className="row">
@@ -967,7 +1200,7 @@ function Billing() {
                           <h6 className="card-title">{item.name}</h6>
                           <p className="card-text">
                             <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Master Price:</strong> ₹{item.masterPrice}
+                            <strong>Special Price:</strong> ₹{item.masterPrice}
                           </p>
                           <button
                             className="btn btn-primary btn-sm"
@@ -986,7 +1219,7 @@ function Billing() {
 
           {/* Selected Items */}
           {selectedItems.length > 0 && (
-            <div className="card mb-4">
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>Bill Items</h5>
               </div>
@@ -1017,7 +1250,7 @@ function Billing() {
                               <td>{item.itemName}</td>
                               <td>
                                 <span className={`badge ${priceType === 'masterPrice' ? 'bg-warning' : 'bg-info'}`}>
-                                  {priceType === 'masterPrice' ? 'Master Price' : 'Regular Price'}
+                                  {priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}
                                 </span>
                               </td>
                               <td>₹{item.selectedPrice}</td>
@@ -1116,7 +1349,7 @@ function Billing() {
                       <div className="card-body">
                         <h5 className="card-title">Total Amount: ₹{totalAmount}</h5>
                         <small className="text-muted">
-                          Using {priceType === 'masterPrice' ? 'Master Price' : 'Regular Price'}
+                          Using {priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}
                         </small>
                       </div>
                     </div>
@@ -1172,35 +1405,62 @@ function Billing() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="row mt-3">
-                  <div className="col-md-12 text-center">
-                    <button 
-                      className={`btn btn-lg me-2 ${showInventoryStatus ? 'btn-success' : 'btn-info'}`}
-                      onClick={checkInventory}
-                      disabled={!selectedGodown}
-                    >
-                      {showInventoryStatus ? '✓ Inventory Checked' : 'Check Inventory'}
-                    </button>
-                    <button 
-                      className="btn btn-warning me-2"
-                      onClick={downloadPDF}
-                    >
-                      Download Bill PDF
-                    </button>
-                    <button 
-                      className="btn btn-primary me-2"
-                      onClick={generatePaymentQR}
-                      disabled={isGeneratingQR}
-                    >
-                      {isGeneratingQR ? 'Generating QR Code...' : 'Generate Payment Link'}
-                    </button>
-                    <button 
-                      className="btn btn-success btn-lg"
-                      onClick={handleSubmitBill}
-                      disabled={!showInventoryStatus}
-                    >
-                      Generate Bill
-                    </button>
+                <div className="row mt-4">
+                  <div className="col-md-12">
+                    <div className="d-flex gap-3 flex-wrap justify-content-center">
+                      <button 
+                        className="btn"
+                        style={{
+                          background: showInventoryStatus ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                          color: 'white',
+                          padding: '12px 28px',
+                          fontSize: '15px'
+                        }}
+                        onClick={checkInventory}
+                        disabled={!selectedGodown}
+                      >
+                        {showInventoryStatus ? '✓ Inventory Checked' : '📦 Check Inventory'}
+                      </button>
+                      <button 
+                        className="btn"
+                        style={{
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                          color: 'white',
+                          padding: '12px 28px',
+                          fontSize: '15px'
+                        }}
+                        onClick={downloadPDF}
+                      >
+                        📄 Download PDF
+                      </button>
+                      <button 
+                        className="btn"
+                        style={{
+                          background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                          color: 'white',
+                          padding: '12px 28px',
+                          fontSize: '15px'
+                        }}
+                        onClick={generatePaymentQR}
+                        disabled={isGeneratingQR}
+                      >
+                        {isGeneratingQR ? '⏳ Generating...' : '📱 Payment QR'}
+                      </button>
+                      <button 
+                        className="btn"
+                        style={{
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          color: 'white',
+                          padding: '14px 32px',
+                          fontSize: '16px',
+                          fontWeight: '700'
+                        }}
+                        onClick={handleSubmitBill}
+                        disabled={!showInventoryStatus}
+                      >
+                        ✨ Generate Bill
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1209,7 +1469,7 @@ function Billing() {
 
           {/* QR Code */}
           {showQRCode && (
-            <div className="card mb-4">
+            <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>Payment QR Code</h5>
               </div>

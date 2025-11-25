@@ -298,9 +298,11 @@ router.post('/items/bulk-update/:customerId',
       logger.debug('Deleted existing items', { deleted: deletedCount.deletedCount });
 
       // Add new items
-      const itemsToAdd = items.map(item => ({
+      const itemsToAdd = items.map((item, index) => ({
         ...item,
         customerId,
+        srNo: item.srNo || String(index + 1),
+        name: item.name || item.itemName || '',
         price: Number(item.price) || 0,
         masterPrice: Number(item.masterPrice) || 0
       }));

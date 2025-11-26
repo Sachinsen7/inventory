@@ -1653,10 +1653,12 @@ const serverUrl =
     ? `https://${process.env.SERVER_HOST || "your-domain.com"}:${PORT}`
     : `http://localhost:${PORT}`;
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running at ${serverUrl}`, {
     port: PORT,
+    host: '0.0.0.0',
     env: process.env.NODE_ENV || "development",
     https: process.env.NODE_ENV === "production",
   });
+  console.log(`Server is listening on 0.0.0.0:${PORT}`);
 });

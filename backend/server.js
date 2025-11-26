@@ -31,19 +31,18 @@ const billingRoutes = require("./routes/billingRoutes");
 app.use(bodyParser.json());
 
 // Hardened CORS configuration: restrict to allowed origins from environment
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5000,http://0.0.0.0:3000,http://0.0.0.0:5000")
   .split(",")
   .map((o) => o.trim());
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., mobile apps or Postman) only in development
-    if (!origin && process.env.NODE_ENV !== "production") {
+    // Allow requests with no origin (same-origin requests from served static files)
+    if (!origin) {
       return callback(null, true);
     }
-    if (origin && allowedOrigins.includes(origin)) {
+    // Allow requests from allowed origins
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
-    } else if (!origin) {
-      callback(new Error("CORS policy: origin required"));
     } else {
       callback(new Error("CORS policy: origin not allowed"));
     }
@@ -1645,6 +1644,15 @@ app.get("/api/transits/summary", async (req, res) => {
 
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
+
+// Serve static files from React build
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
 
 // Start Server
 const protocol = process.env.NODE_ENV === "production" ? "https" : "http";

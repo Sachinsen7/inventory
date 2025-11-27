@@ -772,16 +772,16 @@ app.put(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: "Validation failed", 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: errors.array()
       });
     }
 
     try {
       const { password } = req.body;
       const user = await User.findById(req.params.id);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -1372,68 +1372,50 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
     logger.info("Fetching comprehensive inventory summary");
 
     const godowns = await Godown.find();
-
     const godownInventories = await GodownInventory.find().populate(
       "godownId",
       "name"
     );
-
-    // Get items in select collection (factory inventory)
     const factoryItems = await Select.find();
-
-    // Get items in delevery1 collection (in transit)
     const inTransitItems = await Delevery1.find();
+    const allBarcodes = await Barcode.find(); // Fetch barcodes for name resolution
 
-    // Aggregate data by item name (using first 3 characters)
+    // Create a lookup map: SKU/Code -> Product Name
+    const productLookup = new Map();
+    allBarcodes.forEach(b => {
+      if (b.skuc) productLookup.set(b.skuc.toLowerCase(), b.product);
+      if (b.skun) productLookup.set(b.skun.toLowerCase(), b.product);
+      // Also map the product name to itself to handle cases where we already have the name
+      if (b.product) productLookup.set(b.product.toLowerCase(), b.product);
+    });
+
+    // Helper function to resolve product name
+    const resolveProductName = (input) => {
+      if (!input) return "Unknown";
+      const lowerInput = input.toLowerCase();
+
+      // 1. Direct match
+      if (productLookup.has(lowerInput)) return productLookup.get(lowerInput);
+
+      // 2. Check if input starts with any known SKU (Barcode logic)
+      for (const [code, name] of productLookup.entries()) {
+        if (lowerInput.startsWith(code)) return name;
+      }
+
+      // 3. Fallback: If input looks like a barcode (SKU + Batch), try to extract SKU
+      // This is heuristic. If we can't find a name, return the input itself (or truncated if too long)
+      return input;
+    };
+
+    // Aggregate data by Product Name
     const inventoryMap = new Map();
 
-    // Process factory items
-    factoryItems.forEach((item) => {
-      if (item.inputValue && item.inputValue.length >= 3) {
-        const itemCode = item.inputValue.substring(0, 3);
-        if (!inventoryMap.has(itemCode)) {
-          inventoryMap.set(itemCode, {
-            itemName: itemCode,
-            factoryInventory: 0,
-            inTransit: 0,
-            totalQuantity: 0,
-            godowns: {},
-          });
-        }
-        inventoryMap.get(itemCode).factoryInventory += 1;
-        inventoryMap.get(itemCode).totalQuantity += 1;
-      }
-    });
+    const updateInventory = (name, type, godownName = null, qty = 1) => {
+      const productName = name || "Unknown";
 
-    // Process in-transit items
-    inTransitItems.forEach((item) => {
-      if (item.inputValue && item.inputValue.length >= 3) {
-        const itemCode = item.inputValue.substring(0, 3);
-        if (!inventoryMap.has(itemCode)) {
-          inventoryMap.set(itemCode, {
-            itemName: itemCode,
-            factoryInventory: 0,
-            inTransit: 0,
-            totalQuantity: 0,
-            godowns: {},
-          });
-        }
-        inventoryMap.get(itemCode).inTransit += 1;
-        inventoryMap.get(itemCode).totalQuantity += 1;
-      }
-    });
-
-    // Process godown inventories
-    godownInventories.forEach((item) => {
-      const itemCode =
-        item.itemName.length >= 3
-          ? item.itemName.substring(0, 3)
-          : item.itemName;
-      const godownName = item.godownId ? item.godownId.name : "Unknown";
-
-      if (!inventoryMap.has(itemCode)) {
-        inventoryMap.set(itemCode, {
-          itemName: itemCode,
+      if (!inventoryMap.has(productName)) {
+        inventoryMap.set(productName, {
+          itemName: productName,
           factoryInventory: 0,
           inTransit: 0,
           totalQuantity: 0,
@@ -1441,20 +1423,43 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
         });
       }
 
-      const inventoryItem = inventoryMap.get(itemCode);
-      if (!inventoryItem.godowns[godownName]) {
-        inventoryItem.godowns[godownName] = 0;
+      const entry = inventoryMap.get(productName);
+      entry.totalQuantity += qty;
+
+      if (type === 'factory') entry.factoryInventory += qty;
+      else if (type === 'transit') entry.inTransit += qty;
+      else if (type === 'godown' && godownName) {
+        if (!entry.godowns[godownName]) entry.godowns[godownName] = 0;
+        entry.godowns[godownName] += qty;
       }
-      inventoryItem.godowns[godownName] += item.quantity;
-      inventoryItem.totalQuantity += item.quantity;
+    };
+
+    // Process factory items (Select collection)
+    factoryItems.forEach((item) => {
+      const resolvedName = resolveProductName(item.inputValue);
+      updateInventory(resolvedName, 'factory');
     });
 
-    // Convert map to array and sort by item name
+    // Process in-transit items (Delevery1 collection)
+    inTransitItems.forEach((item) => {
+      // Prefer itemName if available, else resolve from inputValue
+      const name = item.itemName || resolveProductName(item.inputValue);
+      updateInventory(name, 'transit');
+    });
+
+    // Process godown inventories
+    godownInventories.forEach((item) => {
+      const godownName = item.godownId ? item.godownId.name : "Unknown";
+      // GodownInventory usually has the real itemName
+      updateInventory(item.itemName, 'godown', godownName, item.quantity);
+    });
+
+    // Convert map to array and sort
     const inventorySummary = Array.from(inventoryMap.values()).sort((a, b) =>
       a.itemName.localeCompare(b.itemName)
     );
 
-    // Get list of all godown names for consistent columns
+    // Get list of all godown names
     const godownNames = godowns.map((g) => g.name).sort();
 
     res.json({
@@ -1462,18 +1467,9 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
       godownNames: godownNames,
       summary: {
         totalItems: inventorySummary.length,
-        totalQuantity: inventorySummary.reduce(
-          (sum, item) => sum + item.totalQuantity,
-          0
-        ),
-        totalFactory: inventorySummary.reduce(
-          (sum, item) => sum + item.factoryInventory,
-          0
-        ),
-        totalInTransit: inventorySummary.reduce(
-          (sum, item) => sum + item.inTransit,
-          0
-        ),
+        totalQuantity: inventorySummary.reduce((sum, item) => sum + item.totalQuantity, 0),
+        totalFactory: inventorySummary.reduce((sum, item) => sum + item.factoryInventory, 0),
+        totalInTransit: inventorySummary.reduce((sum, item) => sum + item.inTransit, 0),
       },
     });
   } catch (error) {
@@ -1497,31 +1493,50 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
         .json({ message: "Invalid request: barcodeNumbers array required" });
     }
 
-    // Check in Barcode collection
+    logger.info("Checking barcode uniqueness for:", barcodeNumbers);
+
+    // Extract numeric parts from barcode strings (e.g., "SKU0021" -> 21)
+    const numericBarcodes = barcodeNumbers
+      .map((barcode) => {
+        const match = String(barcode).match(/\d+$/); // Get trailing numbers
+        return match ? parseInt(match[0]) : null;
+      })
+      .filter((num) => num !== null);
+
+    logger.info("Extracted numeric barcodes:", numericBarcodes);
+
+    // Check in Barcode collection (uses numeric batchNumbers)
     const existingBarcodes = await Barcode.find({
-      batchNumbers: { $in: barcodeNumbers.map(Number) },
+      batchNumbers: { $in: numericBarcodes },
     });
 
-    // Check in Select collection (factory inventory)
+    // Check in Select collection (factory inventory) - uses full string
     const existingInSelect = await Select.find({
       inputValue: { $in: barcodeNumbers },
     });
 
-    // Check in Delevery1 collection (in transit)
+    // Check in Delevery1 collection (in transit) - uses full string
     const existingInDelevery = await Delevery1.find({
       inputValue: { $in: barcodeNumbers },
     });
 
-    // Check in Despatch collection
+    // Check in Despatch collection - uses full string
     const existingInDespatch = await Despatch.find({
       inputValue: { $in: barcodeNumbers },
     });
 
     const duplicates = new Set();
 
+    // Add duplicates from Barcode collection (reconstruct full barcode string)
     existingBarcodes.forEach((barcode) => {
-      if (barcode.batchNumbers) {
-        barcode.batchNumbers.forEach((num) => duplicates.add(String(num)));
+      if (barcode.batchNumbers && barcode.skuc) {
+        barcode.batchNumbers.forEach((num) => {
+          const fullBarcode = `${barcode.skuc}${num}`;
+          // Check if this matches any of the requested barcodes
+          if (barcodeNumbers.includes(fullBarcode)) {
+            duplicates.add(fullBarcode);
+          }
+        });
       }
     });
 
@@ -1530,6 +1545,8 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
     existingInDespatch.forEach((item) => duplicates.add(item.inputValue));
 
     const duplicatesList = Array.from(duplicates);
+
+    logger.info("Duplicates found:", duplicatesList);
 
     res.json({
       isUnique: duplicatesList.length === 0,
@@ -1541,7 +1558,12 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
     });
   } catch (error) {
     logger.error("Error checking barcode uniqueness:", error);
-    res.status(500).json({ message: "Error checking barcode uniqueness" });
+    logger.error("Error details:", error.message);
+    logger.error("Stack trace:", error.stack);
+    res.status(500).json({
+      message: "Error checking barcode uniqueness",
+      error: error.message
+    });
   }
 });
 

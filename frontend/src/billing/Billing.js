@@ -31,7 +31,7 @@ function Billing() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [dateRangeError, setDateRangeError] = useState({ startDate: '', endDate: '' });
-  
+
   // GST-related states
   const [companyState, setCompanyState] = useState(''); // Your business state
   const [subtotal, setSubtotal] = useState(0);
@@ -39,12 +39,12 @@ function Billing() {
   const [cgst, setCgst] = useState(0);
   const [igst, setIgst] = useState(0);
   const [grandTotal, setGrandTotal] = useState(0);
-  
+
   // Stock dialog state
   const [showStockDialog, setShowStockDialog] = useState(false);
   const [stockDialogItems, setStockDialogItems] = useState([]);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
-  
+
   const navigate = useNavigate();
   const billRef = useRef();
 
@@ -98,7 +98,7 @@ function Billing() {
     const dateValue = e.target.value;
     setStartDate(dateValue);
     validateStartDate(dateValue);
-    
+
     // Re-validate end date if it exists
     if (endDate) {
       validateEndDate(endDate);
@@ -169,17 +169,17 @@ function Billing() {
   useEffect(() => {
     const itemsTotal = selectedItems.reduce((sum, item) => sum + item.total, 0);
     setSubtotal(itemsTotal);
-    
+
     // Get customer state to determine GST type
     const selectedCustomerData = customers.find(c => c._id === selectedCustomer);
     const customerState = selectedCustomerData?.state || '';
-    
+
     // Calculate GST based on state match
     // Assuming your company state - you can set this from settings or hardcode your state
     const businessState = companyState || 'Maharashtra'; // Default to Maharashtra, change as needed
-    
+
     const isWithinState = customerState.toLowerCase() === businessState.toLowerCase();
-    
+
     if (isWithinState) {
       // Within state: SGST 9% + CGST 9%
       const sgstAmount = itemsTotal * 0.09;
@@ -310,7 +310,7 @@ function Billing() {
         const items = response.data.items || [];
         setGodownItems(items);
         setSelectedGodownData(response.data.godown);
-        
+
         // Show stock dialog with items
         setStockDialogItems(items);
         setShowStockDialog(true);
@@ -345,17 +345,17 @@ function Billing() {
   const addItemToBill = (item) => {
     const existingItem = selectedItems.find(selected => selected.itemId === item._id);
     const selectedPrice = priceType === 'masterPrice' ? item.masterPrice : item.price;
-    
+
     if (existingItem) {
       // If item already exists, increase quantity
-      const updatedItems = selectedItems.map(selected => 
-        selected.itemId === item._id 
-          ? { 
-              ...selected, 
-              quantity: selected.quantity + 1, 
-              selectedPrice: selectedPrice,
-              total: (selected.quantity + 1) * selectedPrice 
-            }
+      const updatedItems = selectedItems.map(selected =>
+        selected.itemId === item._id
+          ? {
+            ...selected,
+            quantity: selected.quantity + 1,
+            selectedPrice: selectedPrice,
+            total: (selected.quantity + 1) * selectedPrice
+          }
           : selected
       );
       setSelectedItems(updatedItems);
@@ -375,8 +375,8 @@ function Billing() {
   };
 
   const increaseQuantity = (itemId) => {
-    const updatedItems = selectedItems.map(item => 
-      item.itemId === itemId 
+    const updatedItems = selectedItems.map(item =>
+      item.itemId === itemId
         ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.selectedPrice }
         : item
     );
@@ -466,7 +466,7 @@ function Billing() {
       pdfContent.style.position = 'absolute';
       pdfContent.style.left = '-9999px';
       pdfContent.style.top = '0';
-      
+
       pdfContent.innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
           <h1 style="color: #2c3e50; margin-bottom: 10px;">INVOICE</h1>
@@ -571,7 +571,7 @@ function Billing() {
           <p>Thank you for your business!</p>
         </div>
       `;
-      
+
       document.body.appendChild(pdfContent);
 
       // Wait a moment for the content to render
@@ -589,28 +589,28 @@ function Billing() {
       });
 
       document.body.removeChild(pdfContent);
-      
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 295;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
-      
+
       let position = 0;
-      
+
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
-      
+
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       pdf.save(`bill_${selectedCustomerData.name}_${new Date().toISOString().split('T')[0]}.pdf`);
-      
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       showToast.error('Error generating PDF. Please try again.');
@@ -657,11 +657,11 @@ function Billing() {
 
     try {
       setIsGeneratingQR(true);
-    // Generate UPI payment link
-    const paymentLink = `upi://pay?pa=${upiId}&pn=Payment&am=${totalAmount}&cu=INR&tn=Bill Payment`;
-    
-    setQrCodeData(paymentLink);
-      
+      // Generate UPI payment link
+      const paymentLink = `upi://pay?pa=${upiId}&pn=Payment&am=${totalAmount}&cu=INR&tn=Bill Payment`;
+
+      setQrCodeData(paymentLink);
+
       // Generate QR code image
       const qrCodeDataURL = await QRCode.toDataURL(paymentLink, {
         width: 200,
@@ -671,9 +671,9 @@ function Billing() {
           light: '#FFFFFF'
         }
       });
-      
+
       setQrCodeImage(qrCodeDataURL);
-    setShowQRCode(true);
+      setShowQRCode(true);
     } catch (error) {
       console.error('Error generating QR code:', error);
       showToast.error('Error generating QR code. Please try again.');
@@ -1012,7 +1012,7 @@ function Billing() {
                 </div>
                 <div className="col-md-4 text-center">
                   {selectedCustomer && (
-                    <button 
+                    <button
                       className="btn btn-outline-info w-100"
                       onClick={() => navigate(`/customer/${selectedCustomer}`)}
                     >
@@ -1024,258 +1024,8 @@ function Billing() {
             </div>
           </div>
 
-          {/* Price Type and Godown Selection - Combined Row */}
-          {selectedCustomer && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-body">
-                <div className="row">
-                  {/* Price Type Selection */}
-                  <div className="col-md-6">
-                    <label className="form-label">Select Price Type</label>
-                    <div className="d-flex gap-3">
-                      <div 
-                        className={`price-type-btn flex-fill ${priceType === 'price' ? 'active' : ''}`}
-                        onClick={() => handlePriceTypeChange({ target: { value: 'price' } })}
-                      >
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="priceType"
-                          id="regularPrice"
-                          value="price"
-                          checked={priceType === 'price'}
-                          onChange={handlePriceTypeChange}
-                          style={{ display: 'none' }}
-                        />
-                        <div>⭕ Regular Price</div>
-                      </div>
-                      <div 
-                        className={`price-type-btn flex-fill ${priceType === 'masterPrice' ? 'active' : ''}`}
-                        onClick={() => handlePriceTypeChange({ target: { value: 'masterPrice' } })}
-                      >
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="priceType"
-                          id="masterPrice"
-                          value="masterPrice"
-                          checked={priceType === 'masterPrice'}
-                          onChange={handlePriceTypeChange}
-                          style={{ display: 'none' }}
-                        />
-                        <div>⭕ Special Price</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Godown Selection */}
-                  {showGodowns && (
-                    <div className="col-md-6">
-                      <label className="form-label">Select Godown</label>
-                      <select
-                        className="form-select"
-                        value={selectedGodown}
-                        onChange={handleGodownChange}
-                      >
-                        <option value="">Choose a godown...</option>
-                        
-                        {/* Matching Godowns (Top Priority) */}
-                        {godowns.matchingGodowns.length > 0 && (
-                          <optgroup label={`📍 Matching Location (${godowns.customerLocation?.city}, ${godowns.customerLocation?.state})`}>
-                            {godowns.matchingGodowns.map(godown => (
-                              <option key={godown._id} value={godown._id}>
-                                🏢 {godown.name} - {godown.city}, {godown.state}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        
-                        {/* Non-Matching Godowns */}
-                        {godowns.nonMatchingGodowns.length > 0 && (
-                          <optgroup label="🏢 Other Godowns">
-                            {godowns.nonMatchingGodowns.map(godown => (
-                              <option key={godown._id} value={godown._id}>
-                                {godown.name} - {godown.city}, {godown.state}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Date Range Selector */}
-          {selectedCustomer && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-header">
-                <h5>Select Date Range (Optional)</h5>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <label htmlFor="startDate" className="form-label">Start Date</label>
-                    <input
-                      type="date"
-                      className={`form-control ${dateRangeError.startDate ? 'is-invalid' : ''}`}
-                      id="startDate"
-                      value={startDate}
-                      onChange={handleStartDateChange}
-                    />
-                    {dateRangeError.startDate && (
-                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
-                        ⚠️ {dateRangeError.startDate}
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-md-6">
-                    <label htmlFor="endDate" className="form-label">End Date</label>
-                    <input
-                      type="date"
-                      className={`form-control ${dateRangeError.endDate ? 'is-invalid' : ''}`}
-                      id="endDate"
-                      value={endDate}
-                      onChange={handleEndDateChange}
-                    />
-                    {dateRangeError.endDate && (
-                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
-                        ⚠️ {dateRangeError.endDate}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Initialize Inventory Button */}
-          {selectedGodown && (
-            <div className="text-center mb-4">
-              <button
-                className="initialize-btn"
-                onClick={async () => {
-                  try {
-                    await axios.post(`${backendUrl}/api/godowns/${selectedGodown}/initialize-inventory`);
-                    showToast.success('Godown inventory initialized successfully!');
-                    // Refresh godown items
-                    handleGodownChange({ target: { value: selectedGodown } });
-                  } catch (error) {
-                    console.log(error);
-                    const errorMsg = error.response?.data?.message || error.message || 'Error initializing godown inventory';
-                    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-                      showToast.error('Connection timeout. Please check your internet connection.');
-                    } else if (error.response) {
-                      showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
-                    } else if (error.request) {
-                      showToast.error('Unable to connect to the server. Please check if the backend is running.');
-                    } else {
-                      showToast.error(errorMsg);
-                    }
-                  }
-                }}
-              >
-                📦 Initialize Inventory
-              </button>
-            </div>
-          )}
-
-          {/* Godown Items */}
-          {selectedGodownData && godownItems.length > 0 && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-header">
-                <h5>🏢 {selectedGodownData.name} - Available Items</h5>
-                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Location: {selectedGodownData.city}, {selectedGodownData.state}
-                </small>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  {godownItems.map(item => (
-                    <div key={item._id} className="col-md-4 mb-3">
-                      <div className="card">
-                        <div className="card-body">
-                          <h6 className="card-title">{item.itemName}</h6>
-                          <p className="card-text">
-                            <strong>Quantity:</strong> {item.quantity}<br/>
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
-                            <strong>Category:</strong> {item.category || 'N/A'}
-                          </p>
-                          <button 
-                            className="btn btn-success btn-sm"
-                            onClick={() => addItemToBill(item)}
-                            disabled={item.quantity <= 0}
-                          >
-                            {item.quantity > 0 ? 'Add to Bill' : 'Out of Stock'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Matched Items Based on 3-Digit Prefix */}
-          {selectedCustomer && selectedGodown && availableItems.length > 0 && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-header">
-                <h5>🔍 Matched Items (3-Digit Prefix Matching)</h5>
-                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Items matched between billing and inventory based on first 3 digits
-                </small>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  {availableItems.map(item => (
-                    <div key={item._id} className="col-md-4 mb-3">
-                      <div className="card">
-                        <div className="card-body">
-                          <h6 className="card-title">
-                            {item.itemName}
-                            <span className="badge bg-info ms-2">Prefix: {item.prefix}</span>
-                          </h6>
-                          <p className="card-text">
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
-                            <strong>Available Quantity:</strong>
-                            <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} ms-1`}>
-                              {item.availableQuantity}
-                            </span>
-                          </p>
-                          {item.availableQuantity > 0 && (
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => addItemToBill(item)}
-                            >
-                              Add to Bill
-                            </button>
-                          )}
-                          {item.availableQuantity === 0 && (
-                            <button className="btn btn-secondary btn-sm" disabled>
-                              Out of Stock
-                            </button>
-                          )}
-                          <div className="mt-2">
-                            <small className="text-muted">
-                              Matching items: {item.matchingItems.map(mi => mi.inputValue).join(', ')}
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Original Customer Items (when no godown selected) */}
-          {selectedCustomer && !selectedGodown && (
+          {/* Available Items Section */}
+          {customerItems.length > 0 && (
             <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>Available Items</h5>
@@ -1289,7 +1039,7 @@ function Billing() {
                         <div className="card-body">
                           <h6 className="card-title">{item.name}</h6>
                           <p className="card-text">
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
+                            <strong>Regular Price:</strong> ₹{item.price}<br />
                             <strong>Special Price:</strong> ₹{item.masterPrice}
                           </p>
                           <button
@@ -1332,7 +1082,7 @@ function Billing() {
                         const itemInventoryStatus = inventoryStatus.find(
                           invItem => invItem.itemName === item.itemName
                         );
-                        
+
                         return (
                           <React.Fragment key={item.itemId}>
                             {/* Main item row */}
@@ -1346,7 +1096,7 @@ function Billing() {
                               <td>₹{item.selectedPrice}</td>
                               <td>
                                 <div className="btn-group" role="group">
-                                  <button 
+                                  <button
                                     className="btn btn-outline-secondary btn-sm"
                                     onClick={() => decreaseQuantity(item.itemId)}
                                   >
@@ -1355,7 +1105,7 @@ function Billing() {
                                   <span className="btn btn-outline-secondary btn-sm disabled">
                                     {item.quantity}
                                   </span>
-                                  <button 
+                                  <button
                                     className="btn btn-outline-secondary btn-sm"
                                     onClick={() => increaseQuantity(item.itemId)}
                                   >
@@ -1365,7 +1115,7 @@ function Billing() {
                               </td>
                               <td>₹{item.total}</td>
                               <td>
-                                <button 
+                                <button
                                   className="btn btn-danger btn-sm"
                                   onClick={() => removeItem(item.itemId)}
                                 >
@@ -1373,7 +1123,7 @@ function Billing() {
                                 </button>
                               </td>
                             </tr>
-                            
+
                             {/* Inventory status row (shown when inventory is checked) */}
                             {showInventoryStatus && itemInventoryStatus && (
                               <tr>
@@ -1431,7 +1181,7 @@ function Billing() {
                     </tbody>
                   </table>
                 </div>
-                
+
                 {/* Total Amount with GST Breakdown */}
                 <div className="row">
                   <div className="col-md-6 offset-md-6">
@@ -1528,7 +1278,7 @@ function Billing() {
                 <div className="row mt-4">
                   <div className="col-md-12">
                     <div className="d-flex gap-3 flex-wrap justify-content-center">
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: showInventoryStatus ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -1541,7 +1291,7 @@ function Billing() {
                       >
                         {showInventoryStatus ? '✓ Inventory Checked' : '📦 Check Inventory'}
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -1553,7 +1303,7 @@ function Billing() {
                       >
                         📄 Download PDF
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
@@ -1566,7 +1316,7 @@ function Billing() {
                       >
                         {isGeneratingQR ? '⏳ Generating...' : '📱 Payment QR'}
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -1597,16 +1347,16 @@ function Billing() {
                 <div className="mb-3">
                   <p><strong>Amount:</strong> ₹{totalAmount}</p>
                   <p>Scan this QR code to make payment</p>
-                  
+
                   {/* UPI ID Configuration */}
                   <div className="mb-3">
-                    <button 
+                    <button
                       className="btn btn-outline-secondary btn-sm"
                       onClick={() => setShowUpiInput(!showUpiInput)}
                     >
                       {showUpiInput ? 'Hide' : 'Configure'} UPI ID
                     </button>
-                    
+
                     {showUpiInput && (
                       <div className="mt-2">
                         <div className="row justify-content-center">
@@ -1619,7 +1369,7 @@ function Billing() {
                                 value={upiId}
                                 onChange={(e) => setUpiId(e.target.value)}
                               />
-                              <button 
+                              <button
                                 className="btn btn-primary"
                                 onClick={generatePaymentQR}
                               >
@@ -1633,7 +1383,7 @@ function Billing() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="border p-3 d-inline-block">
                   <div style={{ width: '200px', height: '200px', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {qrCodeImage ? (
@@ -1643,36 +1393,22 @@ function Billing() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="mt-3">
-                  <p className="text-muted">
-                    <strong>Payment Link:</strong> {qrCodeData}
-                  </p>
-                  <div className="d-flex gap-2 justify-content-center">
-                    <button 
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(qrCodeData);
-                        showToast.success('Payment link copied to clipboard!');
-                      }}
-                    >
-                      Copy Payment Link
-                    </button>
-                    <button 
-                      className="btn btn-success btn-sm"
-                      onClick={shareQRCodeOnWhatsApp}
-                    >
-                      📱 Send on WhatsApp
-                    </button>
-                  </div>
+                  <button
+                    className="btn btn-success"
+                    onClick={shareQRCodeOnWhatsApp}
+                  >
+                    📤 Share QR Code
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Stock Dialog Modal */}
+          {/* Stock Dialog */}
           {showStockDialog && (
-            <div 
+            <div
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1688,7 +1424,7 @@ function Billing() {
               }}
               onClick={() => setShowStockDialog(false)}
             >
-              <div 
+              <div
                 style={{
                   backgroundColor: 'white',
                   borderRadius: '15px',
@@ -1764,10 +1500,10 @@ function Billing() {
                 </div>
 
                 {/* Stock Items List */}
-                <div style={{ 
-                  flex: 1, 
-                  overflowY: 'auto', 
-                  padding: '20px 30px' 
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 30px'
                 }}>
                   {stockDialogItems.length === 0 ? (
                     <div style={{
@@ -1781,18 +1517,18 @@ function Billing() {
                     </div>
                   ) : (
                     <>
-                      <div style={{ 
-                        marginBottom: '15px', 
-                        padding: '10px 15px', 
-                        background: '#f8f9fa', 
+                      <div style={{
+                        marginBottom: '15px',
+                        padding: '10px 15px',
+                        background: '#f8f9fa',
                         borderRadius: '8px',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}>
                         <span style={{ fontWeight: 'bold', color: '#333' }}>
-                          Total Items: {stockDialogItems.filter(item => 
-                            !stockSearchTerm || 
+                          Total Items: {stockDialogItems.filter(item =>
+                            !stockSearchTerm ||
                             item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                             item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                           ).length}
@@ -1804,13 +1540,13 @@ function Billing() {
 
                       <div style={{ display: 'grid', gap: '12px' }}>
                         {stockDialogItems
-                          .filter(item => 
-                            !stockSearchTerm || 
+                          .filter(item =>
+                            !stockSearchTerm ||
                             item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                             item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                           )
                           .map((item, index) => (
-                            <div 
+                            <div
                               key={index}
                               style={{
                                 padding: '15px 20px',
@@ -1831,9 +1567,9 @@ function Billing() {
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ 
-                                    fontSize: '1.1rem', 
-                                    fontWeight: 'bold', 
+                                  <div style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
                                     color: '#333',
                                     marginBottom: '5px'
                                   }}>
@@ -1844,8 +1580,8 @@ function Billing() {
                                       {item.itemName}
                                     </div>
                                   )}
-                                  <div style={{ 
-                                    fontSize: '0.85rem', 
+                                  <div style={{
+                                    fontSize: '0.85rem',
                                     color: '#999',
                                     marginTop: '5px'
                                   }}>
@@ -1867,51 +1603,51 @@ function Billing() {
                           ))}
                       </div>
 
-                      {stockDialogItems.filter(item => 
-                        !stockSearchTerm || 
+                      {stockDialogItems.filter(item =>
+                        !stockSearchTerm ||
                         item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                         item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                       ).length === 0 && stockSearchTerm && (
-                        <div style={{
-                          textAlign: 'center',
-                          padding: '40px 20px',
-                          color: '#999'
-                        }}>
-                          <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🔍</div>
-                          <p>No items found matching "{stockSearchTerm}"</p>
-                        </div>
-                      )}
+                          <div style={{
+                            textAlign: 'center',
+                            padding: '40px 20px',
+                            color: '#999'
+                          }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🔍</div>
+                            <p>No items found matching "{stockSearchTerm}"</p>
+                          </div>
+                        )}
                     </>
                   )}
                 </div>
+              </div>
 
-                {/* Dialog Footer */}
-                <div style={{
-                  padding: '15px 30px',
-                  borderTop: '1px solid #e0e0e0',
-                  background: '#f8f9fa',
-                  display: 'flex',
-                  justifyContent: 'flex-end'
-                }}>
-                  <button
-                    onClick={() => setShowStockDialog(false)}
-                    style={{
-                      padding: '10px 30px',
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '1rem',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                    onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                  >
-                    Close
-                  </button>
-                </div>
+              {/* Dialog Footer */}
+              <div style={{
+                padding: '15px 30px',
+                borderTop: '1px solid #e0e0e0',
+                background: '#f8f9fa',
+                display: 'flex',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={() => setShowStockDialog(false)}
+                  style={{
+                    padding: '10px 30px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                >
+                  Close
+                </button>
               </div>
             </div>
           )}
@@ -1921,4 +1657,4 @@ function Billing() {
   );
 }
 
-export default Billing; 
+export default Billing;

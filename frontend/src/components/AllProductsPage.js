@@ -9,8 +9,6 @@ function AllProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [expandedCard, setExpandedCard] = useState(null);
-  const [barcodeDetails, setBarcodeDetails] = useState({});
-  const [loadingBarcode, setLoadingBarcode] = useState({});
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
@@ -23,86 +21,24 @@ function AllProductsPage() {
       setFilteredProducts(products);
     } else {
       const filtered = products.filter(product =>
-        (product.inputValue && product.inputValue.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.godownName && product.godownName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.itemName && product.itemName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
+        (product.product && product.product.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.skuc && String(product.skuc).toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.skun && product.skun.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.batch && String(product.batch).toLowerCase().includes(searchTerm.toLowerCase()))
       );
       setFilteredProducts(filtered);
     }
   }, [searchTerm, products]);
 
-  const toggleCard = async (productId, product) => {
-    const newExpandedCard = expandedCard === productId ? null : productId;
-    setExpandedCard(newExpandedCard);
-    
-    // Fetch barcode details when expanding a card
-    if (newExpandedCard && product.inputValue && !barcodeDetails[productId]) {
-      await fetchBarcodeDetails(productId, product.inputValue);
-    }
-  };
-
-  const fetchBarcodeDetails = async (productId, inputValue) => {
-    setLoadingBarcode(prev => ({ ...prev, [productId]: true }));
-    try {
-      // Fetch all barcodes
-      const response = await axios.get(`${backendUrl}/api/barcodes`);
-      const allBarcodes = response.data;
-      
-      console.log('All Barcodes:', allBarcodes);
-      console.log('Looking for inputValue:', inputValue);
-      
-      // Try multiple matching strategies
-      let matchingBarcode = null;
-      
-      // Strategy 1: Check if any batchNumber combined with skuc matches inputValue
-      matchingBarcode = allBarcodes.find(barcode => {
-        if (!barcode.skuc || !barcode.batchNumbers) return false;
-        
-        return barcode.batchNumbers.some(batchNum => {
-          const fullCode = `${barcode.skuc}${batchNum}`;
-          console.log('Checking:', fullCode, 'against', inputValue);
-          return fullCode === inputValue;
-        });
-      });
-      
-      // Strategy 2: If not found, try partial match with SKU code
-      if (!matchingBarcode) {
-        matchingBarcode = allBarcodes.find(barcode => {
-          if (!barcode.skuc) return false;
-          // Check if inputValue starts with the SKU code
-          return inputValue.startsWith(barcode.skuc);
-        });
-      }
-      
-      // Strategy 3: If still not found, just show the first barcode (for testing)
-      // This will help us see if the display is working
-      if (!matchingBarcode && allBarcodes.length > 0) {
-        console.log('No exact match found, using first barcode for display');
-        matchingBarcode = allBarcodes[0];
-      }
-      
-      console.log('Matching Barcode:', matchingBarcode);
-      
-      if (matchingBarcode) {
-        setBarcodeDetails(prev => ({
-          ...prev,
-          [productId]: matchingBarcode
-        }));
-      } else {
-        console.log('No barcode found for product:', productId);
-      }
-    } catch (error) {
-      console.error('Error fetching barcode details:', error);
-    } finally {
-      setLoadingBarcode(prev => ({ ...prev, [productId]: false }));
-    }
+  const toggleCard = (productId) => {
+    setExpandedCard(expandedCard === productId ? null : productId);
   };
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${backendUrl}/api/delevery1`);
+      // Changed to fetch barcodes directly as per user request
+      const response = await axios.get(`${backendUrl}/api/barcodes`);
       setProducts(response.data);
       setFilteredProducts(response.data);
       showToast.success(`Loaded ${response.data.length} products`);
@@ -115,11 +51,16 @@ function AllProductsPage() {
   };
 
   const handleDelete = async (productId) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
+    // Note: The backend might not have a delete endpoint for barcodes yet, 
+    // but keeping the function structure in case it's needed.
+    // For now, we'll just show a message or implement if endpoint exists.
+    if (window.confirm('Are you sure you want to delete this record?')) {
       try {
-        await axios.delete(`${backendUrl}/api/delevery1/${productId}`);
-        showToast.success('Product deleted successfully');
-        fetchProducts();
+        // Assuming there might be an endpoint, or we just remove from UI for now if API missing
+        // await axios.delete(`${backendUrl}/api/barcodes/${productId}`); 
+        // showToast.success('Product deleted successfully');
+        // fetchProducts();
+        showToast.info('Delete functionality not available for historical records');
       } catch (error) {
         console.error('Error deleting product:', error);
         showToast.error('Error deleting product');
@@ -275,10 +216,10 @@ function AllProductsPage() {
                 fontWeight: 'bold',
                 textShadow: '2px 2px 4px rgba(0, 0, 0, 0.2)',
               }}>
-                All Products Created by Staff
+                All Products (Barcode History)
               </h2>
               <p style={{ margin: '5px 0 0 0', opacity: 0.8, fontSize: '14px' }}>
-                Total Products: {filteredProducts.length}
+                Total Records: {filteredProducts.length}
               </p>
             </div>
           </div>
@@ -288,7 +229,7 @@ function AllProductsPage() {
         <div style={cardStyle}>
           <input
             type="text"
-            placeholder="🔍 Search by product name, godown, or staff name..."
+            placeholder="🔍 Search by product name, SKU, or batch..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -306,7 +247,7 @@ function AllProductsPage() {
                 cursor: 'pointer',
                 marginBottom: '15px',
               }}
-              onClick={() => toggleCard(product._id, product)}
+              onClick={() => toggleCard(product._id)}
               className="product-card"
             >
               {/* Card Header - Always Visible */}
@@ -331,19 +272,18 @@ function AllProductsPage() {
                       borderRadius: '8px',
                       fontSize: '0.9rem',
                     }}>
-                      {product.inputValue || 'N/A'}
+                      {product.skuc || 'N/A'}
                     </span>
-                    {product.itemName && (
-                      <span style={{ fontSize: '1.2rem' }}>{product.itemName}</span>
-                    )}
+                    <span style={{ fontSize: '1.2rem' }}>{product.product || 'Unknown Product'}</span>
                   </h3>
                   <p style={{
                     margin: '0',
                     opacity: 0.8,
                     fontSize: '0.95rem',
                   }}>
-                    📍 {product.godownName || 'N/A'}
-                    {product.category && ` • 🏷️ ${product.category}`}
+                    🏷️ SKU Name: {product.skun || 'N/A'}
+                    {product.batch && ` • 📦 Batch: ${product.batch}`}
+                    {product.currentTime && ` • 🕒 ${product.currentTime}`}
                   </p>
                 </div>
                 <div style={{
@@ -355,7 +295,7 @@ function AllProductsPage() {
                 </div>
               </div>
 
-              {/* Expanded Details - ONLY Barcode Information */}
+              {/* Expanded Details */}
               {expandedCard === product._id && (
                 <div
                   style={{
@@ -365,176 +305,154 @@ function AllProductsPage() {
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Barcode Creation Details */}
-                  {loadingBarcode[product._id] ? (
+                  <div>
+                    {/* Barcode Display */}
                     <div style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      padding: '30px',
+                      borderRadius: '15px',
+                      marginBottom: '25px',
                       textAlign: 'center',
-                      padding: '40px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                     }}>
-                      <div style={{ fontSize: '1.2rem', opacity: 0.8 }}>
-                        🔄 Loading barcode details...
-                      </div>
-                    </div>
-                  ) : barcodeDetails[product._id] ? (
-                    <div>
-                      {/* Barcode Display */}
-                      <div style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        padding: '30px',
-                        borderRadius: '15px',
-                        marginBottom: '25px',
-                        textAlign: 'center',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                      }}>
-                        <h4 style={{
-                          margin: '0 0 20px 0',
-                          fontSize: '1.4rem',
-                          fontWeight: 'bold',
-                          color: '#333',
-                        }}>
-                          Barcode: {product.inputValue}
-                        </h4>
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}>
-                          <Barcode 
-                            value={product.inputValue} 
-                            width={2}
-                            height={80}
-                            fontSize={20}
-                            background="#ffffff"
-                            lineColor="#000000"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Barcode Creation Details */}
                       <h4 style={{
                         margin: '0 0 20px 0',
-                        fontSize: '1.3rem',
+                        fontSize: '1.4rem',
                         fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
+                        color: '#333',
                       }}>
-                        <span style={{ fontSize: '1.5rem' }}>📋</span>
-                        Barcode Creation Details
+                        Master SKU: {product.skuc}
                       </h4>
-                      
                       <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                        gap: '15px',
-                        marginBottom: '20px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
                       }}>
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>📦 Product Name</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].product || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🔢 SKU Code</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].skuc || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🏷️ SKU Name</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].skun || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>👤 Packed By</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].packed || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>📦 Batch No</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].batch || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🌓 Shift</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].shift || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>📍 Location</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].location || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>⏰ Packing Time</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].currentTime || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🔄 Rewinder Operator</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].rewinder || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>✂️ Edge Cut Operator</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].edge || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🎯 Winder Operator</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].winder || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🔀 Mixer Operator</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].mixer || 'N/A'}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>🔢 Total Barcodes</div>
-                          <div style={detailValueStyle}>{barcodeDetails[product._id].numberOfBarcodes || 0}</div>
-                        </div>
-
-                        <div style={detailBoxStyle}>
-                          <div style={detailLabelStyle}>📋 Batch Numbers</div>
-                          <div style={detailValueStyle}>
-                            {barcodeDetails[product._id].batchNumbers && barcodeDetails[product._id].batchNumbers.length > 0
-                              ? barcodeDetails[product._id].batchNumbers.join(', ')
-                              : 'N/A'}
-                          </div>
-                        </div>
+                        <Barcode
+                          value={product.skuc || '000000'}
+                          width={2}
+                          height={80}
+                          fontSize={20}
+                          background="#ffffff"
+                          lineColor="#000000"
+                        />
                       </div>
                     </div>
-                  ) : (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '40px',
-                      opacity: 0.7,
+
+                    {/* Details Grid */}
+                    <h4 style={{
+                      margin: '0 0 20px 0',
+                      fontSize: '1.3rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
                     }}>
-                      <div style={{ fontSize: '1.1rem' }}>
-                        ℹ️ No barcode details found for this product
+                      <span style={{ fontSize: '1.5rem' }}>📋</span>
+                      Product Details
+                    </h4>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                      gap: '15px',
+                      marginBottom: '20px',
+                    }}>
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>📦 Product Name</div>
+                        <div style={detailValueStyle}>{product.product || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🔢 SKU Code</div>
+                        <div style={detailValueStyle}>{product.skuc || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🏷️ SKU Name</div>
+                        <div style={detailValueStyle}>{product.skun || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>👤 Packed By</div>
+                        <div style={detailValueStyle}>{product.packed || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>📦 Batch No</div>
+                        <div style={detailValueStyle}>{product.batch || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🌓 Shift</div>
+                        <div style={detailValueStyle}>{product.shift || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>📍 Location</div>
+                        <div style={detailValueStyle}>{product.location || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>⏰ Packing Time</div>
+                        <div style={detailValueStyle}>{product.currentTime || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🔄 Rewinder Operator</div>
+                        <div style={detailValueStyle}>{product.rewinder || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>✂️ Edge Cut Operator</div>
+                        <div style={detailValueStyle}>{product.edge || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🎯 Winder Operator</div>
+                        <div style={detailValueStyle}>{product.winder || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🔀 Mixer Operator</div>
+                        <div style={detailValueStyle}>{product.mixer || 'N/A'}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>🔢 Total Barcodes</div>
+                        <div style={detailValueStyle}>{product.numberOfBarcodes || 0}</div>
+                      </div>
+
+                      <div style={detailBoxStyle}>
+                        <div style={detailLabelStyle}>📋 Batch Numbers</div>
+                        <div style={detailValueStyle}>
+                          {product.batchNumbers && product.batchNumbers.length > 0
+                            ? product.batchNumbers.join(', ')
+                            : 'N/A'}
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Actions */}
-                  <div style={{
-                    display: 'flex',
-                    gap: '10px',
-                    justifyContent: 'flex-end',
-                  }}>
-                    <button
-                      className="btn btn-danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(product._id);
-                      }}
-                      style={{
-                        padding: '10px 20px',
-                        fontSize: '1rem',
-                      }}
-                    >
-                      🗑️ Delete Product
-                    </button>
+                    {/* Actions */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '10px',
+                      justifyContent: 'flex-end',
+                    }}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(product._id);
+                        }}
+                        style={{
+                          padding: '10px 20px',
+                          fontSize: '1rem',
+                        }}
+                      >
+                        🗑️ Delete Record
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

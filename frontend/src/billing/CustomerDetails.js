@@ -106,31 +106,25 @@ const BillHistory = ({ bills, customer }) => {
                     <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
                         <div>
                             <h3 style="color: #2c3e50; margin-bottom: 10px;">Bill To:</h3>
-                            <p style="margin: 5px 0;"><strong>Name:</strong> ${
-                              customer.name
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>GST No:</strong> ${
-                              customer.gstNo
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>Address:</strong> ${
-                              customer.address
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>Phone:</strong> ${
-                              customer.phoneNumber
-                            }</p>
+                            <p style="margin: 5px 0;"><strong>Name:</strong> ${customer.name
+        }</p>
+                            <p style="margin: 5px 0;"><strong>GST No:</strong> ${customer.gstNo
+        }</p>
+                            <p style="margin: 5px 0;"><strong>Address:</strong> ${customer.address
+        }</p>
+                            <p style="margin: 5px 0;"><strong>Phone:</strong> ${customer.phoneNumber
+        }</p>
                         </div>
                         <div style="text-align: right;">
-                            <p style="margin: 5px 0;"><strong>Bill No:</strong> ${
-                              bill.billNumber
-                            }</p>
+                            <p style="margin: 5px 0;"><strong>Bill No:</strong> ${bill.billNumber
+        }</p>
                             <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(
-                              bill.createdAt
-                            ).toLocaleDateString()}</p>
-                            <p style="margin: 5px 0;"><strong>Price Type:</strong> ${
-                              bill.priceType === "masterPrice"
-                                ? "Special Price"
-                                : "Regular Price"
-                            }</p>
+          bill.createdAt
+        ).toLocaleDateString()}</p>
+                            <p style="margin: 5px 0;"><strong>Price Type:</strong> ${bill.priceType === "masterPrice"
+          ? "Special Price"
+          : "Regular Price"
+        }</p>
                         </div>
                     </div>
                 </div>
@@ -147,8 +141,8 @@ const BillHistory = ({ bills, customer }) => {
                         </thead>
                         <tbody>
                             ${bill.items
-                              .map(
-                                (item) => `
+          .map(
+            (item) => `
                                 <tr>
                                     <td style="border: 1px solid #ddd; padding: 12px;">${item.itemName}</td>
                                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${item.selectedPrice}</td>
@@ -156,17 +150,16 @@ const BillHistory = ({ bills, customer }) => {
                                     <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">${item.total}</td>
                                 </tr>
                             `
-                              )
-                              .join("")}
+          )
+          .join("")}
                         </tbody>
                     </table>
                 </div>
                 
                 <div style="text-align: right; margin-top: 30px;">
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; display: inline-block;">
-                        <h2 style="color: #2c3e50; margin: 0;">Total Amount: ₹${
-                          bill.totalAmount
-                        }</h2>
+                        <h2 style="color: #2c3e50; margin: 0;">Total Amount: ₹${bill.totalAmount
+        }</h2>
                     </div>
                 </div>
                 
@@ -205,8 +198,7 @@ const BillHistory = ({ bills, customer }) => {
       }
 
       pdf.save(
-        `bill_${customer.name}_${bill.billNumber}_${
-          new Date(bill.createdAt).toISOString().split("T")[0]
+        `bill_${customer.name}_${bill.billNumber}_${new Date(bill.createdAt).toISOString().split("T")[0]
         }.pdf`
       );
     } catch (error) {
@@ -245,11 +237,10 @@ const BillHistory = ({ bills, customer }) => {
               <td>₹{bill.totalAmount}</td>
               <td>
                 <span
-                  className={`badge ${
-                    bill.priceType === "masterPrice"
+                  className={`badge ${bill.priceType === "masterPrice"
                       ? "bg-warning"
                       : "bg-info"
-                  }`}
+                    }`}
                 >
                   {bill.priceType === "masterPrice"
                     ? "Special Price"
@@ -299,6 +290,34 @@ function CustomerDetails() {
 
   const { id } = useParams();
   console.log("CustomerDetails - Customer ID from params:", id);
+
+  // Customer Edit State
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [editedCustomer, setEditedCustomer] = useState({});
+
+  // Initialize editedCustomer when customer data is loaded
+  useEffect(() => {
+    if (customer) {
+      setEditedCustomer({
+        ...customer,
+        specialPriceStartDate: customer.specialPriceStartDate ? new Date(customer.specialPriceStartDate).toISOString().split('T')[0] : '',
+        specialPriceEndDate: customer.specialPriceEndDate ? new Date(customer.specialPriceEndDate).toISOString().split('T')[0] : ''
+      });
+    }
+  }, [customer]);
+
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.put(`${backendUrl}/api/customers/${id}`, editedCustomer);
+      setCustomer(response.data);
+      setIsEditingCustomer(false);
+      showToast.success("Customer details updated successfully!");
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      showToast.error("Failed to update customer details");
+    }
+  };
 
   const fetchItems = useCallback(async () => {
     try {
@@ -500,7 +519,7 @@ function CustomerDetails() {
           console.log(err);
           showToast.error(
             "Error deleting item: " +
-              (err.response?.data?.message || err.message)
+            (err.response?.data?.message || err.message)
           );
         });
     }
@@ -672,7 +691,7 @@ function CustomerDetails() {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <div style={{...cardStyle, textAlign: "center"}}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
           <p style={{ fontSize: "20px", margin: 0 }}>Loading...</p>
         </div>
       </div>
@@ -682,7 +701,7 @@ function CustomerDetails() {
   if (!customer) {
     return (
       <div style={containerStyle}>
-        <div style={{...cardStyle, textAlign: "center"}}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
           <p style={{ fontSize: "20px", margin: 0 }}>
             Customer not found.
           </p>
@@ -788,53 +807,171 @@ function CustomerDetails() {
       <div style={{ width: "100%", maxWidth: "1000px" }}>
         {/* Customer Information */}
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "20px" }}>
-            <div style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "30px",
-              boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
-            }}>
-              👤
-            </div>
-            <div>
-              <h2 style={{
-                margin: 0,
-                fontSize: "2rem",
-                fontWeight: "bold",
-                textShadow: "2px 2px 4px rgba(0, 0, 0, 0.2)",
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <div style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "30px",
+                boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
               }}>
-                {customer.name}
-              </h2>
+                👤
+              </div>
+              <div>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: "2rem",
+                  fontWeight: "bold",
+                  textShadow: "2px 2px 4px rgba(0, 0, 0, 0.2)",
+                }}>
+                  {customer.name}
+                </h2>
+              </div>
             </div>
+            <button
+              style={buttonStyle}
+              onClick={() => setIsEditingCustomer(!isEditingCustomer)}
+            >
+              {isEditingCustomer ? "❌ Cancel" : "✏️ Edit Details"}
+            </button>
           </div>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "15px",
-            fontSize: "14px"
-          }}>
-            <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📍 Address:</span> {customer.address}
-            </p>
-            <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏙️ City:</span> {customer.city}
-            </p>
-            <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🗺️ State:</span> {customer.state}
-            </p>
-            <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏢 GST No:</span> {customer.gstNo || "N/A"}
-            </p>
-            <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
-            </p>
-          </div>
+
+          {isEditingCustomer ? (
+            <form onSubmit={handleUpdateCustomer} style={{ display: "grid", gap: "15px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>Name</label>
+                  <input
+                    type="text"
+                    value={editedCustomer.name || ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, name: e.target.value })}
+                    style={searchInputStyle}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>Phone Number</label>
+                  <input
+                    type="text"
+                    value={editedCustomer.phoneNumber || ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, phoneNumber: e.target.value })}
+                    style={searchInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>Address</label>
+                <input
+                  type="text"
+                  value={editedCustomer.address || ''}
+                  onChange={(e) => setEditedCustomer({ ...editedCustomer, address: e.target.value })}
+                  style={searchInputStyle}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>City</label>
+                  <input
+                    type="text"
+                    value={editedCustomer.city || ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, city: e.target.value })}
+                    style={searchInputStyle}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>State</label>
+                  <input
+                    type="text"
+                    value={editedCustomer.state || ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, state: e.target.value })}
+                    style={searchInputStyle}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>GST No</label>
+                  <input
+                    type="text"
+                    value={editedCustomer.gstNo || ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, gstNo: e.target.value })}
+                    style={searchInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", paddingTop: "15px", marginTop: "10px" }}>
+                <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem" }}>🏷️ Special Pricing Configuration</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>Special Price Start Date</label>
+                    <input
+                      type="date"
+                      value={editedCustomer.specialPriceStartDate || ''}
+                      onChange={(e) => setEditedCustomer({ ...editedCustomer, specialPriceStartDate: e.target.value })}
+                      style={searchInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "5px", fontSize: "12px" }}>Special Price End Date</label>
+                    <input
+                      type="date"
+                      value={editedCustomer.specialPriceEndDate || ''}
+                      onChange={(e) => setEditedCustomer({ ...editedCustomer, specialPriceEndDate: e.target.value })}
+                      style={searchInputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button type="submit" style={buttonStyle} className="custom-btn">
+                  💾 Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "15px",
+              fontSize: "14px"
+            }}>
+              <p style={{ margin: "8px 0" }}>
+                <span style={{ opacity: 0.8 }}>📍 Address:</span> {customer.address}
+              </p>
+              <p style={{ margin: "8px 0" }}>
+                <span style={{ opacity: 0.8 }}>🏙️ City:</span> {customer.city}
+              </p>
+              <p style={{ margin: "8px 0" }}>
+                <span style={{ opacity: 0.8 }}>🗺️ State:</span> {customer.state}
+              </p>
+              <p style={{ margin: "8px 0" }}>
+                <span style={{ opacity: 0.8 }}>🏢 GST No:</span> {customer.gstNo || "N/A"}
+              </p>
+              <p style={{ margin: "8px 0" }}>
+                <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
+              </p>
+              {(customer.specialPriceStartDate || customer.specialPriceEndDate) && (
+                <div style={{ gridColumn: "1 / -1", marginTop: "10px", padding: "10px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "8px" }}>
+                  <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>🏷️ Special Pricing Active:</p>
+                  <p style={{ margin: "0" }}>
+                    {customer.specialPriceStartDate ? new Date(customer.specialPriceStartDate).toLocaleDateString() : 'N/A'}
+                    {' ➔ '}
+                    {customer.specialPriceEndDate ? new Date(customer.specialPriceEndDate).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Excel Download/Upload Buttons */}
@@ -866,7 +1003,7 @@ function CustomerDetails() {
             >
               📋 Download Template
             </button>
-            <label style={{...buttonStyle, display: "inline-block"}} className="custom-btn">
+            <label style={{ ...buttonStyle, display: "inline-block" }} className="custom-btn">
               📤 Upload Excel
               <input
                 type="file"
@@ -1023,7 +1160,7 @@ function CustomerDetails() {
                 />
               </div>
             </div>
-            <button type="submit" style={{...buttonStyle, width: "auto"}} className="custom-btn">
+            <button type="submit" style={{ ...buttonStyle, width: "auto" }} className="custom-btn">
               ➕ Add Item
             </button>
           </form>

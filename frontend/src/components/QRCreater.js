@@ -124,12 +124,19 @@ const QRCreater = () => {
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-            // Assuming first row is header: [Sr No, Product Name, SKU Code No]
+            // Assuming first row is header: [Product Name, SKU Code No, SKU Name, Packed By, Batch No, Shift, Rewinder, Edge Cut, Winder, Mixer]
             const [header, ...rows] = data;
             const products = rows.map((row) => ({
-              srNo: row[0],
-              productName: row[1],
-              skuCode: row[2],
+              productName: row[0],
+              skuCode: row[1],
+              skuName: row[2],
+              packedBy: row[3],
+              batchNo: row[4],
+              shift: row[5],
+              rewinderOperator: row[6],
+              edgeCutOperator: row[7],
+              winderOperator: row[8],
+              mixerOperator: row[9],
             }));
             setExcelData(products);
             console.log("Loaded Excel Data:", products); // Debug log
@@ -401,73 +408,156 @@ const QRCreater = () => {
         <h2 style={styles.heading}>Generate Barcodes</h2>
 
         <div style={styles.form}>
-          {/* Product Name with autocomplete */}
-          <div style={{ ...styles.inputGroup, position: "relative" }}>
+          {/* Product Name Dropdown */}
+          <div style={styles.inputGroup}>
             <label htmlFor="product" style={styles.label}>
-              Product Name:
+              1️⃣ Product Name:
             </label>
-            <input
+            <select
               id="product"
-              type="text"
-              placeholder="Product name"
               value={product}
               onChange={(e) => {
-                const value = e.target.value;
-                setProduct(value);
-                // Filter suggestions
-                if (value.length > 0 && excelData.length > 0) {
-                  const suggestions = excelData.filter(
-                    (item) =>
-                      item.productName &&
-                      item.productName
-                        .toLowerCase()
-                        .startsWith(value.toLowerCase())
+                const selectedProductName = e.target.value;
+                setProduct(selectedProductName);
+
+                // Find the selected product in Excel data and auto-fill ALL fields
+                if (selectedProductName && excelData.length > 0) {
+                  const selectedProduct = excelData.find(
+                    (item) => item.productName === selectedProductName
                   );
-                  setProductSuggestions(suggestions);
-                  console.log("Suggestions:", suggestions); // Debug log
+                  if (selectedProduct) {
+                    // Auto-fill primary fields
+                    setSku(selectedProduct.skuCode || "");
+                    setSKU(selectedProduct.skuName || selectedProduct.productName);
+
+                    // Auto-fill additional information
+                    setPacked(selectedProduct.packedBy || "");
+                    setBatch(selectedProduct.batchNo || "");
+                    setShift(selectedProduct.shift || "");
+
+                    // Auto-fill operators
+                    setRewinder(selectedProduct.rewinderOperator || "");
+                    setEdge(selectedProduct.edgeCutOperator || "");
+                    setWinder(selectedProduct.winderOperator || "");
+                    setMixer(selectedProduct.mixerOperator || "");
+
+                    console.log("Auto-filled all fields:", selectedProduct);
+                  }
                 } else {
-                  setProductSuggestions([]);
-                  console.log("Suggestions: []"); // Debug log
+                  // Clear ALL fields if "Select a product" is chosen
+                  setSku("");
+                  setSKU("");
+                  setPacked("");
+                  setBatch("");
+                  setShift("");
+                  setRewinder("");
+                  setEdge("");
+                  setWinder("");
+                  setMixer("");
                 }
               }}
               required
-              style={styles.input}
-              autoComplete="off"
-            />
-            {/* Suggestions dropdown */}
-            {productSuggestions.length > 0 && (
-              <ul
+              style={{
+                ...styles.input,
+                cursor: "pointer",
+                backgroundColor: product
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
+            >
+              <option value="">-- Select a product from Excel --</option>
+              {excelData.length === 0 ? (
+                <option value="" disabled>
+                  No products loaded. Please upload Excel file.
+                </option>
+              ) : (
+                excelData.map((item, idx) => (
+                  <option key={idx} value={item.productName}>
+                    {item.productName} (SKU: {item.skuCode})
+                  </option>
+                ))
+              )}
+            </select>
+            {excelData.length === 0 && (
+              <small
                 style={{
-                  listStyle: "none",
-                  padding: 0,
-                  margin: 0,
-                  background: "#fff",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  maxHeight: "120px",
-                  overflowY: "auto",
-                  position: "absolute",
-                  zIndex: 10,
-                  width: "100%",
+                  color: "#ff6900",
+                  fontSize: "12px",
+                  marginTop: "5px",
+                  display: "block",
+                  fontWeight: "bold",
                 }}
               >
-                {productSuggestions.map((item, idx) => (
-                  <li
-                    key={idx}
-                    style={{ padding: "8px", cursor: "pointer" }}
-                    onClick={() => {
-                      setProduct(item.productName);
-                      setSku(item.skuCode);
-                      setProductSuggestions([]);
-                      // Do NOT setSKU here, so SKU Name is not auto-filled
-                    }}
-                  >
-                    {item.productName}
-                  </li>
-                ))}
-              </ul>
+                ⚠️ No Excel file uploaded. Please ask admin to upload product data.
+              </small>
             )}
           </div>
+
+          {/* SKU Code No */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="skuc" style={styles.label}>
+              2️⃣ SKU Code No:
+            </label>
+            <input
+              id="skuc"
+              type="text"
+              placeholder="SKU code no (auto-filled)"
+              value={skuc}
+              onChange={(e) => setSku(e.target.value)}
+              required
+              style={{
+                ...styles.input,
+                backgroundColor: skuc
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
+            />
+          </div>
+
+          {/* SKU Name */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="skun" style={styles.label}>
+              3️⃣ SKU Name:
+            </label>
+            <input
+              id="skun"
+              type="text"
+              placeholder="SKU Name (auto-filled)"
+              value={skun}
+              onChange={(e) => setSKU(e.target.value)}
+              required
+              style={{
+                ...styles.input,
+                backgroundColor: skun
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
+            />
+          </div>
+
+          <div style={styles.divider}></div>
+          {/* Number of Barcodes */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="numberOfBarcodes" style={styles.label}>
+              4️⃣ Number of Barcodes:
+            </label>
+            <input
+              id="numberOfBarcodes"
+              type="number"
+              placeholder="Enter quantity"
+              value={numberOfBarcodes}
+              onChange={(e) => setNumberOfBarcodes(e.target.value)}
+              required
+              min="1"
+              style={styles.input}
+            />
+          </div>
+
+          <div style={styles.divider}></div>
+
+          {/* Additional Information Section */}
+          <div style={styles.sectionHeader}>📋 Additional Information</div>
+
           {/* Packed By */}
           <div style={styles.inputGroup}>
             <label htmlFor="packed" style={styles.label}>
@@ -476,13 +566,19 @@ const QRCreater = () => {
             <input
               id="packed"
               type="text"
-              placeholder="Packed by"
+              placeholder="Enter packer name (auto-filled)"
               value={packed}
               onChange={(e) => setPacked(e.target.value)}
               required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: packed
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="batch" style={styles.label}>
               Batch No:
@@ -490,27 +586,46 @@ const QRCreater = () => {
             <input
               id="batch"
               type="number"
-              placeholder="Batch no"
+              placeholder="Enter batch number (auto-filled)"
               value={batch}
               onChange={(e) => setBatch(e.target.value)}
               required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: batch
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="shift" style={styles.label}>
               Shift (Day/Night):
             </label>
-            <input
+            <select
               id="shift"
-              type="text"
-              placeholder="Shift-Day/Night"
               value={shift}
               onChange={(e) => setShift(e.target.value)}
               required
-              style={styles.input}
-            />
+              style={{
+                ...styles.input,
+                backgroundColor: shift
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
+            >
+              <option value="">Select shift</option>
+              <option value="Day">Day</option>
+              <option value="Night">Night</option>
+            </select>
           </div>
+
+          <div style={styles.divider}></div>
+
+          {/* Operators Section */}
+          <div style={styles.sectionHeader}>👷 Operators</div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="rewinder" style={styles.label}>
               Rewinder Operator:
@@ -518,13 +633,19 @@ const QRCreater = () => {
             <input
               id="rewinder"
               type="text"
-              placeholder="Rewinder operator"
+              placeholder="Rewinder operator name (auto-filled)"
               value={rewinder}
               onChange={(e) => setRewinder(e.target.value)}
               required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: rewinder
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="edge" style={styles.label}>
               Edge Cut Operator:
@@ -532,13 +653,19 @@ const QRCreater = () => {
             <input
               id="edge"
               type="text"
-              placeholder="Edge Cut Operator"
+              placeholder="Edge cut operator name (auto-filled)"
               value={edge}
               onChange={(e) => setEdge(e.target.value)}
               required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: edge
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="winder" style={styles.label}>
               Winder Operator:
@@ -546,13 +673,19 @@ const QRCreater = () => {
             <input
               id="winder"
               type="text"
-              placeholder="Winder Operator"
+              placeholder="Winder operator name (auto-filled)"
               value={winder}
               onChange={(e) => setWinder(e.target.value)}
               required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: winder
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
+
           <div style={styles.inputGroup}>
             <label htmlFor="mixer" style={styles.label}>
               Mixer Operator:
@@ -560,80 +693,45 @@ const QRCreater = () => {
             <input
               id="mixer"
               type="text"
-              placeholder="Mixer Operator"
+              placeholder="Mixer operator name (auto-filled)"
               value={mixer}
               onChange={(e) => setMixer(e.target.value)}
               required
-              style={styles.input}
-            />
-          </div>
-          {/* SKU Code No */}
-          <div style={styles.inputGroup}>
-            <label htmlFor="skuc" style={styles.label}>
-              SKU Code No:
-            </label>
-            <input
-              id="skuc"
-              type="text"
-              placeholder="SKU code no"
-              value={skuc}
-              onChange={(e) => setSku(e.target.value)}
-              required
-              style={styles.input}
-            />
-          </div>
-          {/* SKU Name (auto-filled, readOnly) */}
-          <div style={styles.inputGroup}>
-            <label htmlFor="skun" style={styles.label}>
-              SKU Name:
-            </label>
-            <input
-              id="skun"
-              type="text"
-              placeholder="SKU Name"
-              value={skun}
-              onChange={(e) => setSKU(e.target.value)}
-              required
-              style={styles.input}
-            />
-          </div>
-          <div style={styles.inputGroup}>
-            <label htmlFor="numberOfBarcodes" style={styles.label}>
-              Number of Barcodes:
-            </label>
-            <input
-              id="numberOfBarcodes"
-              type="number"
-              placeholder="Number of Barcodes"
-              value={numberOfBarcodes}
-              onChange={(e) => setNumberOfBarcodes(e.target.value)}
-              required
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: mixer
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
             />
           </div>
 
-          <button
-            className="styled-button"
-            onClick={() => {
-              handleSaveToDatabase();
-            }}
-          >
-            Add
-          </button>
+          <div style={styles.divider}></div>
 
-          {/* Download All Barcodes PDF button */}
-          <button
-            className="styled-button"
-            onClick={handleDownloadAllBarcodesPDF}
-            disabled={isDownloading}
-          >
-            {isDownloading ? "Downloading..." : "Download All Barcodes as PDF"}
-          </button>
+          <div style={styles.fullWidth}>
+            <div style={styles.buttonGroup}>
+              <button
+                className="styled-button"
+                onClick={() => {
+                  handleSaveToDatabase();
+                }}
+              >
+                💾 Add to Database
+              </button>
 
-          {/* Print Final Barcode button */}
-          <button className="styled-button" onClick={handlePrint}>
-            Print Final Barcode
-          </button>
+              <button
+                className="styled-button"
+                onClick={handleDownloadAllBarcodesPDF}
+                disabled={isDownloading}
+              >
+                {isDownloading ? "⏳ Downloading..." : "📄 Download PDF"}
+              </button>
+
+              <button className="styled-button" onClick={handlePrint}>
+                🖨️ Print Final Barcode
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Generate individual barcodes */}
@@ -641,11 +739,12 @@ const QRCreater = () => {
         <div
           style={{
             display: "flex",
-            flexDirection: "row",
+            flexDirection: "column",
             justifyContent: "center",
-            gap: "32px",
-            flexWrap: "wrap",
+            gap: "0",
+            flexWrap: "nowrap",
             marginBottom: "30px",
+            width: "100%",
           }}
         >
           {Array.from({ length: barcodeNumbers.length }).map((_, index) => (
@@ -657,55 +756,81 @@ const QRCreater = () => {
               {/* Barcode value is SKU Code No + running number */}
               <Barcode
                 value={barcodeNumbers[index]}
-                width={2}
-                height={60}
-                fontSize={28}
+                width={3}
+                height={80}
+                fontSize={32}
+                margin={0}
               />
               <div style={styles.barcodeDetails}>
-                <p
-                  style={{
-                    color: "black",
-                    fontSize: "15px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  <p>Barcode No: {barcodeNumbers[index]}</p>
-                  <p>SKU code no: {skuc}</p>
-                  <p>SKU Name: {skun}</p>
-                  <p>Location: {location}</p>
-                  <p>Packing Date: {currentTime}</p>
-                </p>
+                <div style={styles.barcodeInfo}>
+                  <strong>Barcode:</strong> {barcodeNumbers[index]}
+                </div>
+                <div style={styles.barcodeInfo}>
+                  <strong>SKU Code:</strong> {skuc}
+                </div>
+                <div style={styles.barcodeInfo}>
+                  <strong>SKU Name:</strong> {skun}
+                </div>
+                <div style={styles.barcodeInfo}>
+                  <strong>Location:</strong> {location}
+                </div>
+                <div style={styles.barcodeInfo}>
+                  <strong>Date:</strong> {currentTime}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         {/* Final barcode with the start and end batch numbers */}
-        <div id="barcode-total" style={styles.finalBarcodeContainer}>
-          <h3 style={styles.finalBarcodeHeading}>Final Barcode</h3>
+        {barcodeNumbers.length > 0 && (
+          <div id="barcode-total" style={styles.finalBarcodeContainer}>
+            <h3 style={styles.finalBarcodeHeading}>📦 Final Barcode Summary</h3>
 
-          {/* Final barcode value showing barcode number range */}
-          {barcodeNumbers.length > 0 && (
-            <Barcode
-              value={`${barcodeNumbers[0]}-${
-                barcodeNumbers[barcodeNumbers.length - 1]
-              }`}
-              width={2}
-              height={60}
-              fontSize={28}
-            />
-          )}
-          <div style={styles.barcodeDetails}>
-            <p style={{ color: "black", fontSize: "15px" }}>
-              <h1>Start: {barcodeNumbers[0]}</h1>
-              <h1>End: {barcodeNumbers[barcodeNumbers.length - 1]}</h1>
-              <h1>SKU code no: {skuc}</h1>
-              <h1>SKU Name: {skun}</h1>
-              <h1>Location: {location}</h1>
-              <h1>Packing Date: {currentTime}</h1>
-            </p>
+            <div style={styles.finalBarcodeContent}>
+              {/* Barcode Image */}
+              <div style={styles.finalBarcodeImageSection}>
+                <Barcode
+                  value={`${barcodeNumbers[0]}-${barcodeNumbers[barcodeNumbers.length - 1]}`}
+                  width={2.5}
+                  height={70}
+                  fontSize={28}
+                  margin={0}
+                />
+              </div>
+
+              {/* Details Grid */}
+              <div style={styles.finalBarcodeDetailsGrid}>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>📍 Start:</span>
+                  <span style={styles.detailValue}>{barcodeNumbers[0]}</span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>🏁 End:</span>
+                  <span style={styles.detailValue}>
+                    {barcodeNumbers[barcodeNumbers.length - 1]}
+                  </span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>🏷️ SKU Code:</span>
+                  <span style={styles.detailValue}>{skuc}</span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>📦 SKU Name:</span>
+                  <span style={styles.detailValue}>{skun}</span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>📍 Location:</span>
+                  <span style={styles.detailValue}>{location}</span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>📅 Packing Date:</span>
+                  <span style={styles.detailValue}>{currentTime}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -719,19 +844,19 @@ const styles = {
     background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
     backgroundSize: "400% 400%",
     animation: "gradientAnimation 12s ease infinite",
-    borderRadius: "8px",
+    // borderRadius: "8px",
     boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
-    maxWidth: "1500px",
+    // maxWidth: "1500px",
     margin: "auto",
   },
   container: {
     textAlign: "center",
-    padding: "30px",
+    padding: "30px 20px",
     fontFamily: "'Arial', sans-serif",
     backgroundColor: "rgba(218, 216, 224, 0.6)",
     borderRadius: "8px",
     boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
-    maxWidth: "800px",
+    maxWidth: "1400px",
     margin: "auto",
   },
   heading: {
@@ -740,13 +865,16 @@ const styles = {
     fontSize: "44px",
     fontWeight: "bold",
     textShadow: "2px 2px 4px rgba(0, 0, 0, 0.3)",
+    padding: "0 30px",
   },
   form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+    gap: "20px",
     marginBottom: "30px",
-    alignItems: "center",
+    padding: "0 30px",
+    maxWidth: "1200px",
+    margin: "0 auto 30px auto",
   },
   inputGroup: {
     display: "flex",
@@ -770,27 +898,38 @@ const styles = {
     width: "100%",
     boxSizing: "border-box",
     backgroundColor: "rgba(255, 255, 255, 0.8)",
+    transition: "all 0.3s ease",
+  },
+  divider: {
+    height: "2px",
+    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
+    margin: "20px 0",
+    gridColumn: "1 / -1",
+  },
+  sectionHeader: {
+    fontSize: "20px",
+    fontWeight: "bold",
+    color: "white",
+    textAlign: "center",
+    marginBottom: "10px",
+    textShadow: "2px 2px 4px rgba(0, 0, 0, 0.3)",
+    gridColumn: "1 / -1",
+    padding: "10px",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: "12px",
+  },
+  fullWidth: {
+    gridColumn: "1 / -1",
+  },
+  buttonGroup: {
+    display: "flex",
+    gap: "15px",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    marginTop: "10px",
   },
   barcodeContainer: {
-    margin: "0 12px 24px 12px",
-    padding: "15px",
-    border: "none",
-    backgroundColor: "transparent",
-    textAlign: "left",
-    fontSize: "10px",
-    fontWeight: "bold",
-    display: "inline-block",
-    width: "200px",
-    minWidth: "200px",
-  },
-  barcodeDetails: {
-    fontSize: "12px",
-    marginTop: "10px",
-    color: "#555",
-  },
-
-  finalBarcodeContainer: {
-    margin: "20px",
+    margin: "0 0 24px 0",
     padding: "15px",
     border: "none",
     backgroundColor: "transparent",
@@ -799,11 +938,73 @@ const styles = {
     fontWeight: "bold",
     display: "inline-block",
     width: "100%",
+    maxWidth: "100%",
+  },
+  barcodeDetails: {
+    fontSize: "12px",
+    marginTop: "10px",
+    color: "#333",
+    textAlign: "left",
+  },
+  barcodeInfo: {
+    padding: "4px 0",
+    fontSize: "13px",
+    color: "#333",
+  },
+
+  finalBarcodeContainer: {
+    margin: "30px auto",
+    padding: "30px",
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: "20px",
+    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+    maxWidth: "900px",
+    border: "3px solid rgba(153, 0, 239, 0.3)",
   },
   finalBarcodeHeading: {
-    fontSize: "35px",
+    fontSize: "28px",
     fontWeight: "bold",
-    color: "black",
+    color: "#9900ef",
+    textAlign: "center",
+    marginBottom: "25px",
+    textShadow: "1px 1px 2px rgba(0, 0, 0, 0.1)",
+  },
+  finalBarcodeContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "25px",
+  },
+  finalBarcodeImageSection: {
+    padding: "20px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "12px",
+    border: "2px dashed #9900ef",
+  },
+  finalBarcodeDetailsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    gap: "15px",
+    width: "100%",
+  },
+  detailRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "12px 20px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "10px",
+    border: "1px solid #e0e0e0",
+    transition: "all 0.3s ease",
+  },
+  detailLabel: {
+    fontWeight: "bold",
+    color: "#555",
+    fontSize: "14px",
+  },
+  detailValue: {
+    color: "#333",
+    fontSize: "14px",
+    fontWeight: "600",
   },
 };
 
@@ -816,31 +1017,58 @@ const globalStyles = `
   100% { background-position: 0% 50%; }
 }
 
+/* Input field enhancements */
+input:focus, select:focus {
+  outline: none;
+  border: 2px solid #9900ef !important;
+  box-shadow: 0 0 10px rgba(153, 0, 239, 0.3);
+  transform: scale(1.02);
+}
+
+input:hover, select:hover {
+  border-color: #ff6900;
+  box-shadow: 0 2px 8px rgba(255, 105, 0, 0.2);
+}
+
+/* Detail row hover effect */
+.detail-row:hover {
+  background-color: #e8f4f8 !important;
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px rgba(153, 0, 239, 0.2);
+}
+
 /* Base button styles */
 .styled-button {
-  margin: 10px;
-  width: 100%;
-  max-width: 400px;
-  padding: 12px 20px;
-  background-color: rgba(218, 216, 224, 0.8);
-  color: #333;
+  margin: 5px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #9900ef 0%, #ff6900 100%);
+  color: white;
   border: none;
-  border-radius: 25px;
+  borderRadius: 25px;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: bold;
-  transition: background-color 0.3s ease, transform 0.1s ease; /* Added transform transition */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  text-align: center; /* Ensure text is centered */
+  fontSize: 16px;
+  fontWeight: bold;
+  transition: all 0.3s ease;
+  boxShadow: 0 4px 12px rgba(153, 0, 239, 0.3);
+  textAlign: center;
+  minWidth: 200px;
 }
 
 .styled-button:hover {
-  background-color: rgba(180, 180, 190, 0.95);
+  background: linear-gradient(135deg, #8800dd 0%, #ee5800 100%);
+  transform: translateY(-2px);
+  boxShadow: 0 6px 16px rgba(153, 0, 239, 0.4);
 }
 
 .styled-button:active {
-  background-color: rgba(160, 160, 170, 1);
-  transform: translateY(1px); /* Add a slight press down effect */
+  transform: translateY(0);
+  boxShadow: 0 2px 8px rgba(153, 0, 239, 0.3);
+}
+
+.styled-button:disabled {
+  background: linear-gradient(135deg, #ccc 0%, #999 100%);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 `;
 

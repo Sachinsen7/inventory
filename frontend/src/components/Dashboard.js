@@ -125,10 +125,25 @@ const Dashboard = () => {
 
   const handleDownloadTemplate = async (templateType) => {
     try {
-      const endpoint =
-        templateType === "inventory"
-          ? "download-inventory-template"
-          : "download-billing-template";
+      let endpoint, filename;
+
+      switch (templateType) {
+        case "inventory":
+          endpoint = "download-inventory-template";
+          filename = "inventory_template.xlsx";
+          break;
+        case "billing":
+          endpoint = "download-billing-template";
+          filename = "billing_items_template.xlsx";
+          break;
+        case "products":
+          endpoint = "download-products-template";
+          filename = "products_template.xlsx";
+          break;
+        default:
+          endpoint = "download-products-template";
+          filename = "products_template.xlsx";
+      }
 
       const response = await fetch(
         `${process.env.REACT_APP_BACKEND_URL}/api/${endpoint}`
@@ -139,10 +154,7 @@ const Dashboard = () => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download =
-          templateType === "inventory"
-            ? "inventory_template.xlsx"
-            : "billing_items_template.xlsx";
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -189,13 +201,19 @@ const Dashboard = () => {
         <Link to="/transit" style={styles.link}>
           <button style={styles.button}>Transit</button>
         </Link>
+
         <button style={styles.button} onClick={() => setShowUploadModal(true)}>
-          Excel Upload
+          📤 Upload Excel
         </button>
         <button style={styles.button} onClick={() => setShowFilesModal(true)}>
-          View Files
+          📁 View Files
         </button>
-        
+        <button
+          style={styles.button}
+          onClick={() => handleDownloadTemplate("products")}
+        >
+          📥 Download Template
+        </button>
       </div>
 
       {/* Upload Modal */}
@@ -211,10 +229,16 @@ const Dashboard = () => {
               </p>
               <div style={styles.templateButtons}>
                 <button
+                  onClick={() => handleDownloadTemplate("products")}
+                  style={styles.templateButton}
+                >
+                  � Produtcts Template
+                </button>
+                <button
                   onClick={() => handleDownloadTemplate("inventory")}
                   style={styles.templateButton}
                 >
-                  📊 Inventory Template
+                  � Inventgory Template
                 </button>
                 <button
                   onClick={() => handleDownloadTemplate("billing")}

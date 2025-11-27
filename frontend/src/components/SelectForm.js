@@ -1,273 +1,128 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import Barcode from "react-barcode";
 import { showToast } from "../utils/toastNotifications";
 
 const SelectForm = () => {
   const [inputValue, setInputValue] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isStarted, setIsStarted] = useState(false);
-  const [savedValues, setSavedValues] = useState([]);
-  const [isScannerActive, setIsScannerActive] = useState(false);
-  const [availableBarcodes, setAvailableBarcodes] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [filteredBarcodes, setFilteredBarcodes] = useState([]);
-  const [barcodeMap, setBarcodeMap] = useState({}); // Map of SKU to product info
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedBarcodes, setScannedBarcodes] = useState([]);
+  const [availableProducts, setAvailableProducts] = useState([]);
+  const [showAllProducts, setShowAllProducts] = useState(false);
+  const [barcodeMap, setBarcodeMap] = useState({});
   const inputRef = useRef(null);
 
-  // Backend URL from environment variable
-  const backendUrl =
-    process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-  // Fetch available barcodes on component mount
+  // Fetch available products on mount
   useEffect(() => {
-    fetchAvailableBarcodes();
+    fetchAvailableProducts();
   }, []);
 
-  const fetchAvailableBarcodes = async () => {
+  const fetchAvailableProducts = async () => {
     try {
       const response = await axios.get(`${backendUrl}/api/barcodes`);
-      const skuCodes = [];
+      const products = [];
       const mapping = {};
 
-      // Extract SKU codes and create mapping to product info
       response.data.forEach((barcode) => {
         const productName = barcode.product || "Unknown Product";
+        const skuName = barcode.skun || "";
         const packed = barcode.packed || "";
         const batch = barcode.batch || "";
 
-        // Get all batchNumbers if they exist
         if (barcode.batchNumbers && Array.isArray(barcode.batchNumbers)) {
           barcode.batchNumbers.forEach((bn) => {
-            // Format: skuc + batchNumber
             if (barcode.skuc && bn) {
               const skuCode = String(barcode.skuc) + String(bn);
-              skuCodes.push(skuCode);
-              mapping[skuCode] = {
+              products.push({
+                sku: skuCode,
                 product: productName,
+                skuName: skuName,
                 packed: packed,
                 batch: batch,
-                sku: skuCode,
+              });
+              mapping[skuCode] = {
+                product: productName,
+                skuName: skuName,
+                packed: packed,
+                batch: batch,
               };
             }
           });
         }
-
-        // If no batchNumbers, try skuc + skun format
-        if (
-          barcode.batchNumbers?.length === 0 &&
-          barcode.skuc &&
-          barcode.skun
-        ) {
-          const skuCode = String(barcode.skuc) + String(barcode.skun);
-          skuCodes.push(skuCode);
-          mapping[skuCode] = {
-            product: productName,
-            packed: packed,
-            batch: batch,
-            sku: skuCode,
-          };
-        }
       });
 
-      // Get unique SKU codes
-      const uniqueSkus = [...new Set(skuCodes)].filter(
-        (code) => code && String(code).trim()
-      );
-      setAvailableBarcodes(uniqueSkus);
-      setFilteredBarcodes(uniqueSkus);
+      setAvailableProducts(products);
       setBarcodeMap(mapping);
     } catch (error) {
-      console.error("Error fetching barcodes:", error);
-      showToast.warning("Could not load barcode list");
+      console.error("Error fetching products:", error);
+      showToast.error("Could not load products");
     }
   };
 
-  // Filter barcodes based on input
+  // Auto-save when barcode is entered
   useEffect(() => {
-    const inputStr = String(inputValue || "");
-    if (inputStr.trim()) {
-      const filtered = availableBarcodes.filter((barcode) => {
-        const barcodeStr = String(barcode || "");
-        return barcodeStr.toLowerCase().includes(inputStr.toLowerCase());
-      });
-      setFilteredBarcodes(filtered);
-      setShowDropdown(filtered.length > 0 && inputStr.length > 0);
-    } else {
-      setFilteredBarcodes(availableBarcodes);
-      setShowDropdown(false);
-    }
-  }, [inputValue, availableBarcodes]);
-
-  // Auto-save effect when started and input changes
-  useEffect(() => {
-    const inputStr = String(inputValue || "");
-    if (isStarted && inputStr.trim()) {
+    if (isScanning && inputValue.trim()) {
       const timer = setTimeout(() => {
-        // Check if already scanned in this session
-        if (savedValues.includes(inputStr)) {
-          showToast.warning(`Already scanned: ${inputStr}`);
-          setInputValue("");
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
-          return;
-        }
-
-        // Save the current input value
-        axios
-          .post(`${backendUrl}/api/save`, {
-            inputValue: inputStr,
-          })
-          .then((response) => {
-            // Add to saved values list at the beginning (top)
-            setSavedValues((prev) => [inputStr, ...prev]);
-
-            // Remove the scanned barcode from available list
-            setAvailableBarcodes((prev) =>
-              prev.filter((code) => code !== inputStr)
-            );
-            setFilteredBarcodes((prev) =>
-              prev.filter((code) => code !== inputStr)
-            );
-
-            // Clear the input field after saving
-            setInputValue("");
-            showToast.success(`Saved: ${inputStr}`);
-
-            // Auto-focus input for next scan
-            if (inputRef.current) {
-              inputRef.current.focus();
-            }
-          })
-          .catch((error) => {
-            const errorMsg =
-              error.response?.data?.message ||
-              error.message ||
-              "Error saving data";
-            if (
-              error.code === "ECONNABORTED" ||
-              error.message.includes("timeout")
-            ) {
-              showToast.error(
-                "Connection timeout. Please check your internet connection."
-              );
-            } else if (error.response) {
-              showToast.error(
-                `Backend error: ${error.response.status} - ${errorMsg}`
-              );
-            } else if (error.request) {
-              showToast.error(
-                "Unable to connect to the server. Please check if the backend is running."
-              );
-            } else {
-              showToast.error(errorMsg);
-            }
-          });
-      }, 800); // Save after 0.8 second of no typing
-
+        handleSaveBarcode(inputValue.trim());
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [inputValue, isStarted, backendUrl]);
+  }, [inputValue, isScanning]);
 
-  // Handle the start action - Start auto-saving
-  const handleStart = () => {
-    if (!inputValue && savedValues.length === 0) {
-      setIsStarted(true);
-      setIsSaving(true);
-      showToast.success(
-        "📊 Auto-saving activated! Scan or type barcode numbers."
-      );
-      // Focus input
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 100);
+  const handleSaveBarcode = async (barcode) => {
+    // Check if already scanned
+    if (scannedBarcodes.some((item) => item.sku === barcode)) {
+      showToast.warning(`⚠️ Already scanned: ${barcode}`);
+      setInputValue("");
+      inputRef.current?.focus();
       return;
     }
 
-    if (inputValue) {
-      // Save the current input value immediately
-      const inputStr = String(inputValue || "");
-      axios
-        .post(`${backendUrl}/api/save`, {
-          inputValue: inputStr,
-        })
-        .then((response) => {
-          // Add to saved values list at the beginning (top)
-          setSavedValues((prev) => [inputStr, ...prev]);
+    try {
+      await axios.post(`${backendUrl}/api/save`, { inputValue: barcode });
 
-          // Remove the scanned barcode from available list
-          setAvailableBarcodes((prev) =>
-            prev.filter((code) => code !== inputStr)
-          );
-          setFilteredBarcodes((prev) =>
-            prev.filter((code) => code !== inputStr)
-          );
+      const productInfo = barcodeMap[barcode] || {
+        product: "Unknown Product",
+        skuName: "",
+        packed: "",
+        batch: "",
+      };
 
-          // Clear the input field after saving
-          setInputValue("");
-          setIsSaving(true);
-          setIsStarted(true);
-          showToast.success("Auto-saving started! Scan or type values.");
-          // Focus input
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
-        })
-        .catch((error) => {
-          console.error("Error saving data:", error);
-          const errorMsg =
-            error.response?.data?.message ||
-            error.message ||
-            "Error saving data";
-          showToast.error(errorMsg);
-        });
+      setScannedBarcodes((prev) => [
+        { sku: barcode, ...productInfo, time: new Date().toLocaleTimeString() },
+        ...prev,
+      ]);
+
+      setAvailableProducts((prev) => prev.filter((p) => p.sku !== barcode));
+      setInputValue("");
+      showToast.success(`✓ Scanned: ${barcode}`);
+      inputRef.current?.focus();
+    } catch (error) {
+      console.error("Error saving barcode:", error);
+      showToast.error("Error saving barcode");
     }
   };
 
-  // Stop saving
-  const handleStop = () => {
-    setIsSaving(false);
-    setIsStarted(false);
-    setSavedValues([]);
-    showToast.info("Auto-saving stopped");
+  const handleStartScanning = () => {
+    setIsScanning(true);
+    showToast.success("📷 Scanner activated! Scan barcodes now.");
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  // Toggle camera scanner
-  const toggleScanner = () => {
-    setIsScannerActive(!isScannerActive);
-    if (!isScannerActive) {
-      showToast.info(
-        " Scanner mode activated. Use a barcode scanner device or type manually."
-      );
-    } else {
-      showToast.info("Scanner mode deactivated");
-    }
+  const handleStopScanning = () => {
+    setIsScanning(false);
+    setScannedBarcodes([]);
+    setInputValue("");
+    showToast.info("Scanner stopped. Session cleared.");
+    fetchAvailableProducts(); // Refresh product list
   };
 
-  // Handle selecting from dropdown
-  const handleSelectBarcode = (barcode) => {
-    setInputValue(barcode);
-    setShowDropdown(false);
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+  const toggleProductList = () => {
+    setShowAllProducts(!showAllProducts);
   };
 
-  // Toggle dropdown visibility
-  const toggleBarcodeList = () => {
-    setShowDropdown(!showDropdown);
-  };
-
-  // Handle keyboard input (for barcode scanners that act as keyboards)
-  useEffect(() => {
-    if (isStarted && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isStarted, savedValues]);
-
-  // Styles
   const styles = {
     container: {
       background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
@@ -276,160 +131,136 @@ const SelectForm = () => {
       minHeight: "100vh",
       padding: "20px",
       display: "flex",
-      justifyContent: "center",
+      flexDirection: "column",
       alignItems: "center",
       fontFamily: "'Roboto', sans-serif",
-      color: "#333",
     },
-    formContainer: {
-      backgroundColor: "rgba(218, 216, 224, 0.9)",
+    card: {
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
       padding: "30px",
-      borderRadius: "15px",
-      boxShadow: "0 4px 10px rgba(0, 0, 0, 0.3)",
-      textAlign: "center",
+      borderRadius: "20px",
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
       width: "90%",
-      maxWidth: "600px",
+      maxWidth: "800px",
+      marginBottom: "20px",
     },
     title: {
       fontSize: "2.5rem",
-      color: "white",
-      textShadow: "2px 2px 4px rgba(0, 0, 0, 0.4)",
+      color: "#9900ef",
+      textAlign: "center",
       marginBottom: "10px",
+      fontWeight: "bold",
     },
     subtitle: {
-      fontSize: "1rem",
-      color: "rgba(255, 255, 255, 0.9)",
+      fontSize: "1.1rem",
+      color: "#666",
+      textAlign: "center",
       marginBottom: "20px",
     },
     input: {
-      width: "90%",
-      padding: "15px",
-      margin: "10px 0",
-      borderRadius: "28px",
-      border: "2px solid #ccc",
-      fontSize: "18px",
-      backgroundColor: "white",
+      width: "100%",
+      padding: "18px",
+      fontSize: "20px",
+      border: "3px solid #ddd",
+      borderRadius: "12px",
       textAlign: "center",
       fontWeight: "bold",
-      position: "relative",
+      marginBottom: "20px",
+      transition: "all 0.3s ease",
     },
     inputActive: {
       border: "3px solid #4CAF50",
-      boxShadow: "0 0 10px rgba(76, 175, 80, 0.5)",
+      boxShadow: "0 0 15px rgba(76, 175, 80, 0.4)",
+      backgroundColor: "#f0fff0",
     },
     buttonContainer: {
       display: "flex",
-      gap: "10px",
+      gap: "15px",
       justifyContent: "center",
       flexWrap: "wrap",
-      margin: "15px 0",
+      marginBottom: "20px",
     },
     button: {
-      backgroundColor: "rgba(218, 216, 224, 0.8)",
-      color: "white",
-      padding: "12px 24px",
-      margin: "5px",
-      border: "none",
-      borderRadius: "28px",
+      padding: "15px 30px",
       fontSize: "18px",
+      fontWeight: "bold",
+      border: "none",
+      borderRadius: "12px",
       cursor: "pointer",
-      transition: "all 0.3s",
-      fontWeight: "bold",
+      transition: "all 0.3s ease",
+      minWidth: "150px",
     },
-    buttonActive: {
-      backgroundColor: "#4CAF50",
-      boxShadow: "0 0 15px rgba(76, 175, 80, 0.6)",
-    },
-    scannerButton: {
-      backgroundColor: "#2196F3",
-    },
-    savedValuesList: {
-      marginTop: "20px",
-      textAlign: "left",
-      maxHeight: "250px",
-      overflowY: "auto",
-      backgroundColor: "rgba(255, 255, 255, 0.9)",
-      padding: "15px",
-      borderRadius: "8px",
-    },
-    savedValue: {
-      padding: "8px",
-      margin: "5px 0",
-      backgroundColor: "rgba(76, 175, 80, 0.2)",
-      borderRadius: "4px",
-      borderLeft: "4px solid #4CAF50",
-      fontWeight: "bold",
-    },
-    status: {
+    startButton: {
+      background: "linear-gradient(135deg, #4CAF50 0%, #45a049 100%)",
       color: "white",
-      fontSize: "16px",
-      marginTop: "10px",
-      fontStyle: "italic",
-      fontWeight: "bold",
     },
-    statsContainer: {
+    stopButton: {
+      background: "linear-gradient(135deg, #f44336 0%, #da190b 100%)",
+      color: "white",
+    },
+    showProductsButton: {
+      background: "linear-gradient(135deg, #FF9800 0%, #F57C00 100%)",
+      color: "white",
+    },
+    statsCard: {
       display: "flex",
       justifyContent: "space-around",
-      marginTop: "20px",
-      padding: "15px",
-      backgroundColor: "rgba(255, 255, 255, 0.2)",
-      borderRadius: "10px",
+      padding: "20px",
+      backgroundColor: "#f5f5f5",
+      borderRadius: "12px",
+      marginBottom: "20px",
     },
     stat: {
       textAlign: "center",
     },
     statLabel: {
-      fontSize: "12px",
-      color: "rgba(255, 255, 255, 0.8)",
+      fontSize: "14px",
+      color: "#666",
       marginBottom: "5px",
+      textTransform: "uppercase",
     },
     statValue: {
-      fontSize: "24px",
+      fontSize: "32px",
       fontWeight: "bold",
-      color: "white",
+      color: "#9900ef",
     },
-    dropdownContainer: {
-      position: "relative",
-      width: "90%",
-      margin: "0 auto",
-    },
-    dropdown: {
-      position: "absolute",
-      top: "100%",
-      left: "5%",
-      right: "5%",
-      maxHeight: "200px",
+    productList: {
+      maxHeight: "400px",
       overflowY: "auto",
+      backgroundColor: "#f9f9f9",
+      borderRadius: "12px",
+      padding: "15px",
+    },
+    productItem: {
+      padding: "12px",
+      marginBottom: "8px",
       backgroundColor: "white",
-      border: "2px solid #4CAF50",
-      borderRadius: "10px",
-      boxShadow: "0 4px 10px rgba(0, 0, 0, 0.3)",
-      zIndex: 1000,
-      marginTop: "5px",
+      borderRadius: "8px",
+      borderLeft: "4px solid #9900ef",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
     },
-    dropdownItem: {
-      padding: "10px 15px",
-      cursor: "pointer",
-      borderBottom: "1px solid #eee",
-      transition: "background-color 0.2s",
+    scannedItem: {
+      padding: "12px",
+      marginBottom: "8px",
+      backgroundColor: "#e8f5e9",
+      borderRadius: "8px",
+      borderLeft: "4px solid #4CAF50",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
     },
-    barcodeListButton: {
-      backgroundColor: "#FF9800",
-      color: "white",
-      padding: "12px 24px",
-      margin: "10px auto",
-      border: "none",
-      borderRadius: "28px",
-      fontSize: "16px",
-      cursor: "pointer",
+    productName: {
       fontWeight: "bold",
-      display: "block",
+      color: "#333",
+      marginBottom: "4px",
     },
-    barcodeCount: {
-      color: "white",
+    productDetails: {
       fontSize: "14px",
-      marginTop: "10px",
-      fontStyle: "italic",
+      color: "#666",
+    },
+    emptyState: {
+      textAlign: "center",
+      padding: "40px",
+      color: "#999",
+      fontSize: "18px",
     },
   };
 
@@ -441,203 +272,246 @@ const SelectForm = () => {
       75% { background-position: 50% 0%; }
       100% { background-position: 0% 50%; }
     }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
   `;
 
   return (
     <div style={styles.container}>
       <style>{globalStyles}</style>
-      <div style={styles.formContainer}>
-        <h2 style={styles.title}>
-          {isScannerActive ? "" : ""} Barcode Scanner
-        </h2>
+
+      {/* Main Card */}
+      <div style={styles.card}>
+        <h1 style={styles.title}>📦 Barcode Scanner</h1>
         <p style={styles.subtitle}>
-          {isStarted
-            ? "Scan barcode with scanner device or type manually"
-            : "Click Start to begin scanning"}
+          {isScanning
+            ? "Scan barcodes with your scanner device"
+            : "Click 'Start Scanning' to begin"}
         </p>
 
-        {/* Available Barcodes Info */}
-        <div style={styles.barcodeCount}>
-          {availableBarcodes.length} products available in factory
+        {/* Product Selector Dropdown */}
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold", color: "#666" }}>
+            Select Product:
+          </label>
+          <select
+            style={{
+              width: "100%",
+              padding: "15px",
+              fontSize: "16px",
+              border: "2px solid #ddd",
+              borderRadius: "12px",
+              backgroundColor: "white",
+              cursor: "pointer",
+            }}
+            onChange={(e) => {
+              if (e.target.value && isScanning) {
+                setInputValue(e.target.value);
+              }
+            }}
+            disabled={!isScanning}
+            value=""
+          >
+            <option value="">-- Select a product to scan --</option>
+            {availableProducts.map((product, index) => (
+              <option key={index} value={product.sku}>
+                {product.product} - SKU: {product.sku}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <button
-          type="button"
-          style={styles.barcodeListButton}
-          onClick={toggleBarcodeList}
-        >
-          {showDropdown ? "Hide Product List" : "View Available Products"}
-        </button>
+        {/* Manual Input Field (for scanner devices) */}
+        <div style={{ marginBottom: "10px" }}>
+          <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold", color: "#666" }}>
+            Or Scan Barcode:
+          </label>
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={isScanning ? "📷 Scan with device..." : "Click Start to begin"}
+            disabled={!isScanning}
+            style={{
+              ...styles.input,
+              ...(isScanning ? styles.inputActive : {}),
+            }}
+            autoFocus={isScanning}
+          />
+        </div>
 
-        <form onSubmit={(e) => e.preventDefault()}>
-          {/* Input field - works with barcode scanner devices */}
-          <div style={styles.dropdownContainer}>
-            <input
-              ref={inputRef}
-              style={{
-                ...styles.input,
-                ...(isStarted ? styles.inputActive : {}),
-              }}
-              type="text"
-              placeholder={
-                isStarted
-                  ? "📷 Ready to scan... (or type manually)"
-                  : "Enter barcode value"
-              }
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={!isStarted && savedValues.length === 0}
-              autoFocus={isStarted}
-              onFocus={() => {
-                const inputStr = String(inputValue || "");
-                if (inputStr.trim() && filteredBarcodes.length > 0) {
-                  setShowDropdown(true);
-                }
-              }}
-            />
-
-            {/* Dropdown for barcode suggestions */}
-            {showDropdown && filteredBarcodes.length > 0 && (
-              <div style={styles.dropdown}>
-                {filteredBarcodes.slice(0, 50).map((barcode, index) => {
-                  const info = barcodeMap[barcode] || {};
-                  return (
-                    <div
-                      key={index}
-                      style={styles.dropdownItem}
-                      onClick={() => handleSelectBarcode(barcode)}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "#f0f0f0";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "white";
-                      }}
-                    >
-                      <div style={{ fontWeight: "bold", color: "#333" }}>
-                        {info.product || "Unknown Product"}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#666" }}>
-                        SKU: {barcode}
-                        {info.packed && ` | Packed: ${info.packed}`}
-                        {info.batch && ` | Batch: ${info.batch}`}
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredBarcodes.length > 50 && (
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      fontStyle: "italic",
-                      color: "#666",
-                    }}
-                  >
-                    ... and {filteredBarcodes.length - 50} more
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Button Container */}
-          <div style={styles.buttonContainer}>
-            {/* Start Button */}
+        {/* Buttons */}
+        <div style={styles.buttonContainer}>
+          {!isScanning ? (
             <button
-              type="button"
-              style={{
-                ...styles.button,
-                ...(isStarted ? styles.buttonActive : {}),
-              }}
-              onClick={handleStart}
-              disabled={isStarted}
+              style={{ ...styles.button, ...styles.startButton }}
+              onClick={handleStartScanning}
             >
-              {isStarted ? "✓ Scanning Active" : "▶ Start Scanning"}
+              ▶️ Start Scanning
             </button>
-
-            {/* Stop Button */}
+          ) : (
             <button
-              type="button"
-              style={styles.button}
-              onClick={handleStop}
-              disabled={!isStarted}
+              style={{ ...styles.button, ...styles.stopButton }}
+              onClick={handleStopScanning}
             >
-              Stop
+              ⏹️ Stop & Clear
             </button>
+          )}
 
-            {/* Scanner Mode Toggle */}
-            <button
-              type="button"
-              style={{
-                ...styles.button,
-                ...(isScannerActive
-                  ? { ...styles.scannerButton, ...styles.buttonActive }
-                  : styles.scannerButton),
-              }}
-              onClick={toggleScanner}
-            >
-              {isScannerActive ? " Scanner ON" : " Scanner Mode"}
-            </button>
-          </div>
-        </form>
-
-        {/* Status message */}
-        {isStarted && (
-          <div style={styles.status}>
-            {isScannerActive
-              ? " Scanner Active - Use barcode scanner device"
-              : "Auto-save active - Type or scan barcodes"}
-          </div>
-        )}
+          <button
+            style={{ ...styles.button, ...styles.showProductsButton }}
+            onClick={toggleProductList}
+          >
+            {showAllProducts ? "Hide Products" : "📋 Show All Products"}
+          </button>
+        </div>
 
         {/* Statistics */}
-        {isStarted && (
-          <div style={styles.statsContainer}>
+        {isScanning && (
+          <div style={styles.statsCard}>
             <div style={styles.stat}>
-              <div style={styles.statLabel}>SCANNED</div>
-              <div style={styles.statValue}>{savedValues.length}</div>
+              <div style={styles.statLabel}>Scanned</div>
+              <div style={styles.statValue}>{scannedBarcodes.length}</div>
             </div>
             <div style={styles.stat}>
-              <div style={styles.statLabel}>STATUS</div>
-              <div style={styles.statValue}>
-                {isSaving ? "✓ ACTIVE" : "○ PAUSED"}
-              </div>
+              <div style={styles.statLabel}>Remaining</div>
+              <div style={styles.statValue}>{availableProducts.length}</div>
+            </div>
+            <div style={styles.stat}>
+              <div style={styles.statLabel}>Status</div>
+              <div style={{ ...styles.statValue, color: "#4CAF50" }}>✓ ACTIVE</div>
             </div>
           </div>
         )}
+      </div>
 
-        {/* Show saved values */}
-        {savedValues.length > 0 && (
-          <div style={styles.savedValuesList}>
-            <h4 style={{ margin: "0 0 10px 0", color: "#333" }}>
-              ✓ Scanned Barcodes ({savedValues.length}):
-            </h4>
-            {savedValues.map((value, index) => (
-              <div key={index} style={styles.savedValue}>
-                #{savedValues.length - index}: {value}
+      {/* Scanned Barcodes List */}
+      {scannedBarcodes.length > 0 && (
+        <div style={styles.card}>
+          <h3 style={{ color: "#4CAF50", marginBottom: "15px" }}>
+            ✓ Scanned Barcodes ({scannedBarcodes.length})
+          </h3>
+          <div style={styles.productList}>
+            {scannedBarcodes.map((item, index) => (
+              <div key={index} style={styles.scannedItem}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "15px" }}>
+                  <div style={{ flex: 1, minWidth: "250px" }}>
+                    <div style={styles.productName}>
+                      #{scannedBarcodes.length - index}: {item.product}
+                    </div>
+                    <div style={styles.productDetails}>
+                      SKU: {item.sku} | Time: {item.time}
+                      {item.packed && ` | Packed: ${item.packed}`}
+                      {item.batch && ` | Batch: ${item.batch}`}
+                    </div>
+                  </div>
+                  <div style={{
+                    backgroundColor: "white",
+                    padding: "8px",
+                    borderRadius: "8px",
+                    border: "2px solid #4CAF50",
+                    textAlign: "center"
+                  }}>
+                    <Barcode
+                      value={item.sku}
+                      width={1.5}
+                      height={40}
+                      fontSize={12}
+                      margin={3}
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        )}
-
-        {/* Help Text */}
-        <div
-          style={{
-            marginTop: "20px",
-            fontSize: "14px",
-            color: "rgba(255, 255, 255, 0.8)",
-          }}
-        >
-          <p>
-            <strong>Tip:</strong> Most barcode scanners work like keyboards.
-            Just scan and the barcode will appear in the input field!
-          </p>
         </div>
-      </div>
+      )}
+
+      {/* Available Products List */}
+      {showAllProducts && (
+        <div style={styles.card}>
+          <h3 style={{ color: "#9900ef", marginBottom: "15px" }}>
+            📋 Available Products ({availableProducts.length})
+          </h3>
+          {availableProducts.length > 0 ? (
+            <div style={styles.productList}>
+              {availableProducts.map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    ...styles.productItem,
+                    cursor: isScanning ? "pointer" : "default",
+                  }}
+                  onClick={() => {
+                    if (isScanning) {
+                      setInputValue(item.sku);
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isScanning) {
+                      e.currentTarget.style.backgroundColor = "#f0e6ff";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "white";
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "15px" }}>
+                    <div style={{ flex: 1, minWidth: "250px" }}>
+                      <div style={styles.productName}>
+                        {item.product}
+                        {isScanning && <span style={{ color: "#4CAF50", marginLeft: "10px", fontSize: "14px" }}>← Click to scan</span>}
+                      </div>
+                      <div style={styles.productDetails}>
+                        <strong style={{ color: "#9900ef" }}>SKU: {item.sku}</strong>
+                        {item.skuName && ` | ${item.skuName}`}
+                        <br />
+                        {item.packed && `Packed: ${item.packed}`}
+                        {item.batch && ` | Batch: ${item.batch}`}
+                      </div>
+                    </div>
+                    <div style={{
+                      backgroundColor: "white",
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border: "2px dashed #9900ef",
+                      textAlign: "center"
+                    }}>
+                      <Barcode
+                        value={item.sku}
+                        width={1.5}
+                        height={50}
+                        fontSize={14}
+                        margin={5}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: "48px", marginBottom: "10px" }}>📭</div>
+              <div>No products available</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Help Text */}
+      {!isScanning && scannedBarcodes.length === 0 && (
+        <div style={{ ...styles.card, backgroundColor: "rgba(255, 255, 255, 0.9)" }}>
+          <h4 style={{ color: "#666", marginBottom: "10px" }}>💡 How to use:</h4>
+          <ol style={{ textAlign: "left", color: "#666", lineHeight: "1.8" }}>
+            <li>Click "Start Scanning" to activate the scanner</li>
+            <li><strong>Select from dropdown</strong> - Choose product by name (easier!)</li>
+            <li><strong>Or scan with device</strong> - Use barcode scanner</li>
+            <li><strong>Or click from list</strong> - Click "Show All Products" and click any product</li>
+            <li>Each barcode is automatically saved</li>
+            <li>Duplicate barcodes are prevented automatically</li>
+            <li>Click "Stop & Clear" to end the session</li>
+          </ol>
+        </div>
+      )}
     </div>
   );
 };

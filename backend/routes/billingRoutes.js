@@ -15,12 +15,13 @@ const customerSchema = new mongoose.Schema({
   state: { type: String, required: true },
   gstNo: { type: String },
   phoneNumber: { type: String },
+  specialPriceStartDate: { type: Date },
+  specialPriceEndDate: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 
 // Item Schema
 const itemSchema = new mongoose.Schema({
-  srNo: { type: String, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   masterPrice: { type: Number, required: true },
@@ -106,14 +107,16 @@ router.get('/customers/:id', async (req, res) => {
 
 // Add new customer
 router.post('/customers/add',
-  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate']),
   [
     validators.string('name', 200),
     validators.string('address', 500),
     validators.string('city', 100),
     validators.string('state', 100),
     validators.gstNo('gstNo'),
-    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/),
+    body('specialPriceStartDate').optional().isISO8601().toDate(),
+    body('specialPriceEndDate').optional().isISO8601().toDate()
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -130,14 +133,16 @@ router.post('/customers/add',
 
 // Update customer
 router.put('/customers/:id',
-  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate']),
   [
     body('name').optional().isString().trim().isLength({ max: 200 }),
     body('address').optional().isString().trim().isLength({ max: 500 }),
     body('city').optional().isString().trim().isLength({ max: 100 }),
     body('state').optional().isString().trim().isLength({ max: 100 }),
     validators.gstNo('gstNo'),
-    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/),
+    body('specialPriceStartDate').optional().isISO8601().toDate(),
+    body('specialPriceEndDate').optional().isISO8601().toDate()
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -175,29 +180,29 @@ router.get('/items/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
     logger.debug('Fetching items for customer', { customerId });
-    
+
     // Check if customerId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(customerId)) {
       logger.warn('Invalid customer ID format', { customerId });
       return res.status(400).json({ message: 'Invalid customer ID format' });
     }
-    
+
     // First, let's check if there are any items in the database at all
     const totalItems = await BillingItem.countDocuments();
     logger.debug('Total items in database', { totalItems });
-    
+
     // Check if there are any items for this customer
     const customerItemsCount = await BillingItem.countDocuments({ customerId });
     logger.debug('Items count for this customer', { customerItemsCount });
-    
+
     // Get all items for this customer
     const items = await BillingItem.find({ customerId: customerId }).sort({ srNo: 1 });
     logger.debug('Found items for customer', { count: items.length });
-    
+
     // Also try a more flexible search
     const allItems = await BillingItem.find({});
     logger.debug('All items in database count', { count: allItems.length });
-    
+
     res.json(items);
   } catch (error) {
     logger.error('Error fetching items for customer', error);
@@ -222,8 +227,8 @@ router.post('/items/add',
 
       const itemData = {
         ...req.body,
-        customerId: mongoose.Types.ObjectId.isValid(req.body.customerId) 
-          ? req.body.customerId 
+        customerId: mongoose.Types.ObjectId.isValid(req.body.customerId)
+          ? req.body.customerId
           : new mongoose.Types.ObjectId(req.body.customerId)
       };
 
@@ -297,14 +302,13 @@ router.post('/items/bulk-update/:customerId',
       const deletedCount = await BillingItem.deleteMany({ customerId });
       logger.debug('Deleted existing items', { deleted: deletedCount.deletedCount });
 
-      // Add new items
+      // Add new items - map new template fields to database fields
       const itemsToAdd = items.map((item, index) => ({
-        ...item,
         customerId,
-        srNo: item.srNo || String(index + 1),
-        name: item.name || item.itemName || '',
-        price: Number(item.price) || 0,
-        masterPrice: Number(item.masterPrice) || 0
+        srNo: item.barcodeNumber || item.srNo || String(index + 1),
+        name: item.itemName || item.name || '',
+        price: 0, // Price not in template, set to 0
+        masterPrice: 0 // MasterPrice not in template, set to 0
       }));
 
       const savedItems = await BillingItem.insertMany(itemsToAdd);
@@ -438,7 +442,7 @@ router.post('/inventory/check-availability', async (req, res) => {
 router.get('/godowns/:godownId/items', async (req, res) => {
   try {
     const godownId = req.params.godownId;
-    
+
     // Get godown details
     const godown = await Godown.findById(godownId);
     if (!godown) {
@@ -468,7 +472,7 @@ router.get('/godowns/:godownId/items', async (req, res) => {
 router.get('/godowns/sorted/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    
+
     // Get customer details
     const customer = await Customer.findById(customerId);
     if (!customer) {
@@ -483,8 +487,8 @@ router.get('/godowns/sorted/:customerId', async (req, res) => {
     const nonMatchingGodowns = [];
 
     allGodowns.forEach(godown => {
-      if (godown.city.toLowerCase() === customer.city.toLowerCase() && 
-          godown.state.toLowerCase() === customer.state.toLowerCase()) {
+      if (godown.city.toLowerCase() === customer.city.toLowerCase() &&
+        godown.state.toLowerCase() === customer.state.toLowerCase()) {
         matchingGodowns.push(godown);
       } else {
         nonMatchingGodowns.push(godown);
@@ -622,95 +626,95 @@ router.post('/bills/add',
     try {
       const { items, godownName } = req.body;
 
-    logger.debug('Creating bill', { itemsCount: items?.length || 0, godownName });
+      logger.debug('Creating bill', { itemsCount: items?.length || 0, godownName });
 
-    // Get Delevery1 model
-    let Delevery1;
-    try {
-      Delevery1 = mongoose.model('Delevery1');
-    } catch (error) {
-      const delevery1Schema = new mongoose.Schema({
-        selectedOption: String,
-        inputValue: String,
-        godownName: String,
-        addedAt: { type: Date, default: Date.now },
-        itemName: String,
-        quantity: { type: Number, default: 0 },
-        price: { type: Number, default: 0 },
-        masterPrice: { type: Number, default: 0 },
-        description: String,
-        category: String,
-        godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
-        lastUpdated: { type: Date, default: Date.now }
-      });
-      Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
-    }
-
-    // Create the bill first
-    const billNumber = await generateBillNumber();
-    const bill = new Bill({
-      ...req.body,
-      billNumber
-    });
-    const savedBill = await bill.save();
-    logger.info('Bill created successfully', { billNumber: savedBill.billNumber });
-
-    // Now delete items from delevery1 collection
-    const deletionResults = [];
-
-    for (const item of items) {
-      const itemName = item.itemName;
-      const requestedQuantity = item.quantity;
-
-      logger.debug('Processing bill item', { itemName, requestedQuantity });
-
-      // Get first 3 digits as prefix for matching
-      const itemPrefix = itemName.substring(0, 3);
-      logger.debug('Using prefix for bill item', { itemPrefix, itemName });
-
-      // Find matching items in delevery1 collection using 3-digit prefix
-      const matchingItems = await Delevery1.find({
-        inputValue: { $regex: `^${itemPrefix}` }, // Match items that start with the 3-digit prefix
-        godownName: godownName
-      }).limit(requestedQuantity);
-
-      logger.debug('Found matching items in delevery1', { prefix: itemPrefix, count: matchingItems.length });
-
-      // Delete the found items
-      const deletedItems = [];
-      const deletedItemValues = [];
-      for (const matchingItem of matchingItems) {
-        await Delevery1.findByIdAndDelete(matchingItem._id);
-        deletedItems.push(matchingItem._id);
-        deletedItemValues.push(matchingItem.inputValue);
-        logger.debug('Deleted item from delevery1', { id: matchingItem._id, value: matchingItem.inputValue });
+      // Get Delevery1 model
+      let Delevery1;
+      try {
+        Delevery1 = mongoose.model('Delevery1');
+      } catch (error) {
+        const delevery1Schema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now },
+          itemName: String,
+          quantity: { type: Number, default: 0 },
+          price: { type: Number, default: 0 },
+          masterPrice: { type: Number, default: 0 },
+          description: String,
+          category: String,
+          godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
+          lastUpdated: { type: Date, default: Date.now }
+        });
+        Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
       }
 
-      deletionResults.push({
-        itemName: itemName,
-        prefix: itemPrefix,
-        requestedQuantity: requestedQuantity,
-        foundItems: matchingItems.length,
-        deletedItems: deletedItems.length,
-        deletedIds: deletedItems,
-        deletedItemValues: deletedItemValues
+      // Create the bill first
+      const billNumber = await generateBillNumber();
+      const bill = new Bill({
+        ...req.body,
+        billNumber
       });
+      const savedBill = await bill.save();
+      logger.info('Bill created successfully', { billNumber: savedBill.billNumber });
+
+      // Now delete items from delevery1 collection
+      const deletionResults = [];
+
+      for (const item of items) {
+        const itemName = item.itemName;
+        const requestedQuantity = item.quantity;
+
+        logger.debug('Processing bill item', { itemName, requestedQuantity });
+
+        // Get first 3 digits as prefix for matching
+        const itemPrefix = itemName.substring(0, 3);
+        logger.debug('Using prefix for bill item', { itemPrefix, itemName });
+
+        // Find matching items in delevery1 collection using 3-digit prefix
+        const matchingItems = await Delevery1.find({
+          inputValue: { $regex: `^${itemPrefix}` }, // Match items that start with the 3-digit prefix
+          godownName: godownName
+        }).limit(requestedQuantity);
+
+        logger.debug('Found matching items in delevery1', { prefix: itemPrefix, count: matchingItems.length });
+
+        // Delete the found items
+        const deletedItems = [];
+        const deletedItemValues = [];
+        for (const matchingItem of matchingItems) {
+          await Delevery1.findByIdAndDelete(matchingItem._id);
+          deletedItems.push(matchingItem._id);
+          deletedItemValues.push(matchingItem.inputValue);
+          logger.debug('Deleted item from delevery1', { id: matchingItem._id, value: matchingItem.inputValue });
+        }
+
+        deletionResults.push({
+          itemName: itemName,
+          prefix: itemPrefix,
+          requestedQuantity: requestedQuantity,
+          foundItems: matchingItems.length,
+          deletedItems: deletedItems.length,
+          deletedIds: deletedItems,
+          deletedItemValues: deletedItemValues
+        });
+      }
+
+      logger.debug('Deletion results', { deletionResultsCount: deletionResults.length });
+
+      // Return success response with deletion details
+      res.status(201).json({
+        ...savedBill.toObject(),
+        deletionResults: deletionResults,
+        message: `Bill created successfully! ${deletionResults.reduce((sum, result) => sum + result.deletedItems, 0)} items removed from inventory.`
+      });
+
+    } catch (error) {
+      logger.error('Error creating bill', error);
+      res.status(400).json({ message: 'Unable to create bill' });
     }
-
-    logger.debug('Deletion results', { deletionResultsCount: deletionResults.length });
-
-    // Return success response with deletion details
-    res.status(201).json({
-      ...savedBill.toObject(),
-      deletionResults: deletionResults,
-      message: `Bill created successfully! ${deletionResults.reduce((sum, result) => sum + result.deletedItems, 0)} items removed from inventory.`
-    });
-
-  } catch (error) {
-    logger.error('Error creating bill', error);
-    res.status(400).json({ message: 'Unable to create bill' });
-  }
-});
+  });
 
 // Get all bills
 router.get('/bills/', async (req, res) => {

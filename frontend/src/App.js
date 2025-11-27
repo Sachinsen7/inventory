@@ -37,6 +37,8 @@ import BillingMain from "./components/BillingMain";
 import CreateCustomer from "./billing/CreateCustomer";
 import CustomersList from "./billing/CustomersList";
 import CustomerDetails from "./billing/CustomerDetails";
+import AllProductsPage from "./components/AllProductsPage";
+
 const App = () => {
   const [isAuthenticated] = useState(false);
 
@@ -97,6 +99,7 @@ const App = () => {
           element={<CustomerDetails />}
         />
         <Route path="/customer/:id" element={<CustomerDetails />} />
+        <Route path="/all-products" element={<AllProductsPage />} />
       </Routes>
     </Router>
   );

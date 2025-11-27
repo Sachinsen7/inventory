@@ -24,7 +24,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:local": "env-cmd -f .env.local react-scripts start",
+    "start:aws": "env-cmd -f .env.aws react-scripts start",
     "build": "react-scripts build",
+    "build:local": "env-cmd -f .env.local react-scripts build",
+    "build:aws": "env-cmd -f .env.aws react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -53,5 +57,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "env-cmd": "^11.0.0"
   }
 }

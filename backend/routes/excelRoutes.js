@@ -290,19 +290,22 @@ router.get("/download-billing-template", (req, res) => {
     // Sample data structure for billing items
     const templateData = [
       {
-        name: "Product A",
-        price: 100.0,
-        masterPrice: 90.0,
+        itemName: "Product A",
+        barcodeNumber: "123456789012",
+        skuName: "SKU-A",
+        skuCode: "SKU001",
       },
       {
-        name: "Product B",
-        price: 150.5,
-        masterPrice: 135.0,
+        itemName: "Product B",
+        barcodeNumber: "234567890123",
+        skuName: "SKU-B",
+        skuCode: "SKU002",
       },
       {
-        name: "Product C",
-        price: 75.75,
-        masterPrice: 68.0,
+        itemName: "Product C",
+        barcodeNumber: "345678901234",
+        skuName: "SKU-C",
+        skuCode: "SKU003",
       },
     ];
 
@@ -311,9 +314,10 @@ router.get("/download-billing-template", (req, res) => {
 
     // Set column widths
     ws["!cols"] = [
-      { wch: 25 }, // name
-      { wch: 15 }, // price
-      { wch: 15 }, // masterPrice
+      { wch: 30 }, // itemName
+      { wch: 20 }, // barcodeNumber
+      { wch: 25 }, // skuName
+      { wch: 15 }, // skuCode
     ];
 
     // Create workbook
@@ -337,6 +341,93 @@ router.get("/download-billing-template", (req, res) => {
     res.send(buf);
   } catch (err) {
     logger.error("Error generating billing template", err);
+    res.status(500).json({ message: "Error generating template" });
+  }
+});
+
+// Download Excel template for products (All Fields)
+router.get("/download-products-template", (req, res) => {
+  try {
+    logger.info("Generating products template with all fields");
+
+    // Sample data structure for products with ALL fields
+    const templateData = [
+      {
+        "Product Name": "Sample Product 1",
+        "SKU Code No": "SKU001",
+        "SKU Name": "Sample SKU Name 1",
+        "Packed By": "John Doe",
+        "Batch No": "100",
+        "Shift": "Day",
+        "Rewinder Operator": "Operator A",
+        "Edge Cut Operator": "Operator B",
+        "Winder Operator": "Operator C",
+        "Mixer Operator": "Operator D",
+      },
+      {
+        "Product Name": "Sample Product 2",
+        "SKU Code No": "SKU002",
+        "SKU Name": "Sample SKU Name 2",
+        "Packed By": "Jane Smith",
+        "Batch No": "101",
+        "Shift": "Night",
+        "Rewinder Operator": "Operator E",
+        "Edge Cut Operator": "Operator F",
+        "Winder Operator": "Operator G",
+        "Mixer Operator": "Operator H",
+      },
+      {
+        "Product Name": "Sample Product 3",
+        "SKU Code No": "SKU003",
+        "SKU Name": "Sample SKU Name 3",
+        "Packed By": "Bob Johnson",
+        "Batch No": "102",
+        "Shift": "Day",
+        "Rewinder Operator": "Operator I",
+        "Edge Cut Operator": "Operator J",
+        "Winder Operator": "Operator K",
+        "Mixer Operator": "Operator L",
+      },
+    ];
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(templateData);
+
+    // Set column widths
+    ws["!cols"] = [
+      { wch: 30 }, // Product Name
+      { wch: 15 }, // SKU Code No
+      { wch: 25 }, // SKU Name
+      { wch: 20 }, // Packed By
+      { wch: 12 }, // Batch No
+      { wch: 12 }, // Shift
+      { wch: 20 }, // Rewinder Operator
+      { wch: 20 }, // Edge Cut Operator
+      { wch: 20 }, // Winder Operator
+      { wch: 20 }, // Mixer Operator
+    ];
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+
+    // Generate buffer
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+    // Set headers
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=products_template.xlsx"
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    logger.info("Products template downloaded");
+    res.send(buf);
+  } catch (err) {
+    logger.error("Error generating products template", err);
     res.status(500).json({ message: "Error generating template" });
   }
 });

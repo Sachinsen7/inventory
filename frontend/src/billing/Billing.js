@@ -31,6 +31,20 @@ function Billing() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [dateRangeError, setDateRangeError] = useState({ startDate: '', endDate: '' });
+  
+  // GST-related states
+  const [companyState, setCompanyState] = useState(''); // Your business state
+  const [subtotal, setSubtotal] = useState(0);
+  const [sgst, setSgst] = useState(0);
+  const [cgst, setCgst] = useState(0);
+  const [igst, setIgst] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
+  
+  // Stock dialog state
+  const [showStockDialog, setShowStockDialog] = useState(false);
+  const [stockDialogItems, setStockDialogItems] = useState([]);
+  const [stockSearchTerm, setStockSearchTerm] = useState('');
+  
   const navigate = useNavigate();
   const billRef = useRef();
 
@@ -151,11 +165,42 @@ function Billing() {
     }
   }, [selectedCustomer]);
 
-  // Calculate total amount when selected items change
+  // Calculate total amount and GST when selected items or customer changes
   useEffect(() => {
-    const total = selectedItems.reduce((sum, item) => sum + item.total, 0);
-    setTotalAmount(total);
-  }, [selectedItems]);
+    const itemsTotal = selectedItems.reduce((sum, item) => sum + item.total, 0);
+    setSubtotal(itemsTotal);
+    
+    // Get customer state to determine GST type
+    const selectedCustomerData = customers.find(c => c._id === selectedCustomer);
+    const customerState = selectedCustomerData?.state || '';
+    
+    // Calculate GST based on state match
+    // Assuming your company state - you can set this from settings or hardcode your state
+    const businessState = companyState || 'Maharashtra'; // Default to Maharashtra, change as needed
+    
+    const isWithinState = customerState.toLowerCase() === businessState.toLowerCase();
+    
+    if (isWithinState) {
+      // Within state: SGST 9% + CGST 9%
+      const sgstAmount = itemsTotal * 0.09;
+      const cgstAmount = itemsTotal * 0.09;
+      setSgst(sgstAmount);
+      setCgst(cgstAmount);
+      setIgst(0);
+      const total = itemsTotal + sgstAmount + cgstAmount;
+      setTotalAmount(total);
+      setGrandTotal(total);
+    } else {
+      // Other state: IGST 18%
+      const igstAmount = itemsTotal * 0.18;
+      setSgst(0);
+      setCgst(0);
+      setIgst(igstAmount);
+      const total = itemsTotal + igstAmount;
+      setTotalAmount(total);
+      setGrandTotal(total);
+    }
+  }, [selectedItems, selectedCustomer, customers, companyState]);
 
   const handleCustomerChange = async (e) => {
     const customerId = e.target.value;
@@ -262,8 +307,13 @@ function Billing() {
       try {
         const response = await axios.get(`${backendUrl}/api/godowns/${godownId}/items`);
         console.log('Godown items received:', response.data);
-        setGodownItems(response.data.items);
+        const items = response.data.items || [];
+        setGodownItems(items);
         setSelectedGodownData(response.data.godown);
+        
+        // Show stock dialog with items
+        setStockDialogItems(items);
+        setShowStockDialog(true);
 
         // If customer is also selected, fetch and match items
         if (selectedCustomer) {
@@ -288,6 +338,7 @@ function Billing() {
       setGodownItems([]);
       setSelectedGodownData(null);
       setAvailableItems([]);
+      setShowStockDialog(false);
     }
   };
 
@@ -461,12 +512,48 @@ function Billing() {
                   <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">₹${item.total}</td>
                 </tr>
               `).join('')}
-              <tr style="background-color: #f8f9fa; font-weight: bold;">
+              <tr style="background-color: #f8f9fa;">
                 <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  <strong>TOTAL AMOUNT:</strong>
+                  <strong>Subtotal:</strong>
                 </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-size: 18px; color: #2c3e50;">
-                  <strong>₹${calculatedTotal}</strong>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
+                  <strong>₹${subtotal.toFixed(2)}</strong>
+                </td>
+              </tr>
+              ${sgst > 0 ? `
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
+                  SGST (9%):
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
+                  ₹${sgst.toFixed(2)}
+                </td>
+              </tr>
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
+                  CGST (9%):
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
+                  ₹${cgst.toFixed(2)}
+                </td>
+              </tr>
+              ` : ''}
+              ${igst > 0 ? `
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
+                  IGST (18%):
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
+                  ₹${igst.toFixed(2)}
+                </td>
+              </tr>
+              ` : ''}
+              <tr style="background-color: #3498db; color: white; font-weight: bold;">
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
+                  <strong>GRAND TOTAL:</strong>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-size: 18px;">
+                  <strong>₹${grandTotal.toFixed(2)}</strong>
                 </td>
               </tr>
             </tbody>
@@ -474,7 +561,10 @@ function Billing() {
         </div>
 
         <div style="text-align: right; margin-top: 20px; margin-bottom: 30px;">
-          <h2 style="color: #2c3e50; margin: 0; font-size: 24px;">Grand Total: ₹${calculatedTotal}</h2>
+          <h2 style="color: #2c3e50; margin: 0; font-size: 24px;">Grand Total: ₹${grandTotal.toFixed(2)}</h2>
+          <p style="color: #7f8c8d; font-size: 14px; margin-top: 10px;">
+            ${sgst > 0 ? '(Includes SGST 9% + CGST 9%)' : igst > 0 ? '(Includes IGST 18%)' : ''}
+          </p>
         </div>
         
         <div style="margin-top: 50px; text-align: center; color: #7f8c8d; font-size: 12px;">
@@ -1342,14 +1432,44 @@ function Billing() {
                   </table>
                 </div>
                 
-                {/* Total Amount */}
+                {/* Total Amount with GST Breakdown */}
                 <div className="row">
                   <div className="col-md-6 offset-md-6">
                     <div className="card bg-light">
                       <div className="card-body">
-                        <h5 className="card-title">Total Amount: ₹{totalAmount}</h5>
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span>Subtotal:</span>
+                            <span><strong>₹{subtotal.toFixed(2)}</strong></span>
+                          </div>
+                          {sgst > 0 && (
+                            <>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.9rem', color: '#666' }}>
+                                <span>SGST (9%):</span>
+                                <span>₹{sgst.toFixed(2)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem', color: '#666' }}>
+                                <span>CGST (9%):</span>
+                                <span>₹{cgst.toFixed(2)}</span>
+                              </div>
+                            </>
+                          )}
+                          {igst > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem', color: '#666' }}>
+                              <span>IGST (18%):</span>
+                              <span>₹{igst.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <hr style={{ margin: '10px 0' }} />
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span><strong>Grand Total:</strong></span>
+                            <span style={{ fontSize: '1.3rem', color: '#28a745' }}><strong>₹{grandTotal.toFixed(2)}</strong></span>
+                          </div>
+                        </div>
                         <small className="text-muted">
                           Using {priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}
+                          {sgst > 0 && ' • Within State (SGST + CGST)'}
+                          {igst > 0 && ' • Inter-State (IGST)'}
                         </small>
                       </div>
                     </div>
@@ -1545,6 +1665,252 @@ function Billing() {
                       📱 Send on WhatsApp
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Stock Dialog Modal */}
+          {showStockDialog && (
+            <div 
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 9999,
+                padding: '20px'
+              }}
+              onClick={() => setShowStockDialog(false)}
+            >
+              <div 
+                style={{
+                  backgroundColor: 'white',
+                  borderRadius: '15px',
+                  maxWidth: '900px',
+                  width: '100%',
+                  maxHeight: '80vh',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Dialog Header */}
+                <div style={{
+                  padding: '20px 30px',
+                  borderBottom: '2px solid #e0e0e0',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+                        📦 {selectedGodownData?.name || 'Godown'} - Stock Inventory
+                      </h3>
+                      <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
+                        {selectedGodownData?.city}, {selectedGodownData?.state}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowStockDialog(false)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        border: 'none',
+                        color: 'white',
+                        fontSize: '1.5rem',
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+                      onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div style={{ padding: '20px 30px', borderBottom: '1px solid #e0e0e0' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Search items by name or code..."
+                    value={stockSearchTerm}
+                    onChange={(e) => setStockSearchTerm(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 20px',
+                      fontSize: '1rem',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '10px',
+                      outline: 'none',
+                      transition: 'border-color 0.3s ease'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                  />
+                </div>
+
+                {/* Stock Items List */}
+                <div style={{ 
+                  flex: 1, 
+                  overflowY: 'auto', 
+                  padding: '20px 30px' 
+                }}>
+                  {stockDialogItems.length === 0 ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '60px 20px',
+                      color: '#999'
+                    }}>
+                      <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📭</div>
+                      <h4 style={{ color: '#666', marginBottom: '10px' }}>No Stock Available</h4>
+                      <p style={{ color: '#999' }}>This godown currently has no items in stock.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ 
+                        marginBottom: '15px', 
+                        padding: '10px 15px', 
+                        background: '#f8f9fa', 
+                        borderRadius: '8px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontWeight: 'bold', color: '#333' }}>
+                          Total Items: {stockDialogItems.filter(item => 
+                            !stockSearchTerm || 
+                            item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
+                            item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+                          ).length}
+                        </span>
+                        <span style={{ color: '#666', fontSize: '0.9rem' }}>
+                          {stockDialogItems.length} items in stock
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gap: '12px' }}>
+                        {stockDialogItems
+                          .filter(item => 
+                            !stockSearchTerm || 
+                            item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
+                            item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+                          )
+                          .map((item, index) => (
+                            <div 
+                              key={index}
+                              style={{
+                                padding: '15px 20px',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '10px',
+                                background: 'white',
+                                transition: 'all 0.3s ease',
+                                cursor: 'pointer'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.boxShadow = 'none';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ 
+                                    fontSize: '1.1rem', 
+                                    fontWeight: 'bold', 
+                                    color: '#333',
+                                    marginBottom: '5px'
+                                  }}>
+                                    {item.inputValue || item.itemName || 'Unknown Item'}
+                                  </div>
+                                  {item.itemName && item.inputValue && (
+                                    <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                                      {item.itemName}
+                                    </div>
+                                  )}
+                                  <div style={{ 
+                                    fontSize: '0.85rem', 
+                                    color: '#999',
+                                    marginTop: '5px'
+                                  }}>
+                                    Added: {item.addedAt ? new Date(item.addedAt).toLocaleDateString() : 'N/A'}
+                                  </div>
+                                </div>
+                                <div style={{
+                                  padding: '8px 16px',
+                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                  color: 'white',
+                                  borderRadius: '20px',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.9rem'
+                                }}>
+                                  In Stock
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+
+                      {stockDialogItems.filter(item => 
+                        !stockSearchTerm || 
+                        item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
+                        item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+                      ).length === 0 && stockSearchTerm && (
+                        <div style={{
+                          textAlign: 'center',
+                          padding: '40px 20px',
+                          color: '#999'
+                        }}>
+                          <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🔍</div>
+                          <p>No items found matching "{stockSearchTerm}"</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Dialog Footer */}
+                <div style={{
+                  padding: '15px 30px',
+                  borderTop: '1px solid #e0e0e0',
+                  background: '#f8f9fa',
+                  display: 'flex',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    onClick={() => setShowStockDialog(false)}
+                    style={{
+                      padding: '10px 30px',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
             </div>

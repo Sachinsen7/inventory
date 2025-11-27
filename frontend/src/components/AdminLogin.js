@@ -21,6 +21,18 @@ const AdminLogin = () => {
       });
 
       if (response.data.success) {
+        // Store the token in localStorage
+        if (response.data.token) {
+          localStorage.setItem('authToken', response.data.token);
+          localStorage.setItem('role', 'admin');
+          localStorage.setItem('user', JSON.stringify({
+            id: 'admin',
+            name: username,
+            role: 'admin'
+          }));
+          console.log('Admin token stored successfully');
+        }
+        
         showToast.success('Login successful!');
         navigate('/dashboard');
       } else {

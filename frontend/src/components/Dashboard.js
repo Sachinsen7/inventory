@@ -195,6 +195,7 @@ const Dashboard = () => {
         <button style={styles.button} onClick={() => setShowFilesModal(true)}>
           View Files
         </button>
+        
       </div>
 
       {/* Upload Modal */}

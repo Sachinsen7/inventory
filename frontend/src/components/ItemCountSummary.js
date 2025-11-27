@@ -246,6 +246,22 @@ const ItemCountSummary = () => {
 
         <button
           style={styles.button}
+          onMouseEnter={(e) => (e.target.style.transform = "scale(1.1)")}
+          onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+        >
+          <Link
+            to="/all-products"
+            style={{
+              color: "white",
+              textDecoration: "none",
+            }}
+          >
+            📦 All Products
+          </Link>
+        </button>
+
+        <button
+          style={styles.button}
           onClick={fetchInventoryData}
           onMouseEnter={(e) => (e.target.style.transform = "scale(1.1)")}
           onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}

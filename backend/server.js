@@ -31,9 +31,11 @@ const billingRoutes = require("./routes/billingRoutes");
 app.use(bodyParser.json());
 
 // Hardened CORS configuration: restrict to allowed origins from environment
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "*")
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5000,http://0.0.0.0:3000,http://0.0.0.0:5000")
   .split(",")
   .map((o) => o.trim());
+
+console.log('Allowed CORS origins:', allowedOrigins);
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (same-origin requests from served static files)
@@ -751,6 +753,48 @@ app.delete(
       res.json({ message: "User deleted successfully" });
     } catch (error) {
       logger.error("Error deleting user:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// User Password Change API (protected - admin only)
+app.put(
+  "/api/users/:id/password",
+  authenticateJWT,
+  authorizeRole("admin"),
+  [
+    body("password")
+      .isString()
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters long"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: "Validation failed", 
+        errors: errors.array() 
+      });
+    }
+
+    try {
+      const { password } = req.body;
+      const user = await User.findById(req.params.id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user.password = hashedPassword;
+      await user.save();
+
+      logger.info(`Password changed for user: ${user.username} by admin`);
+      res.json({ message: "Password changed successfully" });
+    } catch (error) {
+      logger.error("Error changing user password:", error);
       res.status(500).json({ message: "Server error" });
     }
   }

@@ -15,13 +15,16 @@ const Dashboard = () => {
 
   const fetchExcelFiles = async () => {
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/excel-files`
+        `${backendUrl}/api/excel-files`
       );
       const data = await response.json();
       setExcelFiles(data);
+      console.log("Fetched Excel files:", data);
     } catch (error) {
       console.error("Error fetching Excel files:", error);
+      showToast.error("Error loading files list");
     }
   };
 
@@ -51,8 +54,9 @@ const Dashboard = () => {
     formData.append("excelFile", selectedFile);
 
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/upload-excel`,
+        `${backendUrl}/api/upload-excel`,
         {
           method: "POST",
           body: formData,
@@ -69,7 +73,7 @@ const Dashboard = () => {
         showToast.error("Error uploading file: " + data.message);
       }
     } catch (error) {
-      showToast.error("Error uploading file");
+      showToast.error("Error uploading file: " + error.message);
       console.error("Upload error:", error);
     } finally {
       setUploading(false);
@@ -78,24 +82,34 @@ const Dashboard = () => {
 
   const handleDownload = async (fileId, fileName) => {
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/download-excel/${fileId}`
+        `${backendUrl}/api/download-excel/${fileId}`
       );
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = fileName;
+        a.download = fileName || fileId.split("-").slice(1).join("-") || "download.xlsx";
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+
+        showToast.success("File downloaded successfully!");
       } else {
-        showToast.error("Error downloading file");
+        const errorData = await response.json();
+        showToast.error("Error downloading file: " + (errorData.message || "Unknown error"));
+        console.error("Download error response:", errorData);
       }
     } catch (error) {
-      showToast.error("Error downloading file");
+      showToast.error("Error downloading file: " + error.message);
       console.error("Download error:", error);
     }
   };
@@ -103,8 +117,9 @@ const Dashboard = () => {
   const handleDelete = async (fileId) => {
     if (window.confirm("Are you sure you want to delete this file?")) {
       try {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
         const response = await fetch(
-          `${process.env.REACT_APP_BACKEND_URL}/api/delete-excel/${fileId}`,
+          `${backendUrl}/api/delete-excel/${fileId}`,
           {
             method: "DELETE",
           }
@@ -114,10 +129,11 @@ const Dashboard = () => {
           showToast.success("File deleted successfully!");
           fetchExcelFiles();
         } else {
-          showToast.error("Error deleting file");
+          const errorData = await response.json();
+          showToast.error("Error deleting file: " + (errorData.message || "Unknown error"));
         }
       } catch (error) {
-        showToast.error("Error deleting file");
+        showToast.error("Error deleting file: " + error.message);
         console.error("Delete error:", error);
       }
     }
@@ -145,8 +161,9 @@ const Dashboard = () => {
           filename = "products_template.xlsx";
       }
 
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/${endpoint}`
+        `${backendUrl}/api/${endpoint}`
       );
 
       if (response.ok) {
@@ -157,14 +174,20 @@ const Dashboard = () => {
         a.download = filename;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+
         showToast.success("Template downloaded successfully!");
       } else {
-        showToast.error("Error downloading template");
+        const errorData = await response.json();
+        showToast.error("Error downloading template: " + (errorData.message || "Unknown error"));
       }
     } catch (error) {
-      showToast.error("Error downloading template");
+      showToast.error("Error downloading template: " + error.message);
       console.error("Template download error:", error);
     }
   };
@@ -203,16 +226,16 @@ const Dashboard = () => {
         </Link>
 
         <button style={styles.button} onClick={() => setShowUploadModal(true)}>
-          📤 Upload Excel
+          Upload Excel
         </button>
         <button style={styles.button} onClick={() => setShowFilesModal(true)}>
-          📁 View Files
+          View Files
         </button>
         <button
           style={styles.button}
           onClick={() => handleDownloadTemplate("products")}
         >
-          📥 Download Template
+          Download Template
         </button>
       </div>
 

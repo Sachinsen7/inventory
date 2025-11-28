@@ -30,6 +30,14 @@ const SelectForm = () => {
         const skuName = barcode.skun || "";
         const packed = barcode.packed || "";
         const batch = barcode.batch || "";
+        const weight = barcode.weight || "";
+        const shift = barcode.shift || "";
+        const location = barcode.location || "";
+        const currentTime = barcode.currentTime || "";
+        const rewinder = barcode.rewinder || "";
+        const edge = barcode.edge || "";
+        const winder = barcode.winder || "";
+        const mixer = barcode.mixer || "";
 
         if (barcode.batchNumbers && Array.isArray(barcode.batchNumbers)) {
           barcode.batchNumbers.forEach((bn) => {
@@ -41,12 +49,28 @@ const SelectForm = () => {
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
+                weight: weight,
+                shift: shift,
+                location: location,
+                currentTime: currentTime,
+                rewinder: rewinder,
+                edge: edge,
+                winder: winder,
+                mixer: mixer,
               });
               mapping[skuCode] = {
                 product: productName,
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
+                weight: weight,
+                shift: shift,
+                location: location,
+                currentTime: currentTime,
+                rewinder: rewinder,
+                edge: edge,
+                winder: winder,
+                mixer: mixer,
               };
             }
           });
@@ -88,6 +112,14 @@ const SelectForm = () => {
         skuName: "",
         packed: "",
         batch: "",
+        weight: "",
+        shift: "",
+        location: "",
+        currentTime: "",
+        rewinder: "",
+        edge: "",
+        winder: "",
+        mixer: "",
       };
 
       setScannedBarcodes((prev) => [
@@ -121,6 +153,163 @@ const SelectForm = () => {
 
   const toggleProductList = () => {
     setShowAllProducts(!showAllProducts);
+  };
+
+  const handlePrintItem = (item) => {
+    const printWindow = window.open("", "_blank", "width=800,height=600");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Product Details - ${item.sku}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #4CAF50;
+              padding-bottom: 20px;
+            }
+            .header h1 {
+              color: #4CAF50;
+              margin: 0;
+              font-size: 28px;
+            }
+            .barcode-section {
+              text-align: center;
+              margin: 30px 0;
+              padding: 20px;
+              background: #f5f5f5;
+              border-radius: 10px;
+            }
+            .details-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 15px;
+              margin: 20px 0;
+            }
+            .detail-item {
+              padding: 12px;
+              background: #f9f9f9;
+              border-left: 4px solid #4CAF50;
+              border-radius: 5px;
+            }
+            .detail-label {
+              font-weight: bold;
+              color: #666;
+              font-size: 12px;
+              text-transform: uppercase;
+              margin-bottom: 5px;
+            }
+            .detail-value {
+              color: #333;
+              font-size: 16px;
+              font-weight: 600;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              color: #999;
+              font-size: 12px;
+              border-top: 1px solid #ddd;
+              padding-top: 20px;
+            }
+            @media print {
+              body { padding: 20px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>📦 Product Details</h1>
+            <p style="color: #666; margin: 10px 0 0 0;">Scanned on: ${item.time}</p>
+          </div>
+          
+          <div class="barcode-section">
+            <h2 style="margin: 0 0 10px 0; color: #333;">Barcode: ${item.sku}</h2>
+            <svg id="barcode"></svg>
+          </div>
+
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">Product Name</div>
+              <div class="detail-value">${item.product || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">SKU Code</div>
+              <div class="detail-value">${item.sku || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">SKU Name</div>
+              <div class="detail-value">${item.skuName || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Weight</div>
+              <div class="detail-value">${item.weight || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Packed By</div>
+              <div class="detail-value">${item.packed || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Batch No</div>
+              <div class="detail-value">${item.batch || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Shift</div>
+              <div class="detail-value">${item.shift || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Location</div>
+              <div class="detail-value">${item.location || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Packing Date</div>
+              <div class="detail-value">${item.currentTime || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Rewinder Operator</div>
+              <div class="detail-value">${item.rewinder || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Edge Cut Operator</div>
+              <div class="detail-value">${item.edge || "N/A"}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Winder Operator</div>
+              <div class="detail-value">${item.winder || "N/A"}</div>
+            </div>
+            <div class="detail-item" style="grid-column: 1 / -1;">
+              <div class="detail-label">Mixer Operator</div>
+              <div class="detail-value">${item.mixer || "N/A"}</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Generated by Inventory Management System</p>
+          </div>
+
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+          <script>
+            JsBarcode("#barcode", "${item.sku}", {
+              format: "CODE128",
+              width: 2,
+              height: 80,
+              displayValue: true,
+              fontSize: 20,
+              margin: 10
+            });
+            setTimeout(() => window.print(), 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const styles = {
@@ -240,21 +429,23 @@ const SelectForm = () => {
       boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
     },
     scannedItem: {
-      padding: "12px",
-      marginBottom: "8px",
+      padding: "20px",
+      marginBottom: "15px",
       backgroundColor: "#e8f5e9",
-      borderRadius: "8px",
-      borderLeft: "4px solid #4CAF50",
-      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+      borderRadius: "12px",
+      borderLeft: "6px solid #4CAF50",
+      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
     },
     productName: {
       fontWeight: "bold",
       color: "#333",
-      marginBottom: "4px",
+      marginBottom: "10px",
+      fontSize: "20px",
     },
     productDetails: {
-      fontSize: "14px",
-      color: "#666",
+      fontSize: "16px",
+      color: "#333",
+      lineHeight: "1.8",
     },
     emptyState: {
       textAlign: "center",
@@ -271,6 +462,33 @@ const SelectForm = () => {
       50% { background-position: 100% 50%; }
       75% { background-position: 50% 0%; }
       100% { background-position: 0% 50%; }
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+      .scanned-product-name {
+        font-size: 22px !important;
+      }
+      .scanned-product-details {
+        font-size: 17px !important;
+        line-height: 2 !important;
+      }
+      .detail-row-mobile {
+        display: block !important;
+        margin-bottom: 8px !important;
+        padding: 8px 0 !important;
+        border-bottom: 1px solid #ddd;
+      }
+      .detail-label-mobile {
+        font-weight: bold !important;
+        color: #4CAF50 !important;
+        display: inline-block !important;
+        min-width: 120px !important;
+      }
+      .detail-value-mobile {
+        color: #333 !important;
+        font-weight: 600 !important;
+      }
     }
   `;
 
@@ -395,29 +613,127 @@ const SelectForm = () => {
               <div key={index} style={styles.scannedItem}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "15px" }}>
                   <div style={{ flex: 1, minWidth: "250px" }}>
-                    <div style={styles.productName}>
+                    <div style={styles.productName} className="scanned-product-name">
                       #{scannedBarcodes.length - index}: {item.product}
                     </div>
-                    <div style={styles.productDetails}>
-                      SKU: {item.sku} | Time: {item.time}
-                      {item.packed && ` | Packed: ${item.packed}`}
-                      {item.batch && ` | Batch: ${item.batch}`}
+                    <div style={styles.productDetails} className="scanned-product-details">
+                      <div className="detail-row-mobile">
+                        <span className="detail-label-mobile">🏷️ SKU Code:</span>
+                        <span className="detail-value-mobile"> {item.sku}</span>
+                      </div>
+                      <div className="detail-row-mobile">
+                        <span className="detail-label-mobile">🕐 Scan Time:</span>
+                        <span className="detail-value-mobile"> {item.time}</span>
+                      </div>
+                      {item.skuName && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">📦 SKU Name:</span>
+                          <span className="detail-value-mobile"> {item.skuName}</span>
+                        </div>
+                      )}
+                      {item.weight && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">⚖️ Weight:</span>
+                          <span className="detail-value-mobile"> {item.weight}</span>
+                        </div>
+                      )}
+                      {item.packed && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">👤 Packed By:</span>
+                          <span className="detail-value-mobile"> {item.packed}</span>
+                        </div>
+                      )}
+                      {item.batch && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">🔢 Batch No:</span>
+                          <span className="detail-value-mobile"> {item.batch}</span>
+                        </div>
+                      )}
+                      {item.shift && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">🌓 Shift:</span>
+                          <span className="detail-value-mobile"> {item.shift}</span>
+                        </div>
+                      )}
+                      {item.location && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">📍 Location:</span>
+                          <span className="detail-value-mobile"> {item.location}</span>
+                        </div>
+                      )}
+                      {item.currentTime && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">📅 Packing Date:</span>
+                          <span className="detail-value-mobile"> {item.currentTime}</span>
+                        </div>
+                      )}
+                      {item.rewinder && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">👷 Rewinder:</span>
+                          <span className="detail-value-mobile"> {item.rewinder}</span>
+                        </div>
+                      )}
+                      {item.edge && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">✂️ Edge Cut:</span>
+                          <span className="detail-value-mobile"> {item.edge}</span>
+                        </div>
+                      )}
+                      {item.winder && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">🔄 Winder:</span>
+                          <span className="detail-value-mobile"> {item.winder}</span>
+                        </div>
+                      )}
+                      {item.mixer && (
+                        <div className="detail-row-mobile">
+                          <span className="detail-label-mobile">🥣 Mixer:</span>
+                          <span className="detail-value-mobile"> {item.mixer}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div style={{
-                    backgroundColor: "white",
-                    padding: "8px",
-                    borderRadius: "8px",
-                    border: "2px solid #4CAF50",
-                    textAlign: "center"
-                  }}>
-                    <Barcode
-                      value={item.sku}
-                      width={1.5}
-                      height={40}
-                      fontSize={12}
-                      margin={3}
-                    />
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center" }}>
+                    <div style={{
+                      backgroundColor: "white",
+                      padding: "8px",
+                      borderRadius: "8px",
+                      border: "2px solid #4CAF50",
+                      textAlign: "center"
+                    }}>
+                      <Barcode
+                        value={item.sku}
+                        width={1.5}
+                        height={40}
+                        fontSize={12}
+                        margin={3}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handlePrintItem(item)}
+                      style={{
+                        padding: "12px 24px",
+                        backgroundColor: "#4CAF50",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        fontSize: "16px",
+                        transition: "all 0.3s ease",
+                        boxShadow: "0 2px 8px rgba(76, 175, 80, 0.3)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#45a049";
+                        e.currentTarget.style.transform = "scale(1.05)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#4CAF50";
+                        e.currentTarget.style.transform = "scale(1)";
+                      }}
+                    >
+                      🖨️ Print Details
+                    </button>
                   </div>
                 </div>
               </div>
@@ -464,9 +780,11 @@ const SelectForm = () => {
                       <div style={styles.productDetails}>
                         <strong style={{ color: "#9900ef" }}>SKU: {item.sku}</strong>
                         {item.skuName && ` | ${item.skuName}`}
+                        {item.weight && ` | Weight: ${item.weight}`}
                         <br />
                         {item.packed && `Packed: ${item.packed}`}
                         {item.batch && ` | Batch: ${item.batch}`}
+                        {item.shift && ` | Shift: ${item.shift}`}
                       </div>
                     </div>
                     <div style={{

@@ -38,6 +38,7 @@ import CreateCustomer from "./billing/CreateCustomer";
 import CustomersList from "./billing/CustomersList";
 import CustomerDetails from "./billing/CustomerDetails";
 import AllProductsPage from "./components/AllProductsPage";
+import ProductDetails from "./components/ProductDetails";
 
 const App = () => {
   const [isAuthenticated] = useState(false);
@@ -100,6 +101,8 @@ const App = () => {
         />
         <Route path="/customer/:id" element={<CustomerDetails />} />
         <Route path="/all-products" element={<AllProductsPage />} />
+        <Route path="/product/:sku" element={<ProductDetails />} />
+        <Route path="/product" element={<ProductDetails />} />
       </Routes>
     </Router>
   );

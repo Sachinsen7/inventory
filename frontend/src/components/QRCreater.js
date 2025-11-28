@@ -20,6 +20,7 @@ const QRCreater = () => {
   const [mixer, setMixer] = useState("");
   const [skuc, setSku] = useState("");
   const [skun, setSKU] = useState("");
+  const [weight, setWeight] = useState("");
   const [barcodeNumbers, setBarcodeNumbers] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [excelData, setExcelData] = useState([]); // To store parsed Excel data
@@ -124,19 +125,20 @@ const QRCreater = () => {
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-            // Assuming first row is header: [Product Name, SKU Code No, SKU Name, Packed By, Batch No, Shift, Rewinder, Edge Cut, Winder, Mixer]
+            // Assuming first row is header: [Product Name, SKU Code No, SKU Name, Weight, Packed By, Batch No, Shift, Rewinder, Edge Cut, Winder, Mixer]
             const [header, ...rows] = data;
             const products = rows.map((row) => ({
               productName: row[0],
               skuCode: row[1],
               skuName: row[2],
-              packedBy: row[3],
-              batchNo: row[4],
-              shift: row[5],
-              rewinderOperator: row[6],
-              edgeCutOperator: row[7],
-              winderOperator: row[8],
-              mixerOperator: row[9],
+              weight: row[3],
+              packedBy: row[4],
+              batchNo: row[5],
+              shift: row[6],
+              rewinderOperator: row[7],
+              edgeCutOperator: row[8],
+              winderOperator: row[9],
+              mixerOperator: row[10],
             }));
             setExcelData(products);
             console.log("Loaded Excel Data:", products); // Debug log
@@ -357,6 +359,7 @@ const QRCreater = () => {
       mixer,
       skuc,
       skun,
+      weight,
       batchNumbers,
     };
 
@@ -429,6 +432,7 @@ const QRCreater = () => {
                     // Auto-fill primary fields
                     setSku(selectedProduct.skuCode || "");
                     setSKU(selectedProduct.skuName || selectedProduct.productName);
+                    setWeight(selectedProduct.weight || "");
 
                     // Auto-fill additional information
                     setPacked(selectedProduct.packedBy || "");
@@ -447,6 +451,7 @@ const QRCreater = () => {
                   // Clear ALL fields if "Select a product" is chosen
                   setSku("");
                   setSKU("");
+                  setWeight("");
                   setPacked("");
                   setBatch("");
                   setShift("");
@@ -535,11 +540,32 @@ const QRCreater = () => {
             />
           </div>
 
+          {/* Weight */}
+          <div style={styles.inputGroup}>
+            <label htmlFor="weight" style={styles.label}>
+              4️⃣ Weight:
+            </label>
+            <input
+              id="weight"
+              type="text"
+              placeholder="Weight (auto-filled)"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              required
+              style={{
+                ...styles.input,
+                backgroundColor: weight
+                  ? "rgba(144, 238, 144, 0.2)"
+                  : "rgba(255, 255, 255, 0.8)",
+              }}
+            />
+          </div>
+
           <div style={styles.divider}></div>
           {/* Number of Barcodes */}
           <div style={styles.inputGroup}>
             <label htmlFor="numberOfBarcodes" style={styles.label}>
-              4️⃣ Number of Barcodes:
+              5️⃣ Number of Barcodes:
             </label>
             <input
               id="numberOfBarcodes"
@@ -772,6 +798,9 @@ const QRCreater = () => {
                   <strong>SKU Name:</strong> {skun}
                 </div>
                 <div style={styles.barcodeInfo}>
+                  <strong>Weight:</strong> {weight}
+                </div>
+                <div style={styles.barcodeInfo}>
                   <strong>Location:</strong> {location}
                 </div>
                 <div style={styles.barcodeInfo}>
@@ -818,6 +847,10 @@ const QRCreater = () => {
                 <div style={styles.detailRow} className="detail-row">
                   <span style={styles.detailLabel}>📦 SKU Name:</span>
                   <span style={styles.detailValue}>{skun}</span>
+                </div>
+                <div style={styles.detailRow} className="detail-row">
+                  <span style={styles.detailLabel}>⚖️ Weight:</span>
+                  <span style={styles.detailValue}>{weight}</span>
                 </div>
                 <div style={styles.detailRow} className="detail-row">
                   <span style={styles.detailLabel}>📍 Location:</span>

@@ -745,13 +745,6 @@ const QRCreater = () => {
                 💾 Add to Database
               </button>
 
-              <button
-                className="styled-button"
-                onClick={handleDownloadAllBarcodesPDF}
-                disabled={isDownloading}
-              >
-                {isDownloading ? "⏳ Downloading..." : "📄 Download PDF"}
-              </button>
 
               <button className="styled-button" onClick={handlePrint}>
                 🖨️ Print Final Barcode

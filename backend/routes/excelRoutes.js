@@ -350,12 +350,13 @@ router.get("/download-products-template", (req, res) => {
   try {
     logger.info("Generating products template with all fields");
 
-    // Sample data structure for products with ALL fields
+    // Sample data structure for products with ALL fields including Weight
     const templateData = [
       {
         "Product Name": "Sample Product 1",
         "SKU Code No": "SKU001",
         "SKU Name": "Sample SKU Name 1",
+        "Weight": "500g",
         "Packed By": "John Doe",
         "Batch No": "100",
         "Shift": "Day",
@@ -368,6 +369,7 @@ router.get("/download-products-template", (req, res) => {
         "Product Name": "Sample Product 2",
         "SKU Code No": "SKU002",
         "SKU Name": "Sample SKU Name 2",
+        "Weight": "1kg",
         "Packed By": "Jane Smith",
         "Batch No": "101",
         "Shift": "Night",
@@ -380,6 +382,7 @@ router.get("/download-products-template", (req, res) => {
         "Product Name": "Sample Product 3",
         "SKU Code No": "SKU003",
         "SKU Name": "Sample SKU Name 3",
+        "Weight": "250g",
         "Packed By": "Bob Johnson",
         "Batch No": "102",
         "Shift": "Day",
@@ -398,6 +401,7 @@ router.get("/download-products-template", (req, res) => {
       { wch: 30 }, // Product Name
       { wch: 15 }, // SKU Code No
       { wch: 25 }, // SKU Name
+      { wch: 12 }, // Weight
       { wch: 20 }, // Packed By
       { wch: 12 }, // Batch No
       { wch: 12 }, // Shift

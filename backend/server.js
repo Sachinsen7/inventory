@@ -222,6 +222,7 @@ const barcodeSchema = new mongoose.Schema({
   mixer: String,
   skuc: String,
   skun: String,
+  weight: String,
   batchNumbers: [Number],
 });
 
@@ -1087,6 +1088,7 @@ app.post(
     "mixer",
     "skuc",
     "skun",
+    "weight",
     "batchNumbers",
   ]),
   [
@@ -1103,6 +1105,7 @@ app.post(
     body("mixer").optional().isString().trim(),
     body("skuc").optional().isString().trim(),
     body("skun").optional().isString().trim(),
+    body("weight").optional().isString().trim(),
     body("batchNumbers").optional().isArray(),
   ],
   validators.handleValidationErrors,

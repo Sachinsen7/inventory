@@ -14,6 +14,8 @@ const ItemCountSummary = () => {
   });
   const [loading, setLoading] = useState(true);
   const [showAllGodowns, setShowAllGodowns] = useState(false);
+  const [viewMode, setViewMode] = useState('all'); // 'all', 'factory', 'godowns', 'transit'
+  const [expandedRows, setExpandedRows] = useState(new Set());
 
   // Backend URL from environment variable
   const backendUrl =
@@ -84,6 +86,31 @@ const ItemCountSummary = () => {
 
   // Determine which godowns to show based on toggle
   const visibleGodowns = showAllGodowns ? godownNames : activeGodowns;
+
+  // Toggle row expansion
+  const toggleRow = (index) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  // Filter inventory based on view mode
+  const filteredInventory = useMemo(() => {
+    if (viewMode === 'factory') {
+      return inventory.filter(item => (item.factoryInventory || 0) > 0);
+    } else if (viewMode === 'transit') {
+      return inventory.filter(item => (item.inTransit || 0) > 0);
+    } else if (viewMode === 'godowns') {
+      return inventory.filter(item => {
+        return godownNames.some(godown => (item.godowns[godown] || 0) > 0);
+      });
+    }
+    return inventory;
+  }, [inventory, viewMode, godownNames]);
 
   const styles = {
     container: {
@@ -219,6 +246,67 @@ const ItemCountSummary = () => {
       transform: "translateY(-2px)",
       boxShadow: "0 6px 12px rgba(0,0,0,0.2)",
     },
+    viewModeContainer: {
+      display: "flex",
+      gap: "10px",
+      marginBottom: "20px",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      padding: "15px",
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      borderRadius: "15px",
+    },
+    viewModeButton: {
+      padding: "10px 20px",
+      borderRadius: "25px",
+      border: "2px solid white",
+      backgroundColor: "transparent",
+      color: "white",
+      cursor: "pointer",
+      fontSize: "14px",
+      fontWeight: "bold",
+      transition: "all 0.3s ease",
+    },
+    viewModeButtonActive: {
+      backgroundColor: "white",
+      color: "#333",
+      transform: "scale(1.05)",
+    },
+    expandButton: {
+      cursor: "pointer",
+      fontSize: "18px",
+      userSelect: "none",
+    },
+    detailsRow: {
+      backgroundColor: "#f8f9fa",
+    },
+    detailsCell: {
+      padding: "20px",
+      textAlign: "left",
+    },
+    detailsGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+      gap: "15px",
+    },
+    detailCard: {
+      backgroundColor: "white",
+      padding: "15px",
+      borderRadius: "10px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+    },
+    detailLabel: {
+      fontSize: "12px",
+      color: "#666",
+      marginBottom: "5px",
+      textTransform: "uppercase",
+      fontWeight: "bold",
+    },
+    detailValue: {
+      fontSize: "20px",
+      fontWeight: "bold",
+      color: "#333",
+    },
     loadingText: {
       fontSize: "24px",
       color: "white",
@@ -270,6 +358,46 @@ const ItemCountSummary = () => {
           <div style={styles.cardTitle}>In Transit</div>
           <div style={styles.cardValue}>{summary.totalInTransit}</div>
         </div>
+      </div>
+
+      {/* View Mode Selector */}
+      <div style={styles.viewModeContainer}>
+        <button
+          style={{
+            ...styles.viewModeButton,
+            ...(viewMode === 'all' ? styles.viewModeButtonActive : {}),
+          }}
+          onClick={() => setViewMode('all')}
+        >
+          📊 All Inventory
+        </button>
+        <button
+          style={{
+            ...styles.viewModeButton,
+            ...(viewMode === 'factory' ? styles.viewModeButtonActive : {}),
+          }}
+          onClick={() => setViewMode('factory')}
+        >
+          🏭 Factory Only ({summary.totalFactory})
+        </button>
+        <button
+          style={{
+            ...styles.viewModeButton,
+            ...(viewMode === 'godowns' ? styles.viewModeButtonActive : {}),
+          }}
+          onClick={() => setViewMode('godowns')}
+        >
+          🏢 Godowns Only
+        </button>
+        <button
+          style={{
+            ...styles.viewModeButton,
+            ...(viewMode === 'transit' ? styles.viewModeButtonActive : {}),
+          }}
+          onClick={() => setViewMode('transit')}
+        >
+          🚚 In Transit ({summary.totalInTransit})
+        </button>
       </div>
 
       {/* Buttons */}
@@ -356,61 +484,105 @@ const ItemCountSummary = () => {
             </tr>
           </thead>
           <tbody>
-            {inventory.length === 0 ? (
+            {filteredInventory.length === 0 ? (
               <tr>
                 <td
                   colSpan={5 + visibleGodowns.length}
                   style={{ ...styles.td, padding: "40px", fontStyle: "italic", color: "#666" }}
                 >
-                  No inventory data available. Please add items to the system.
+                  {viewMode === 'factory' && "No items in factory inventory"}
+                  {viewMode === 'transit' && "No items in transit"}
+                  {viewMode === 'godowns' && "No items in godowns"}
+                  {viewMode === 'all' && "No inventory data available. Please add items to the system."}
                 </td>
               </tr>
             ) : (
-              inventory.map((item, index) => (
-                <tr
-                  key={index}
-                  style={styles.tr}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#f1f2f6")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "transparent")
-                  }
-                >
-                  <td style={styles.td}>{index + 1}</td>
-                  <td style={{ ...styles.td, textAlign: "left", paddingLeft: "20px", fontWeight: "600" }}>
-                    {item.itemName}
-                  </td>
-                  <td style={styles.td}>
-                    <span style={item.totalQuantity > 0 ? styles.positiveValue : styles.zeroValue}>
-                      {item.totalQuantity}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, backgroundColor: "rgba(52, 73, 94, 0.05)" }}>
-                    <span style={(item.factoryInventory || 0) > 0 ? styles.positiveValue : styles.zeroValue}>
-                      {item.factoryInventory || 0}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, backgroundColor: "rgba(52, 73, 94, 0.05)" }}>
-                    <span style={(item.inTransit || 0) > 0 ? styles.positiveValue : styles.zeroValue}>
-                      {item.inTransit || 0}
-                    </span>
-                  </td>
-                  {visibleGodowns.map((godownName, gIndex) => {
-                    const qty = item.godowns[godownName] || 0;
-                    return (
-                      <td key={gIndex} style={styles.td}>
-                        <span style={qty > 0 ? styles.positiveValue : styles.zeroValue}>
-                          {qty}
-                        </span>
+              filteredInventory.map((item, index) => (
+                <React.Fragment key={index}>
+                  <tr
+                    style={styles.tr}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#f1f2f6")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "transparent")
+                    }
+                  >
+                    <td style={styles.td}>
+                      <span
+                        style={styles.expandButton}
+                        onClick={() => toggleRow(index)}
+                      >
+                        {expandedRows.has(index) ? "▼" : "▶"}
+                      </span>
+                      {" "}{index + 1}
+                    </td>
+                    <td style={{ ...styles.td, textAlign: "left", paddingLeft: "20px", fontWeight: "600" }}>
+                      {item.itemName}
+                    </td>
+                    <td style={styles.td}>
+                      <span style={item.totalQuantity > 0 ? styles.positiveValue : styles.zeroValue}>
+                        {item.totalQuantity}
+                      </span>
+                    </td>
+                    <td style={{ ...styles.td, backgroundColor: "rgba(52, 73, 94, 0.05)" }}>
+                      <span style={(item.factoryInventory || 0) > 0 ? styles.positiveValue : styles.zeroValue}>
+                        {item.factoryInventory || 0}
+                      </span>
+                    </td>
+                    <td style={{ ...styles.td, backgroundColor: "rgba(52, 73, 94, 0.05)" }}>
+                      <span style={(item.inTransit || 0) > 0 ? styles.positiveValue : styles.zeroValue}>
+                        {item.inTransit || 0}
+                      </span>
+                    </td>
+                    {visibleGodowns.map((godownName, gIndex) => {
+                      const qty = item.godowns[godownName] || 0;
+                      return (
+                        <td key={gIndex} style={styles.td}>
+                          <span style={qty > 0 ? styles.positiveValue : styles.zeroValue}>
+                            {qty}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {expandedRows.has(index) && (
+                    <tr style={styles.detailsRow}>
+                      <td colSpan={5 + visibleGodowns.length} style={styles.detailsCell}>
+                        <div style={styles.detailsGrid}>
+                          <div style={styles.detailCard}>
+                            <div style={styles.detailLabel}>🏭 Factory Inventory</div>
+                            <div style={styles.detailValue}>{item.factoryInventory || 0}</div>
+                          </div>
+                          <div style={styles.detailCard}>
+                            <div style={styles.detailLabel}>🚚 In Transit</div>
+                            <div style={styles.detailValue}>{item.inTransit || 0}</div>
+                          </div>
+                          <div style={styles.detailCard}>
+                            <div style={styles.detailLabel}>📦 Total Quantity</div>
+                            <div style={styles.detailValue}>{item.totalQuantity}</div>
+                          </div>
+                          {godownNames.map((godownName, gIdx) => {
+                            const qty = item.godowns[godownName] || 0;
+                            if (qty > 0) {
+                              return (
+                                <div key={gIdx} style={styles.detailCard}>
+                                  <div style={styles.detailLabel}>🏢 {godownName}</div>
+                                  <div style={styles.detailValue}>{qty}</div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
                       </td>
-                    );
-                  })}
-                </tr>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))
             )}
           </tbody>
-          {inventory.length > 0 && (
+          {filteredInventory.length > 0 && (
             <tfoot>
               <tr style={{ backgroundColor: "#ecf0f1", borderTop: "2px solid #bdc3c7" }}>
                 <td
@@ -423,26 +595,26 @@ const ItemCountSummary = () => {
                     paddingRight: "20px",
                   }}
                 >
-                  TOTALS:
+                  TOTALS ({viewMode === 'all' ? 'All' : viewMode === 'factory' ? 'Factory' : viewMode === 'transit' ? 'Transit' : 'Godowns'}):
                 </td>
                 <td style={{ ...styles.td, fontWeight: "bold", fontSize: "16px", color: "#27ae60" }}>
-                  {inventory.reduce((sum, item) => sum + item.totalQuantity, 0)}
+                  {filteredInventory.reduce((sum, item) => sum + item.totalQuantity, 0)}
                 </td>
                 <td style={{ ...styles.td, fontWeight: "bold" }}>
-                  {inventory.reduce(
+                  {filteredInventory.reduce(
                     (sum, item) => sum + (item.factoryInventory || 0),
                     0
                   )}
                 </td>
                 <td style={{ ...styles.td, fontWeight: "bold" }}>
-                  {inventory.reduce(
+                  {filteredInventory.reduce(
                     (sum, item) => sum + (item.inTransit || 0),
                     0
                   )}
                 </td>
                 {visibleGodowns.map((godownName, gIndex) => (
                   <td key={gIndex} style={{ ...styles.td, fontWeight: "bold" }}>
-                    {inventory.reduce(
+                    {filteredInventory.reduce(
                       (sum, item) => sum + (item.godowns[godownName] || 0),
                       0
                     )}

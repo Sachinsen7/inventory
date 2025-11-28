@@ -1,70 +1,35 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Barcode from "react-barcode";
 
 const ProductDetails = () => {
-    const { sku } = useParams();
-    const [searchParams] = useSearchParams();
-    const skuFromQuery = searchParams.get('sku');
-    const [product, setProduct] = useState(null);
+    const { barcode } = useParams();
+    const navigate = useNavigate();
+    const [productData, setProductData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
-    const actualSku = sku || skuFromQuery;
 
     useEffect(() => {
-        if (actualSku) {
-            fetchProductDetails(actualSku);
-        }
-    }, [actualSku]);
+        fetchProductDetails();
+    }, [barcode]);
 
-    const fetchProductDetails = async (skuCode) => {
+    const fetchProductDetails = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${backendUrl}/api/barcodes`);
+            const response = await axios.get(`${backendUrl}/api/product-details/${barcode}`);
 
-            // Find the product that contains this SKU in its batch numbers
-            let foundProduct = null;
-
-            response.data.forEach((barcode) => {
-                if (barcode.batchNumbers && Array.isArray(barcode.batchNumbers)) {
-                    barcode.batchNumbers.forEach((bn) => {
-                        if (barcode.skuc && bn) {
-                            const fullSkuCode = String(barcode.skuc) + String(bn);
-                            if (fullSkuCode === skuCode) {
-                                foundProduct = {
-                                    sku: fullSkuCode,
-                                    product: barcode.product || "Unknown Product",
-                                    skuName: barcode.skun || "",
-                                    packed: barcode.packed || "",
-                                    batch: barcode.batch || "",
-                                    weight: barcode.weight || "",
-                                    shift: barcode.shift || "",
-                                    location: barcode.location || "",
-                                    currentTime: barcode.currentTime || "",
-                                    rewinder: barcode.rewinder || "",
-                                    edge: barcode.edge || "",
-                                    winder: barcode.winder || "",
-                                    mixer: barcode.mixer || "",
-                                };
-                            }
-                        }
-                    });
-                }
-            });
-
-            if (foundProduct) {
-                setProduct(foundProduct);
-                setError(null);
+            if (response.data.success) {
+                setProductData(response.data.data);
             } else {
                 setError("Product not found");
             }
-            setLoading(false);
-        } catch (err) {
-            console.error("Error fetching product:", err);
+        } catch (error) {
+            console.error("Error fetching product details:", error);
             setError("Error loading product details");
+        } finally {
             setLoading(false);
         }
     };
@@ -73,171 +38,30 @@ const ProductDetails = () => {
         window.print();
     };
 
-    const styles = {
-        container: {
-            minHeight: "100vh",
-            background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
-            backgroundSize: "400% 400%",
-            animation: "gradientAnimation 12s ease infinite",
-            padding: "20px",
-            fontFamily: "'Roboto', sans-serif",
-        },
-        card: {
-            backgroundColor: "white",
-            borderRadius: "20px",
-            padding: "30px",
-            maxWidth: "800px",
-            margin: "0 auto",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-        },
-        header: {
-            textAlign: "center",
-            marginBottom: "30px",
-            borderBottom: "3px solid #4CAF50",
-            paddingBottom: "20px",
-        },
-        title: {
-            color: "#4CAF50",
-            fontSize: "32px",
-            fontWeight: "bold",
-            margin: "0 0 10px 0",
-        },
-        subtitle: {
-            color: "#666",
-            fontSize: "16px",
-            margin: 0,
-        },
-        barcodeSection: {
-            textAlign: "center",
-            margin: "30px 0",
-            padding: "20px",
-            background: "#f5f5f5",
-            borderRadius: "12px",
-        },
-        detailsGrid: {
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: "12px",
-            margin: "20px 0",
-        },
-        detailRow: {
-            padding: "15px",
-            background: "#f9f9f9",
-            borderLeft: "4px solid #4CAF50",
-            borderRadius: "8px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-        },
-        detailLabel: {
-            fontWeight: "bold",
-            color: "#4CAF50",
-            fontSize: "16px",
-            minWidth: "140px",
-        },
-        detailValue: {
-            color: "#333",
-            fontSize: "18px",
-            fontWeight: "600",
-            flex: 1,
-            textAlign: "right",
-        },
-        buttonContainer: {
-            display: "flex",
-            gap: "15px",
-            justifyContent: "center",
-            marginTop: "30px",
-            flexWrap: "wrap",
-        },
-        button: {
-            padding: "15px 30px",
-            fontSize: "18px",
-            fontWeight: "bold",
-            border: "none",
-            borderRadius: "12px",
-            cursor: "pointer",
-            transition: "all 0.3s ease",
-            minWidth: "150px",
-        },
-        printButton: {
-            background: "linear-gradient(135deg, #4CAF50 0%, #45a049 100%)",
-            color: "white",
-        },
-        backButton: {
-            background: "linear-gradient(135deg, #9900ef 0%, #7700cc 100%)",
-            color: "white",
-        },
-        loading: {
-            textAlign: "center",
-            padding: "50px",
-            fontSize: "24px",
-            color: "#666",
-        },
-        error: {
-            textAlign: "center",
-            padding: "50px",
-            fontSize: "20px",
-            color: "#f44336",
-        },
-    };
-
-    const globalStyles = `
-    @keyframes gradientAnimation {
-      0% { background-position: 0% 50%; }
-      25% { background-position: 50% 100%; }
-      50% { background-position: 100% 50%; }
-      75% { background-position: 50% 0%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    @media print {
-      body { background: white !important; }
-      .no-print { display: none !important; }
-    }
-
-    @media (max-width: 768px) {
-      .detail-row {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-      }
-      .detail-label {
-        margin-bottom: 8px !important;
-      }
-      .detail-value {
-        text-align: left !important;
-        font-size: 20px !important;
-      }
-    }
-  `;
-
     if (loading) {
         return (
             <div style={styles.container}>
-                <style>{globalStyles}</style>
-                <div style={styles.card}>
-                    <div style={styles.loading}>
-                        <div style={{ fontSize: "48px", marginBottom: "20px" }}>⏳</div>
-                        Loading product details...
-                    </div>
+                <div style={styles.loadingCard}>
+                    <div style={styles.spinner}></div>
+                    <p style={styles.loadingText}>Loading product details...</p>
                 </div>
             </div>
         );
     }
 
-    if (error || !product) {
+    if (error || !productData) {
         return (
             <div style={styles.container}>
-                <style>{globalStyles}</style>
-                <div style={styles.card}>
-                    <div style={styles.error}>
-                        <div style={{ fontSize: "48px", marginBottom: "20px" }}>❌</div>
-                        {error || "Product not found"}
-                        <div style={{ marginTop: "20px" }}>
-                            <p style={{ fontSize: "16px", color: "#666" }}>
-                                SKU Code: {actualSku}
-                            </p>
-                        </div>
-                    </div>
+                <div style={styles.errorCard}>
+                    <div style={styles.errorIcon}>❌</div>
+                    <h2 style={styles.errorTitle}>Product Not Found</h2>
+                    <p style={styles.errorText}>
+                        {error || "The barcode you scanned doesn't exist in our system."}
+                    </p>
+                    <p style={styles.barcodeText}>Barcode: {barcode}</p>
+                    <button onClick={() => navigate("/")} style={styles.homeButton}>
+                        Go to Home
+                    </button>
                 </div>
             </div>
         );
@@ -246,138 +70,286 @@ const ProductDetails = () => {
     return (
         <div style={styles.container}>
             <style>{globalStyles}</style>
+
             <div style={styles.card}>
+                {/* Header */}
                 <div style={styles.header}>
                     <h1 style={styles.title}>📦 Product Details</h1>
-                    <p style={styles.subtitle}>Complete Product Information</p>
+                    <p style={styles.subtitle}>Scanned at: {new Date().toLocaleString()}</p>
                 </div>
 
+                {/* Barcode Display */}
                 <div style={styles.barcodeSection}>
-                    <h2 style={{ margin: "0 0 15px 0", color: "#333", fontSize: "24px" }}>
-                        {product.product}
-                    </h2>
                     <Barcode
-                        value={product.sku}
+                        value={barcode}
                         width={2}
                         height={80}
-                        fontSize={20}
+                        fontSize={18}
                         margin={10}
                     />
                 </div>
 
+                {/* Product Information */}
                 <div style={styles.detailsGrid}>
-                    <div style={styles.detailRow} className="detail-row">
-                        <span style={styles.detailLabel} className="detail-label">🏷️ SKU Code</span>
-                        <span style={styles.detailValue} className="detail-value">{product.sku}</span>
-                    </div>
-
-                    {product.skuName && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">📦 SKU Name</span>
-                            <span style={styles.detailValue} className="detail-value">{product.skuName}</span>
-                        </div>
-                    )}
-
-                    {product.weight && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">⚖️ Weight</span>
-                            <span style={styles.detailValue} className="detail-value">{product.weight}</span>
-                        </div>
-                    )}
-
-                    {product.packed && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">👤 Packed By</span>
-                            <span style={styles.detailValue} className="detail-value">{product.packed}</span>
-                        </div>
-                    )}
-
-                    {product.batch && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">🔢 Batch No</span>
-                            <span style={styles.detailValue} className="detail-value">{product.batch}</span>
-                        </div>
-                    )}
-
-                    {product.shift && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">🌓 Shift</span>
-                            <span style={styles.detailValue} className="detail-value">{product.shift}</span>
-                        </div>
-                    )}
-
-                    {product.location && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">📍 Location</span>
-                            <span style={styles.detailValue} className="detail-value">{product.location}</span>
-                        </div>
-                    )}
-
-                    {product.currentTime && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">📅 Packing Date</span>
-                            <span style={styles.detailValue} className="detail-value">{product.currentTime}</span>
-                        </div>
-                    )}
-
-                    {product.rewinder && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">👷 Rewinder</span>
-                            <span style={styles.detailValue} className="detail-value">{product.rewinder}</span>
-                        </div>
-                    )}
-
-                    {product.edge && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">✂️ Edge Cut</span>
-                            <span style={styles.detailValue} className="detail-value">{product.edge}</span>
-                        </div>
-                    )}
-
-                    {product.winder && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">🔄 Winder</span>
-                            <span style={styles.detailValue} className="detail-value">{product.winder}</span>
-                        </div>
-                    )}
-
-                    {product.mixer && (
-                        <div style={styles.detailRow} className="detail-row">
-                            <span style={styles.detailLabel} className="detail-label">🥣 Mixer</span>
-                            <span style={styles.detailValue} className="detail-value">{product.mixer}</span>
-                        </div>
-                    )}
+                    <DetailRow icon="🏷️" label="Product Name" value={productData.product} />
+                    <DetailRow icon="📦" label="SKU Code" value={barcode} />
+                    <DetailRow icon="📝" label="SKU Name" value={productData.skuName} />
+                    <DetailRow icon="⚖️" label="Weight" value={productData.weight} />
+                    <DetailRow icon="👤" label="Packed By" value={productData.packed} />
+                    <DetailRow icon="🔢" label="Batch No" value={productData.batch} />
+                    <DetailRow icon="🌓" label="Shift" value={productData.shift} />
+                    <DetailRow icon="📍" label="Location" value={productData.location} />
+                    <DetailRow icon="📅" label="Packing Date" value={productData.currentTime} />
+                    <DetailRow icon="👷" label="Rewinder Operator" value={productData.rewinder} />
+                    <DetailRow icon="✂️" label="Edge Cut Operator" value={productData.edge} />
+                    <DetailRow icon="🔄" label="Winder Operator" value={productData.winder} />
+                    <DetailRow icon="🥣" label="Mixer Operator" value={productData.mixer} />
                 </div>
 
-                <div style={styles.buttonContainer} className="no-print">
-                    <button
-                        style={{ ...styles.button, ...styles.printButton }}
-                        onClick={handlePrint}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = "scale(1.05)";
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = "scale(1)";
-                        }}
-                    >
-                        🖨️ Print
+                {/* Action Buttons */}
+                <div style={styles.buttonContainer}>
+                    <button onClick={handlePrint} style={styles.printButton} className="no-print">
+                        🖨️ Print Details
                     </button>
-                    <button
-                        style={{ ...styles.button, ...styles.backButton }}
-                        onClick={() => window.history.back()}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = "scale(1.05)";
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = "scale(1)";
-                        }}
-                    >
-                        ← Back
+                    <button onClick={() => navigate("/")} style={styles.homeButton} className="no-print">
+                        🏠 Go to Home
                     </button>
+                </div>
+
+                {/* Footer */}
+                <div style={styles.footer} className="no-print">
+                    <p>Generated by Inventory Management System</p>
                 </div>
             </div>
         </div>
     );
 };
+
+const DetailRow = ({ icon, label, value }) => {
+    if (!value || value === "N/A" || value === "") return null;
+
+    return (
+        <div style={styles.detailRow}>
+            <div style={styles.detailLabel}>
+                <span style={styles.icon}>{icon}</span>
+                {label}
+            </div>
+            <div style={styles.detailValue}>{value}</div>
+        </div>
+    );
+};
+
+const styles = {
+    container: {
+        minHeight: "100vh",
+        background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
+        backgroundSize: "400% 400%",
+        animation: "gradientAnimation 12s ease infinite",
+        padding: "20px",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "'Roboto', sans-serif",
+    },
+    card: {
+        backgroundColor: "rgba(255, 255, 255, 0.98)",
+        borderRadius: "20px",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+        maxWidth: "800px",
+        width: "100%",
+        padding: "30px",
+        margin: "20px",
+    },
+    header: {
+        textAlign: "center",
+        marginBottom: "30px",
+        borderBottom: "3px solid #4CAF50",
+        paddingBottom: "20px",
+    },
+    title: {
+        color: "#4CAF50",
+        margin: "0 0 10px 0",
+        fontSize: "32px",
+        fontWeight: "bold",
+    },
+    subtitle: {
+        color: "#666",
+        margin: "0",
+        fontSize: "16px",
+    },
+    barcodeSection: {
+        textAlign: "center",
+        margin: "30px 0",
+        padding: "20px",
+        backgroundColor: "#f5f5f5",
+        borderRadius: "12px",
+        border: "2px dashed #4CAF50",
+    },
+    detailsGrid: {
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gap: "12px",
+        marginBottom: "30px",
+    },
+    detailRow: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "15px",
+        backgroundColor: "#f9f9f9",
+        borderRadius: "10px",
+        borderLeft: "4px solid #4CAF50",
+        transition: "all 0.3s ease",
+    },
+    detailLabel: {
+        fontWeight: "bold",
+        color: "#555",
+        fontSize: "16px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    icon: {
+        fontSize: "20px",
+    },
+    detailValue: {
+        color: "#333",
+        fontSize: "16px",
+        fontWeight: "600",
+        textAlign: "right",
+        maxWidth: "60%",
+        wordBreak: "break-word",
+    },
+    buttonContainer: {
+        display: "flex",
+        gap: "15px",
+        justifyContent: "center",
+        flexWrap: "wrap",
+        marginTop: "30px",
+    },
+    printButton: {
+        padding: "15px 30px",
+        backgroundColor: "#4CAF50",
+        color: "white",
+        border: "none",
+        borderRadius: "10px",
+        fontSize: "18px",
+        fontWeight: "bold",
+        cursor: "pointer",
+        transition: "all 0.3s ease",
+        boxShadow: "0 4px 12px rgba(76, 175, 80, 0.3)",
+    },
+    homeButton: {
+        padding: "15px 30px",
+        backgroundColor: "#2196F3",
+        color: "white",
+        border: "none",
+        borderRadius: "10px",
+        fontSize: "18px",
+        fontWeight: "bold",
+        cursor: "pointer",
+        transition: "all 0.3s ease",
+        boxShadow: "0 4px 12px rgba(33, 150, 243, 0.3)",
+    },
+    footer: {
+        marginTop: "40px",
+        textAlign: "center",
+        color: "#999",
+        fontSize: "14px",
+        borderTop: "1px solid #ddd",
+        paddingTop: "20px",
+    },
+    loadingCard: {
+        backgroundColor: "white",
+        padding: "60px",
+        borderRadius: "20px",
+        textAlign: "center",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+    },
+    spinner: {
+        width: "60px",
+        height: "60px",
+        border: "6px solid #f3f3f3",
+        borderTop: "6px solid #4CAF50",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+        margin: "0 auto 20px",
+    },
+    loadingText: {
+        fontSize: "18px",
+        color: "#666",
+    },
+    errorCard: {
+        backgroundColor: "white",
+        padding: "60px",
+        borderRadius: "20px",
+        textAlign: "center",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+        maxWidth: "500px",
+    },
+    errorIcon: {
+        fontSize: "64px",
+        marginBottom: "20px",
+    },
+    errorTitle: {
+        color: "#f44336",
+        fontSize: "28px",
+        marginBottom: "15px",
+    },
+    errorText: {
+        color: "#666",
+        fontSize: "16px",
+        marginBottom: "10px",
+        lineHeight: "1.6",
+    },
+    barcodeText: {
+        color: "#999",
+        fontSize: "14px",
+        fontFamily: "monospace",
+        marginTop: "20px",
+    },
+};
+
+const globalStyles = `
+  @keyframes gradientAnimation {
+    0% { background-position: 0% 50%; }
+    25% { background-position: 50% 100%; }
+    50% { background-position: 100% 50%; }
+    75% { background-position: 50% 0%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .no-print {
+    display: block;
+  }
+
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    body {
+      background: white !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .detailRow {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+    
+    .detailValue {
+      max-width: 100% !important;
+      text-align: left !important;
+    }
+  }
+`;
 
 export default ProductDetails;

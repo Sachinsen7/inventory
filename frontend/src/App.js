@@ -101,7 +101,7 @@ const App = () => {
         />
         <Route path="/customer/:id" element={<CustomerDetails />} />
         <Route path="/all-products" element={<AllProductsPage />} />
-        <Route path="/product/:sku" element={<ProductDetails />} />
+        <Route path="/product/:barcode" element={<ProductDetails />} />
         <Route path="/product" element={<ProductDetails />} />
       </Routes>
     </Router>

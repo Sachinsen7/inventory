@@ -306,6 +306,66 @@ app.get("/api/barcodes", async (req, res) => {
   }
 });
 
+// API: Get product details by barcode number
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    logger.info("Fetching product details for barcode:", barcode);
+
+    // Find the barcode in the database
+    // The barcode format is: skuc + batchNumber (e.g., "SKU0011" = "SKU001" + "1")
+    const allBarcodes = await Barcode.find();
+
+    let foundProduct = null;
+
+    for (const barcodeDoc of allBarcodes) {
+      if (barcodeDoc.batchNumbers && Array.isArray(barcodeDoc.batchNumbers)) {
+        for (const bn of barcodeDoc.batchNumbers) {
+          const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+          if (fullBarcode === barcode) {
+            foundProduct = {
+              product: barcodeDoc.product || "Unknown Product",
+              skuName: barcodeDoc.skun || "",
+              packed: barcodeDoc.packed || "",
+              batch: barcodeDoc.batch || "",
+              weight: barcodeDoc.weight || "",
+              shift: barcodeDoc.shift || "",
+              location: barcodeDoc.location || "",
+              currentTime: barcodeDoc.currentTime || "",
+              rewinder: barcodeDoc.rewinder || "",
+              edge: barcodeDoc.edge || "",
+              winder: barcodeDoc.winder || "",
+              mixer: barcodeDoc.mixer || "",
+              skuc: barcodeDoc.skuc || "",
+              barcodeNumber: fullBarcode,
+            };
+            break;
+          }
+        }
+      }
+      if (foundProduct) break;
+    }
+
+    if (foundProduct) {
+      res.json({
+        success: true,
+        data: foundProduct,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details",
+    });
+  }
+});
+
 // Godown API
 app.get("/api/godowns", async (req, res) => {
   try {
@@ -939,6 +999,74 @@ app.post(
   }
 );
 
+// API: Get product details by barcode
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+
+    // Find the barcode in the database
+    const barcodeData = await Barcode.findOne({
+      $expr: {
+        $and: [
+          { $ne: ["$skuc", null] },
+          { $ne: ["$skuc", ""] },
+          {
+            $in: [
+              {
+                $toInt: {
+                  $substr: [
+                    barcode,
+                    { $strLenCP: "$skuc" },
+                    { $subtract: [{ $strLenCP: barcode }, { $strLenCP: "$skuc" }] }
+                  ]
+                }
+              },
+              "$batchNumbers"
+            ]
+          },
+          {
+            $eq: [
+              { $substr: [barcode, 0, { $strLenCP: "$skuc" }] },
+              "$skuc"
+            ]
+          }
+        ]
+      }
+    });
+
+    if (!barcodeData) {
+      return res.json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        product: barcodeData.product || "N/A",
+        skuName: barcodeData.skun || "N/A",
+        weight: barcodeData.weight || "N/A",
+        packed: barcodeData.packed || "N/A",
+        batch: barcodeData.batch || "N/A",
+        shift: barcodeData.shift || "N/A",
+        location: barcodeData.location || "N/A",
+        currentTime: barcodeData.currentTime || "N/A",
+        rewinder: barcodeData.rewinder || "N/A",
+        edge: barcodeData.edge || "N/A",
+        winder: barcodeData.winder || "N/A",
+        mixer: barcodeData.mixer || "N/A",
+      }
+    });
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details"
+    });
+  }
+});
+
 // API: Get All Select Options
 app.get("/api/products1", async (req, res) => {
   try {
@@ -1120,6 +1248,66 @@ app.post(
     }
   }
 );
+
+// API: Get product details by barcode
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    logger.info("Fetching product details for barcode:", barcode);
+
+    // Get all barcodes and search through them
+    const allBarcodes = await Barcode.find();
+
+    let foundProduct = null;
+
+    for (const barcodeData of allBarcodes) {
+      if (barcodeData.skuc && barcodeData.batchNumbers && Array.isArray(barcodeData.batchNumbers)) {
+        // Check if the scanned barcode matches any of the generated barcodes
+        for (const batchNum of barcodeData.batchNumbers) {
+          const fullBarcode = String(barcodeData.skuc) + String(batchNum);
+          if (fullBarcode === barcode) {
+            foundProduct = barcodeData;
+            break;
+          }
+        }
+      }
+      if (foundProduct) break;
+    }
+
+    if (!foundProduct) {
+      logger.warn("Product not found for barcode:", barcode);
+      return res.json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    logger.info("Product found:", foundProduct.product);
+    res.json({
+      success: true,
+      data: {
+        product: foundProduct.product || "N/A",
+        skuName: foundProduct.skun || "N/A",
+        weight: foundProduct.weight || "N/A",
+        packed: foundProduct.packed || "N/A",
+        batch: foundProduct.batch || "N/A",
+        shift: foundProduct.shift || "N/A",
+        location: foundProduct.location || "N/A",
+        currentTime: foundProduct.currentTime || "N/A",
+        rewinder: foundProduct.rewinder || "N/A",
+        edge: foundProduct.edge || "N/A",
+        winder: foundProduct.winder || "N/A",
+        mixer: foundProduct.mixer || "N/A",
+      }
+    });
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details"
+    });
+  }
+});
 
 // API: Get All Despatch Options
 app.get("/api/products2", async (req, res) => {

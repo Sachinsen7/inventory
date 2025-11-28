@@ -257,18 +257,7 @@ const Dashboard = () => {
                 >
                   � Produtcts Template
                 </button>
-                <button
-                  onClick={() => handleDownloadTemplate("inventory")}
-                  style={styles.templateButton}
-                >
-                  � Inventgory Template
-                </button>
-                <button
-                  onClick={() => handleDownloadTemplate("billing")}
-                  style={styles.templateButton}
-                >
-                  📄 Billing Items Template
-                </button>
+
               </div>
             </div>
 

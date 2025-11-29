@@ -1186,18 +1186,8 @@ const QRCreater = () => {
 
           <div style={styles.fullWidth}>
             <div style={styles.buttonGroup}>
-              <button
-                className="styled-button"
-                onClick={() => {
-                  handleSaveToDatabase();
-                }}
-              >
-                💾 Add to Database
-              </button>
-
-
               <button className="styled-button" onClick={handlePrint}>
-                🖨️ Print Final Barcode
+                🖨️ Print Final Barcode Summary
               </button>
             </div>
           </div>

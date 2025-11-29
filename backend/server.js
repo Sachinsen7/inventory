@@ -1550,7 +1550,7 @@ app.post(
       // Delete from `delevery1` collection after adding to `dsale`
       await Delevery1.deleteOne({ _id: existingData._id });
 
-      res.json({ message: "Data saved in dsale and deleted from delevery1" });
+      res.json({ message: "Data saved in dsale and deleted from deleverxy1" });
     } catch (error) {
       logger.error("Error saving to delevery1/dsale:", error);
       res.status(500).json({ message: "Error saving data" });

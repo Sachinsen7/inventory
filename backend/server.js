@@ -224,6 +224,9 @@ const barcodeSchema = new mongoose.Schema({
   skun: String,
   weight: String,
   batchNumbers: [Number],
+  barcodeWeights: { type: Map, of: String }, // Store individual barcode weights as key-value pairs
+  is_scanned: { type: Boolean, default: false }, // Track if barcode has been scanned
+  scanned_at: { type: Date }, // Track when barcode was scanned
 });
 
 // Create Model
@@ -298,7 +301,26 @@ const Dsale = mongoose.model("Dsale", dsaleSchema, "dsale");
 
 app.get("/api/barcodes", async (req, res) => {
   try {
-    const barcodes = await Barcode.find();
+    // Check if filtering by is_scanned status
+    const { is_scanned } = req.query;
+
+    let query = {};
+    if (is_scanned !== undefined) {
+      const isScannedBool = is_scanned === 'true' || is_scanned === true;
+
+      if (isScannedBool) {
+        // Only return barcodes that are explicitly marked as scanned
+        query.is_scanned = true;
+      } else {
+        // Return barcodes that are either false OR don't have the field (legacy data)
+        query.$or = [
+          { is_scanned: false },
+          { is_scanned: { $exists: false } }
+        ];
+      }
+    }
+
+    const barcodes = await Barcode.find(query);
     res.json(barcodes);
   } catch (error) {
     logger.error("Error fetching barcodes:", error);
@@ -972,6 +994,34 @@ app.post(
       const { inputValue } = req.body;
       const newEntry = new Select({ inputValue });
       await newEntry.save();
+
+      // Mark the barcode as scanned in the Barcode collection
+      // Find the barcode that contains this scanned value in its batchNumbers
+      const allBarcodes = await Barcode.find();
+      for (const barcodeDoc of allBarcodes) {
+        if (barcodeDoc.batchNumbers && barcodeDoc.skuc) {
+          const matchingBatchNumber = barcodeDoc.batchNumbers.find(bn => {
+            const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+            return fullBarcode === inputValue;
+          });
+
+          if (matchingBatchNumber) {
+            // Mark this barcode document as scanned
+            await Barcode.updateOne(
+              { _id: barcodeDoc._id },
+              {
+                $set: {
+                  is_scanned: true,
+                  scanned_at: new Date()
+                }
+              }
+            );
+            logger.info(`Marked barcode ${inputValue} as scanned`);
+            break;
+          }
+        }
+      }
+
       res.json({ message: "Data saved successfully" });
     } catch (error) {
       logger.error("Error saving data:", error);
@@ -1218,6 +1268,7 @@ app.post(
     "skun",
     "weight",
     "batchNumbers",
+    "barcodeWeights",
   ]),
   [
     body("product").optional().isString().trim(),
@@ -1235,6 +1286,7 @@ app.post(
     body("skun").optional().isString().trim(),
     body("weight").optional().isString().trim(),
     body("batchNumbers").optional().isArray(),
+    body("barcodeWeights").optional().isObject(),
   ],
   validators.handleValidationErrors,
   async (req, res) => {

@@ -20,11 +20,31 @@ const QRCreater = () => {
   const [mixer, setMixer] = useState("");
   const [skuc, setSku] = useState("");
   const [skun, setSKU] = useState("");
-  const [weight, setWeight] = useState("");
   const [barcodeNumbers, setBarcodeNumbers] = useState([]);
+  const [barcodeWeights, setBarcodeWeights] = useState({}); // Store weight for each barcode
   const [isDownloading, setIsDownloading] = useState(false);
   const [excelData, setExcelData] = useState([]); // To store parsed Excel data
   const [productSuggestions, setProductSuggestions] = useState([]); // For autocomplete
+
+  // Get unique operator names from Excel data
+  const [operatorOptions, setOperatorOptions] = useState({
+    rewinder: [],
+    edgeCut: [],
+    winder: [],
+    mixer: [],
+    packedBy: [],
+    batchNo: [],
+    shift: []
+  });
+
+  // State for "Other" option handling
+  const [showRewinderOther, setShowRewinderOther] = useState(false);
+  const [showEdgeOther, setShowEdgeOther] = useState(false);
+  const [showWinderOther, setShowWinderOther] = useState(false);
+  const [showMixerOther, setShowMixerOther] = useState(false);
+  const [showPackedOther, setShowPackedOther] = useState(false);
+  const [showBatchOther, setShowBatchOther] = useState(false);
+  const [showShiftOther, setShowShiftOther] = useState(false);
 
   // Fetch location using OpenCage API or reverse geolocation API
   const fetchLocation = async (lat, long) => {
@@ -141,7 +161,36 @@ const QRCreater = () => {
               mixerOperator: row[10],
             }));
             setExcelData(products);
+
+            // Extract unique operator names for dropdowns
+            const uniqueRewinder = [...new Set(products.map(p => p.rewinderOperator).filter(Boolean))];
+            const uniqueEdgeCut = [...new Set(products.map(p => p.edgeCutOperator).filter(Boolean))];
+            const uniqueWinder = [...new Set(products.map(p => p.winderOperator).filter(Boolean))];
+            const uniqueMixer = [...new Set(products.map(p => p.mixerOperator).filter(Boolean))];
+            const uniquePackedBy = [...new Set(products.map(p => p.packedBy).filter(Boolean))];
+            const uniqueBatchNo = [...new Set(products.map(p => p.batchNo).filter(Boolean))];
+            const uniqueShift = [...new Set(products.map(p => p.shift).filter(Boolean))];
+
+            setOperatorOptions({
+              rewinder: uniqueRewinder,
+              edgeCut: uniqueEdgeCut,
+              winder: uniqueWinder,
+              mixer: uniqueMixer,
+              packedBy: uniquePackedBy,
+              batchNo: uniqueBatchNo,
+              shift: uniqueShift
+            });
+
             console.log("Loaded Excel Data:", products); // Debug log
+            console.log("Operator Options:", {
+              rewinder: uniqueRewinder,
+              edgeCut: uniqueEdgeCut,
+              winder: uniqueWinder,
+              mixer: uniqueMixer,
+              packedBy: uniquePackedBy,
+              batchNo: uniqueBatchNo,
+              shift: uniqueShift
+            });
           } catch (parseError) {
             console.error("Error parsing Excel file:", parseError);
           }
@@ -261,6 +310,87 @@ const QRCreater = () => {
     }
   };
 
+  // Function to handle printing of individual barcode
+  const handlePrintIndividualBarcode = async (index) => {
+    const barcodeNumber = barcodeNumbers[index];
+    const weight = barcodeWeights[barcodeNumber];
+
+    // Check if weight is entered
+    if (!weight) {
+      showToast.error("⚠️ Please enter weight before printing!");
+      return;
+    }
+
+    // Save to database first
+    try {
+      showToast.info("Saving barcode data...");
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
+      const singleBarcodeData = {
+        product,
+        packed,
+        batch,
+        shift,
+        numberOfBarcodes: 1,
+        location,
+        currentTime,
+        rewinder,
+        edge,
+        winder,
+        mixer,
+        skuc,
+        skun,
+        batchNumbers: [parseInt(barcodeNumber.replace(skuc, "")) || 0],
+        barcodeWeights: { [barcodeNumber]: weight }
+      };
+
+      await axios.post(`${backendUrl}/api/saved`, singleBarcodeData);
+      showToast.success("✓ Saved to database!");
+    } catch (error) {
+      console.error("Error saving barcode:", error);
+      showToast.error("Failed to save. Printing anyway...");
+    }
+
+    // Now print
+    const content = document.getElementById(`barcode-div-${index}`);
+    if (content) {
+      const printWindow = window.open("", "_blank", "width=800,height=600");
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Barcode ${barcodeNumber}</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                text-align: center;
+              }
+              .barcode-container {
+                width: 4in;
+                height: 6in;
+                text-align: left;
+                margin: auto;
+                font-weight: bold;
+                border: 1px solid #000;
+                padding: 20px;
+              }
+              .barcode-info {
+                padding: 4px 0;
+                font-size: 13px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="barcode-container">${content.innerHTML}</div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   // Function to handle printing of the final barcode
   const handlePrint = () => {
     const content = document.getElementById("barcode-total");
@@ -359,8 +489,8 @@ const QRCreater = () => {
       mixer,
       skuc,
       skun,
-      weight,
       batchNumbers,
+      barcodeWeights, // Include individual barcode weights
     };
 
     try {
@@ -432,7 +562,6 @@ const QRCreater = () => {
                     // Auto-fill primary fields
                     setSku(selectedProduct.skuCode || "");
                     setSKU(selectedProduct.skuName || selectedProduct.productName);
-                    setWeight(selectedProduct.weight || "");
 
                     // Auto-fill additional information
                     setPacked(selectedProduct.packedBy || "");
@@ -451,7 +580,6 @@ const QRCreater = () => {
                   // Clear ALL fields if "Select a product" is chosen
                   setSku("");
                   setSKU("");
-                  setWeight("");
                   setPacked("");
                   setBatch("");
                   setShift("");
@@ -540,32 +668,11 @@ const QRCreater = () => {
             />
           </div>
 
-          {/* Weight */}
-          <div style={styles.inputGroup}>
-            <label htmlFor="weight" style={styles.label}>
-              4️⃣ Weight:
-            </label>
-            <input
-              id="weight"
-              type="text"
-              placeholder="Weight (auto-filled)"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: weight
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
-          </div>
-
           <div style={styles.divider}></div>
           {/* Number of Barcodes */}
           <div style={styles.inputGroup}>
             <label htmlFor="numberOfBarcodes" style={styles.label}>
-              5️⃣ Number of Barcodes:
+              4️⃣ Number of Barcodes:
             </label>
             <input
               id="numberOfBarcodes"
@@ -589,62 +696,209 @@ const QRCreater = () => {
             <label htmlFor="packed" style={styles.label}>
               Packed By:
             </label>
-            <input
-              id="packed"
-              type="text"
-              placeholder="Enter packer name (auto-filled)"
-              value={packed}
-              onChange={(e) => setPacked(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: packed
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showPackedOther ? (
+              <select
+                id="packed"
+                value={packed}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowPackedOther(true);
+                    setPacked("");
+                  } else {
+                    setPacked(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: packed
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Packer --</option>
+                {operatorOptions.packedBy.map((name, idx) => (
+                  <option key={idx} value={name}>{name}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter packer name"
+                  value={packed}
+                  onChange={(e) => setPacked(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: packed
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPackedOther(false);
+                    setPacked("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.inputGroup}>
             <label htmlFor="batch" style={styles.label}>
               Batch No:
             </label>
-            <input
-              id="batch"
-              type="number"
-              placeholder="Enter batch number (auto-filled)"
-              value={batch}
-              onChange={(e) => setBatch(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: batch
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showBatchOther ? (
+              <select
+                id="batch"
+                value={batch}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowBatchOther(true);
+                    setBatch("");
+                  } else {
+                    setBatch(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: batch
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Batch No --</option>
+                {operatorOptions.batchNo.map((num, idx) => (
+                  <option key={idx} value={num}>{num}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter batch number"
+                  value={batch}
+                  onChange={(e) => setBatch(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: batch
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBatchOther(false);
+                    setBatch("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.inputGroup}>
             <label htmlFor="shift" style={styles.label}>
               Shift (Day/Night):
             </label>
-            <select
-              id="shift"
-              value={shift}
-              onChange={(e) => setShift(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: shift
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            >
-              <option value="">Select shift</option>
-              <option value="Day">Day</option>
-              <option value="Night">Night</option>
-            </select>
+            {!showShiftOther ? (
+              <select
+                id="shift"
+                value={shift}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowShiftOther(true);
+                    setShift("");
+                  } else {
+                    setShift(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: shift
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Shift --</option>
+                <option value="Day">Day</option>
+                <option value="Night">Night</option>
+                {operatorOptions.shift.filter(s => s !== "Day" && s !== "Night").map((s, idx) => (
+                  <option key={idx} value={s}>{s}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter shift"
+                  value={shift}
+                  onChange={(e) => setShift(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: shift
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowShiftOther(false);
+                    setShift("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.divider}></div>
@@ -656,80 +910,276 @@ const QRCreater = () => {
             <label htmlFor="rewinder" style={styles.label}>
               Rewinder Operator:
             </label>
-            <input
-              id="rewinder"
-              type="text"
-              placeholder="Rewinder operator name (auto-filled)"
-              value={rewinder}
-              onChange={(e) => setRewinder(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: rewinder
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showRewinderOther ? (
+              <select
+                id="rewinder"
+                value={rewinder}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowRewinderOther(true);
+                    setRewinder("");
+                  } else {
+                    setRewinder(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: rewinder
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Rewinder Operator --</option>
+                {operatorOptions.rewinder.map((name, idx) => (
+                  <option key={idx} value={name}>{name}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter rewinder operator"
+                  value={rewinder}
+                  onChange={(e) => setRewinder(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: rewinder
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRewinderOther(false);
+                    setRewinder("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.inputGroup}>
             <label htmlFor="edge" style={styles.label}>
               Edge Cut Operator:
             </label>
-            <input
-              id="edge"
-              type="text"
-              placeholder="Edge cut operator name (auto-filled)"
-              value={edge}
-              onChange={(e) => setEdge(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: edge
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showEdgeOther ? (
+              <select
+                id="edge"
+                value={edge}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowEdgeOther(true);
+                    setEdge("");
+                  } else {
+                    setEdge(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: edge
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Edge Cut Operator --</option>
+                {operatorOptions.edgeCut.map((name, idx) => (
+                  <option key={idx} value={name}>{name}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter edge cut operator"
+                  value={edge}
+                  onChange={(e) => setEdge(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: edge
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEdgeOther(false);
+                    setEdge("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.inputGroup}>
             <label htmlFor="winder" style={styles.label}>
               Winder Operator:
             </label>
-            <input
-              id="winder"
-              type="text"
-              placeholder="Winder operator name (auto-filled)"
-              value={winder}
-              onChange={(e) => setWinder(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: winder
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showWinderOther ? (
+              <select
+                id="winder"
+                value={winder}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowWinderOther(true);
+                    setWinder("");
+                  } else {
+                    setWinder(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: winder
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Winder Operator --</option>
+                {operatorOptions.winder.map((name, idx) => (
+                  <option key={idx} value={name}>{name}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter winder operator"
+                  value={winder}
+                  onChange={(e) => setWinder(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: winder
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWinderOther(false);
+                    setWinder("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.inputGroup}>
             <label htmlFor="mixer" style={styles.label}>
               Mixer Operator:
             </label>
-            <input
-              id="mixer"
-              type="text"
-              placeholder="Mixer operator name (auto-filled)"
-              value={mixer}
-              onChange={(e) => setMixer(e.target.value)}
-              required
-              style={{
-                ...styles.input,
-                backgroundColor: mixer
-                  ? "rgba(144, 238, 144, 0.2)"
-                  : "rgba(255, 255, 255, 0.8)",
-              }}
-            />
+            {!showMixerOther ? (
+              <select
+                id="mixer"
+                value={mixer}
+                onChange={(e) => {
+                  if (e.target.value === "__other__") {
+                    setShowMixerOther(true);
+                    setMixer("");
+                  } else {
+                    setMixer(e.target.value);
+                  }
+                }}
+                required
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  backgroundColor: mixer
+                    ? "rgba(144, 238, 144, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <option value="">-- Select Mixer Operator --</option>
+                {operatorOptions.mixer.map((name, idx) => (
+                  <option key={idx} value={name}>{name}</option>
+                ))}
+                <option value="__other__">✏️ Enter Manually</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Enter mixer operator"
+                  value={mixer}
+                  onChange={(e) => setMixer(e.target.value)}
+                  required
+                  style={{
+                    ...styles.input,
+                    flex: 1,
+                    backgroundColor: mixer
+                      ? "rgba(144, 238, 144, 0.2)"
+                      : "rgba(255, 255, 255, 0.8)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMixerOther(false);
+                    setMixer("");
+                  }}
+                  style={{
+                    padding: "10px 15px",
+                    backgroundColor: "#ff6900",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  ↩️ Back
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.divider}></div>
@@ -760,7 +1210,7 @@ const QRCreater = () => {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            gap: "0",
+            gap: "20px",
             flexWrap: "nowrap",
             marginBottom: "30px",
             width: "100%",
@@ -770,7 +1220,14 @@ const QRCreater = () => {
             <div
               id={`barcode-div-${index}`}
               key={index}
-              style={styles.barcodeContainer}
+              style={{
+                ...styles.barcodeContainer,
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "15px",
+                padding: "20px",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                border: "2px solid rgba(153, 0, 239, 0.2)"
+              }}
             >
               {/* Barcode value is SKU Code No + running number */}
               <Barcode
@@ -790,14 +1247,80 @@ const QRCreater = () => {
                 <div style={styles.barcodeInfo}>
                   <strong>SKU Name:</strong> {skun}
                 </div>
-                <div style={styles.barcodeInfo}>
-                  <strong>Weight:</strong> {weight}
+                <div style={{
+                  ...styles.barcodeInfo,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginTop: "10px",
+                  padding: "10px",
+                  backgroundColor: "rgba(153, 0, 239, 0.05)",
+                  borderRadius: "8px"
+                }}>
+                  <strong>⚖️ Weight:</strong>
+                  <input
+                    type="text"
+                    placeholder="Enter weight"
+                    value={barcodeWeights[barcodeNumbers[index]] || ""}
+                    onChange={(e) => {
+                      setBarcodeWeights({
+                        ...barcodeWeights,
+                        [barcodeNumbers[index]]: e.target.value
+                      });
+                    }}
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: "14px",
+                      border: "2px solid #9900ef",
+                      borderRadius: "8px",
+                      width: "150px",
+                      backgroundColor: "white"
+                    }}
+                  />
+                  <span style={{
+                    color: barcodeWeights[barcodeNumbers[index]] ? "#10b981" : "#ef4444",
+                    fontWeight: "bold"
+                  }}>
+                    {barcodeWeights[barcodeNumbers[index]] ? "✓" : "⚠️ Required"}
+                  </span>
                 </div>
                 <div style={styles.barcodeInfo}>
                   <strong>Location:</strong> {location}
                 </div>
                 <div style={styles.barcodeInfo}>
                   <strong>Date:</strong> {currentTime}
+                </div>
+
+                {/* Print Button */}
+                <div style={{ marginTop: "15px", textAlign: "center" }}>
+                  <button
+                    className="styled-button"
+                    onClick={() => handlePrintIndividualBarcode(index)}
+                    style={{
+                      padding: "12px 24px",
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "12px",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                      transition: "all 0.3s ease",
+                      minWidth: "auto",
+                      width: "100%"
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.background = "linear-gradient(135deg, #059669 0%, #047857 100%)";
+                      e.target.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+                      e.target.style.transform = "translateY(0)";
+                    }}
+                  >
+                    🖨️ Print & Save Barcode #{index + 1}
+                  </button>
                 </div>
               </div>
             </div>
@@ -842,8 +1365,8 @@ const QRCreater = () => {
                   <span style={styles.detailValue}>{skun}</span>
                 </div>
                 <div style={styles.detailRow} className="detail-row">
-                  <span style={styles.detailLabel}>⚖️ Weight:</span>
-                  <span style={styles.detailValue}>{weight}</span>
+                  <span style={styles.detailLabel}>⚖️ Total Barcodes:</span>
+                  <span style={styles.detailValue}>{barcodeNumbers.length}</span>
                 </div>
                 <div style={styles.detailRow} className="detail-row">
                   <span style={styles.detailLabel}>📍 Location:</span>

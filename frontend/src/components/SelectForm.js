@@ -21,7 +21,8 @@ const SelectForm = () => {
 
   const fetchAvailableProducts = async () => {
     try {
-      const response = await axios.get(`${backendUrl}/api/barcodes`);
+      // Fetch only unscanned barcodes
+      const response = await axios.get(`${backendUrl}/api/barcodes?is_scanned=false`);
       const products = [];
       const mapping = {};
 
@@ -30,7 +31,6 @@ const SelectForm = () => {
         const skuName = barcode.skun || "";
         const packed = barcode.packed || "";
         const batch = barcode.batch || "";
-        const weight = barcode.weight || "";
         const shift = barcode.shift || "";
         const location = barcode.location || "";
         const currentTime = barcode.currentTime || "";
@@ -39,17 +39,24 @@ const SelectForm = () => {
         const winder = barcode.winder || "";
         const mixer = barcode.mixer || "";
 
+        // Get individual barcode weights (Map object)
+        const barcodeWeights = barcode.barcodeWeights || {};
+
         if (barcode.batchNumbers && Array.isArray(barcode.batchNumbers)) {
           barcode.batchNumbers.forEach((bn) => {
             if (barcode.skuc && bn) {
               const skuCode = String(barcode.skuc) + String(bn);
+
+              // Get individual weight for this specific barcode
+              const individualWeight = barcodeWeights[skuCode] || barcode.weight || "";
+
               products.push({
                 sku: skuCode,
                 product: productName,
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
-                weight: weight,
+                weight: individualWeight, // Individual weight for this barcode
                 shift: shift,
                 location: location,
                 currentTime: currentTime,
@@ -63,7 +70,7 @@ const SelectForm = () => {
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
-                weight: weight,
+                weight: individualWeight, // Individual weight for this barcode
                 shift: shift,
                 location: location,
                 currentTime: currentTime,
@@ -139,6 +146,7 @@ const SelectForm = () => {
 
   const handleStartScanning = () => {
     setIsScanning(true);
+    setShowAllProducts(true); // Automatically show available products
     showToast.success("📷 Scanner activated! Scan barcodes now.");
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -501,61 +509,24 @@ const SelectForm = () => {
         <h1 style={styles.title}>📦 Barcode Scanner</h1>
         <p style={styles.subtitle}>
           {isScanning
-            ? "Scan barcodes with your scanner device"
-            : "Click 'Start Scanning' to begin"}
+            ? "Recently generated barcodes shown below - Use IoT scanner or click to scan"
+            : "Click 'Start Scanning' to see recently generated barcodes"}
         </p>
 
-        {/* Product Selector Dropdown */}
-        <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold", color: "#666" }}>
-            Select Product:
-          </label>
-          <select
-            style={{
-              width: "100%",
-              padding: "15px",
-              fontSize: "16px",
-              border: "2px solid #ddd",
-              borderRadius: "12px",
-              backgroundColor: "white",
-              cursor: "pointer",
-            }}
-            onChange={(e) => {
-              if (e.target.value && isScanning) {
-                setInputValue(e.target.value);
-              }
-            }}
-            disabled={!isScanning}
-            value=""
-          >
-            <option value="">-- Select a product to scan --</option>
-            {availableProducts.map((product, index) => (
-              <option key={index} value={product.sku}>
-                {product.product} - SKU: {product.sku}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Manual Input Field (for scanner devices) */}
-        <div style={{ marginBottom: "10px" }}>
-          <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold", color: "#666" }}>
-            Or Scan Barcode:
-          </label>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder={isScanning ? "📷 Scan with device..." : "Click Start to begin"}
-            disabled={!isScanning}
-            style={{
-              ...styles.input,
-              ...(isScanning ? styles.inputActive : {}),
-            }}
-            autoFocus={isScanning}
-          />
-        </div>
+        {/* Hidden input for IoT scanner device */}
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            width: "1px",
+            height: "1px",
+          }}
+          autoFocus={isScanning}
+        />
 
         {/* Buttons */}
         <div style={styles.buttonContainer}>
@@ -574,13 +545,6 @@ const SelectForm = () => {
               ⏹️ Stop & Clear
             </button>
           )}
-
-          <button
-            style={{ ...styles.button, ...styles.showProductsButton }}
-            onClick={toggleProductList}
-          >
-            {showAllProducts ? "Hide Products" : "📋 Show All Products"}
-          </button>
         </div>
 
         {/* Statistics */}
@@ -820,12 +784,12 @@ const SelectForm = () => {
         <div style={{ ...styles.card, backgroundColor: "rgba(255, 255, 255, 0.9)" }}>
           <h4 style={{ color: "#666", marginBottom: "10px" }}>💡 How to use:</h4>
           <ol style={{ textAlign: "left", color: "#666", lineHeight: "1.8" }}>
-            <li>Click "Start Scanning" to activate the scanner</li>
-            <li><strong>Select from dropdown</strong> - Choose product by name (easier!)</li>
-            <li><strong>Or scan with device</strong> - Use barcode scanner</li>
-            <li><strong>Or click from list</strong> - Click "Show All Products" and click any product</li>
-            <li>Each barcode is automatically saved</li>
-            <li>Duplicate barcodes are prevented automatically</li>
+            <li>Click <strong>"Start Scanning"</strong> to begin</li>
+            <li>All <strong>recently generated unscanned barcodes</strong> will appear automatically</li>
+            <li><strong>Scan with your IoT device</strong> - Barcode scanner will capture automatically</li>
+            <li><strong>Or click any barcode</strong> from the list to mark as scanned</li>
+            <li>Already scanned barcodes are <strong>hidden automatically</strong></li>
+            <li>Scanned barcodes disappear from the list immediately</li>
             <li>Click "Stop & Clear" to end the session</li>
           </ol>
         </div>

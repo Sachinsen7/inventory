@@ -229,7 +229,7 @@ function AllProductsPage() {
         <div style={cardStyle}>
           <input
             type="text"
-            placeholder="🔍 Search by product name, SKU, or batch..."
+            placeholder="Search by product name, SKU, or batch..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={searchInputStyle}

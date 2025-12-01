@@ -351,49 +351,63 @@ const QRCreater = () => {
         inputValue: barcodeNumber
       });
 
-      showToast.success("✓ Saved to database & added to inventory!");
+      showToast.success(`✅ Barcode ${barcodeNumber} added to inventory successfully!`);
+
+      // Print first, then remove
+      const content = document.getElementById(`barcode-div-${index}`);
+      if (content) {
+        const printWindow = window.open("", "_blank", "width=800,height=600");
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Print Barcode ${barcodeNumber}</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  margin: 0;
+                  padding: 20px;
+                  text-align: center;
+                }
+                .barcode-container {
+                  width: 4in;
+                  height: 6in;
+                  text-align: left;
+                  margin: auto;
+                  font-weight: bold;
+                  border: 1px solid #000;
+                  padding: 20px;
+                }
+                .barcode-info {
+                  padding: 4px 0;
+                  font-size: 13px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="barcode-container">${content.innerHTML}</div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+
+      // Remove this barcode from the list after successful save and print
+      setBarcodeNumbers(prev => prev.filter((_, i) => i !== index));
+
+      // Also remove the weight from barcodeWeights
+      setBarcodeWeights(prev => {
+        const newWeights = { ...prev };
+        delete newWeights[barcodeNumber];
+        return newWeights;
+      });
+
+      showToast.info(`🗑️ Barcode ${barcodeNumber} removed from list (already in inventory)`);
+
     } catch (error) {
       console.error("Error saving barcode:", error);
-      showToast.error("Failed to save. Printing anyway...");
-    }
-
-    // Now print
-    const content = document.getElementById(`barcode-div-${index}`);
-    if (content) {
-      const printWindow = window.open("", "_blank", "width=800,height=600");
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Barcode ${barcodeNumber}</title>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-                text-align: center;
-              }
-              .barcode-container {
-                width: 4in;
-                height: 6in;
-                text-align: left;
-                margin: auto;
-                font-weight: bold;
-                border: 1px solid #000;
-                padding: 20px;
-              }
-              .barcode-info {
-                padding: 4px 0;
-                font-size: 13px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="barcode-container">${content.innerHTML}</div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
+      showToast.error("Failed to save. Please try again.");
+      return; // Don't print if save failed
     }
   };
 

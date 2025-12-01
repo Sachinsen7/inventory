@@ -351,48 +351,9 @@ const QRCreater = () => {
         inputValue: barcodeNumber
       });
 
-      showToast.success(`✅ Barcode ${barcodeNumber} added to inventory successfully!`);
+      showToast.success(`✅ Barcode ${barcodeNumber} saved to database & inventory!`);
 
-      // Print first, then remove
-      const content = document.getElementById(`barcode-div-${index}`);
-      if (content) {
-        const printWindow = window.open("", "_blank", "width=800,height=600");
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Print Barcode ${barcodeNumber}</title>
-              <style>
-                body {
-                  font-family: Arial, sans-serif;
-                  margin: 0;
-                  padding: 20px;
-                  text-align: center;
-                }
-                .barcode-container {
-                  width: 4in;
-                  height: 6in;
-                  text-align: left;
-                  margin: auto;
-                  font-weight: bold;
-                  border: 1px solid #000;
-                  padding: 20px;
-                }
-                .barcode-info {
-                  padding: 4px 0;
-                  font-size: 13px;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="barcode-container">${content.innerHTML}</div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
-      }
-
-      // Remove this barcode from the list after successful save and print
+      // Remove this barcode from the list after successful save
       setBarcodeNumbers(prev => prev.filter((_, i) => i !== index));
 
       // Also remove the weight from barcodeWeights
@@ -1348,7 +1309,7 @@ const QRCreater = () => {
                       e.target.style.transform = "translateY(0)";
                     }}
                   >
-                    🖨️ Print & Save Barcode #{index + 1}
+                    � Save B arcode #{index + 1} to Inventory
                   </button>
                 </div>
               </div>

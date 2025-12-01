@@ -353,6 +353,62 @@ const QRCreater = () => {
 
       showToast.success(`✅ Barcode ${barcodeNumber} saved to database & inventory!`);
 
+      // Print using browser's native print (works better in production)
+      const content = document.getElementById(`barcode-div-${index}`);
+      if (content) {
+        // Create a temporary print container
+        const printContent = content.cloneNode(true);
+        const printWindow = document.createElement('iframe');
+        printWindow.style.position = 'absolute';
+        printWindow.style.width = '0';
+        printWindow.style.height = '0';
+        printWindow.style.border = 'none';
+
+        document.body.appendChild(printWindow);
+
+        const doc = printWindow.contentWindow.document;
+        doc.open();
+        doc.write(`
+          <html>
+            <head>
+              <title>Print Barcode ${barcodeNumber}</title>
+              <style>
+                @media print {
+                  @page { size: 4in 6in; margin: 0; }
+                  body { margin: 0; padding: 20px; }
+                }
+                body {
+                  font-family: Arial, sans-serif;
+                  width: 4in;
+                  height: 6in;
+                }
+                .barcode-container {
+                  text-align: left;
+                  font-weight: bold;
+                  border: 1px solid #000;
+                  padding: 20px;
+                }
+                .barcode-info {
+                  padding: 4px 0;
+                  font-size: 13px;
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent.innerHTML}
+            </body>
+          </html>
+        `);
+        doc.close();
+
+        // Wait for content to load, then print
+        setTimeout(() => {
+          printWindow.contentWindow.print();
+          // Remove iframe after printing
+          setTimeout(() => document.body.removeChild(printWindow), 1000);
+        }, 250);
+      }
+
       // Remove this barcode from the list after successful save
       setBarcodeNumbers(prev => prev.filter((_, i) => i !== index));
 
@@ -1309,7 +1365,7 @@ const QRCreater = () => {
                       e.target.style.transform = "translateY(0)";
                     }}
                   >
-                    � Save B arcode #{index + 1} to Inventory
+                    �  Print & Save Barcode #{index + 1}
                   </button>
                 </div>
               </div>

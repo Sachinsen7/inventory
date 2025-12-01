@@ -31,7 +31,7 @@ const billingRoutes = require("./routes/billingRoutes");
 app.use(bodyParser.json());
 
 // Hardened CORS configuration: restrict to allowed origins from environment
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5000,http://0.0.0.0:3000,http://0.0.0.0:5000,http://inventory.works,http://www.inventory.works")
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5000,http://0.0.0.0:3000,http://0.0.0.0:5000,https://inventory.works,https://www.inventory.works")
   .split(",")
   .map((o) => o.trim());
 

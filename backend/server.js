@@ -17,6 +17,9 @@ const validators = require("./utils/validators");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy - required when behind Nginx reverse proxy
+app.set('trust proxy', true);
+
 const Godown = require("./models/Godowns");
 const GodownInventory = require("./models/GodownInventory");
 const excelRoutes = require("./routes/excelRoutes");

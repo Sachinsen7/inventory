@@ -345,7 +345,13 @@ const QRCreater = () => {
       };
 
       await axios.post(`${backendUrl}/api/saved`, singleBarcodeData);
-      showToast.success("✓ Saved to database!");
+
+      // IMMEDIATELY save to inventory (selects collection)
+      await axios.post(`${backendUrl}/api/save`, {
+        inputValue: barcodeNumber
+      });
+
+      showToast.success("✓ Saved to database & added to inventory!");
     } catch (error) {
       console.error("Error saving barcode:", error);
       showToast.error("Failed to save. Printing anyway...");
@@ -494,8 +500,27 @@ const QRCreater = () => {
     };
 
     try {
+      // Save to barcodes collection
       const response = await axios.post(`${backendUrl}/api/saved`, formData);
       showToast.success(response.data.message);
+
+      // IMMEDIATELY save each barcode to inventory (selects collection)
+      showToast.info("Adding barcodes to inventory...");
+      let successCount = 0;
+
+      for (const barcodeNumber of barcodeNumbers) {
+        try {
+          await axios.post(`${backendUrl}/api/save`, {
+            inputValue: barcodeNumber
+          });
+          successCount++;
+        } catch (saveError) {
+          console.error(`Error saving barcode ${barcodeNumber} to inventory:`, saveError);
+        }
+      }
+
+      showToast.success(`✓ ${successCount} barcodes added to inventory immediately!`);
+
       // Update last used number for this SKU
       if (skuc && barcodeNumbers.length > 0) {
         const lastNum = parseInt(

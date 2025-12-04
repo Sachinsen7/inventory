@@ -2090,21 +2090,6 @@ app.post('/api/ledger', async (req, res) => {
 });
 
 // API: Get customer history
-app.get('/api/ledger/customer/:customerId', async (req, res) => {
-  try {
-    const { customerId } = req.params;
-    const entries = await Ledger.find({ 'metadata.customerId': customerId }).sort({ timestamp: -1 }).lean();
-    const paymentEntries = entries.filter(e => e.action === 'PAYMENT_RECEIVED' || e.action === 'PARTIAL_PAYMENT');
-    const totalPaid = paymentEntries.reduce((sum, entry) => sum + (entry.metadata.paymentAmount || 0), 0);
-    const invoiceEntries = entries.filter(e => e.action === 'INVOICE_CREATED');
-    const customerName = entries[0]?.metadata?.customerName || 'Unknown';
-    res.json({ success: true, data: { customer: { id: customerId, name: customerName }, totalInvoices: invoiceEntries.length, totalPaid, history: entries } });
-  } catch (error) {
-    logger.error('Error in GET /api/ledger/customer:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // API: Get invoice history
 app.get('/api/ledger/invoice/:invoiceId', async (req, res) => {
   try {
@@ -2135,32 +2120,6 @@ app.post('/api/ledger/payment', async (req, res) => {
     logger.error('Error in POST /api/ledger/payment:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
-
-// Serve static files from React build
-const path = require('path');
-app.use(express.static(path.join(__dirname, '../frontend/build')));
-
-// Handle React routing, return all requests to React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-});
-
-// Start Server
-const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-const serverUrl =
-  process.env.NODE_ENV === "production"
-    ? `https://${process.env.SERVER_HOST || "your-domain.com"}:${PORT}`
-    : `http://localhost:${PORT}`;
-
-app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Server running at ${serverUrl}`, {
-    port: PORT,
-    host: '0.0.0.0',
-    env: process.env.NODE_ENV || "development",
-    https: process.env.NODE_ENV === "production",
-  });
-  console.log(`Server is listening on 0.0.0.0:${PORT}`);
 });
 
 // ============================================
@@ -2289,3 +2248,33 @@ app.post('/api/ledger/payment', async (req, res) => {
   }
 });
 
+
+// ============================================
+// SERVE STATIC FILES (Must be AFTER all API routes)
+// ============================================
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
+
+// ============================================
+// START SERVER
+// ============================================
+const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+const serverUrl =
+  process.env.NODE_ENV === "production"
+    ? `https://${process.env.SERVER_HOST || "your-domain.com"}:${PORT}`
+    : `http://localhost:${PORT}`;
+
+app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`Server running at ${serverUrl}`, {
+    port: PORT,
+    host: '0.0.0.0',
+    env: process.env.NODE_ENV || "development",
+    https: process.env.NODE_ENV === "production",
+  });
+  console.log(`Server is listening on 0.0.0.0:${PORT}`);
+});

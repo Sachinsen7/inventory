@@ -44,6 +44,7 @@ const inventorySchema = new mongoose.Schema({
 // Bill Schema
 const billSchema = new mongoose.Schema({
   billNumber: { type: String, required: true, unique: true },
+  invoiceId: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   customerName: { type: String, required: true },
   godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
@@ -59,6 +60,7 @@ const billSchema = new mongoose.Schema({
   }],
   totalAmount: { type: Number, required: true },
   priceType: { type: String, enum: ['price', 'masterPrice'], default: 'price' },
+  paymentStatus: { type: String, enum: ['Pending', 'Processing', 'Completed', 'Failed'], default: 'Pending' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -71,6 +73,13 @@ const Bill = mongoose.model('Bill', billSchema);
 const generateBillNumber = async () => {
   const count = await Bill.countDocuments();
   return `BILL-${String(count + 1).padStart(6, '0')}`;
+};
+
+// Generate unique invoice ID
+const generateInvoiceId = async () => {
+  const count = await Bill.countDocuments();
+  const timestamp = Date.now().toString().slice(-6);
+  return `INV-${timestamp}-${String(count + 1).padStart(4, '0')}`;
 };
 
 // ==================== CUSTOMER ROUTES ====================
@@ -611,7 +620,7 @@ router.get('/bills/customer/:customerId/bills', async (req, res) => {
 
 // Add new bill
 router.post('/bills/add',
-  validators.rejectUnknownFields(['items', 'godownName', 'customerId', 'customerName', 'godownId', 'totalAmount', 'priceType']),
+  validators.rejectUnknownFields(['items', 'godownName', 'customerId', 'customerName', 'godownId', 'totalAmount', 'priceType', 'paymentStatus']),
   [
     body('items').isArray({ min: 1 }).withMessage('Items must be a non-empty array'),
     body('godownName').optional().isString().trim(),
@@ -619,7 +628,8 @@ router.post('/bills/add',
     body('customerName').optional().isString().trim(),
     body('godownId').optional().isMongoId(),
     validators.price('totalAmount'),
-    body('priceType').optional().isIn(['price', 'masterPrice'])
+    body('priceType').optional().isIn(['price', 'masterPrice']),
+    body('paymentStatus').optional().isIn(['Pending', 'Processing', 'Completed', 'Failed'])
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -652,12 +662,15 @@ router.post('/bills/add',
 
       // Create the bill first
       const billNumber = await generateBillNumber();
+      const invoiceId = await generateInvoiceId();
       const bill = new Bill({
         ...req.body,
-        billNumber
+        billNumber,
+        invoiceId,
+        paymentStatus: req.body.paymentStatus || 'Pending'
       });
       const savedBill = await bill.save();
-      logger.info('Bill created successfully', { billNumber: savedBill.billNumber });
+      logger.info('Bill created successfully', { billNumber: savedBill.billNumber, invoiceId: savedBill.invoiceId });
 
       // Now delete items from delevery1 collection
       const deletionResults = [];
@@ -741,6 +754,92 @@ router.get('/bills/:id', async (req, res) => {
   } catch (error) {
     logger.error('Error fetching bill', error);
     res.status(500).json({ message: 'Unable to fetch bill' });
+  }
+});
+
+// Get invoice by invoiceId
+router.get('/invoices/:invoiceId', async (req, res) => {
+  try {
+    const bill = await Bill.findOne({ invoiceId: req.params.invoiceId })
+      .populate('customerId', 'name address gstNo phoneNumber city state');
+    if (!bill) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    res.json(bill);
+  } catch (error) {
+    logger.error('Error fetching invoice', error);
+    res.status(500).json({ message: 'Unable to fetch invoice' });
+  }
+});
+
+// Update payment status
+router.put('/invoices/:invoiceId/status', async (req, res) => {
+  try {
+    const { paymentStatus } = req.body;
+
+    if (!['Pending', 'Processing', 'Completed', 'Failed'].includes(paymentStatus)) {
+      return res.status(400).json({ message: 'Invalid payment status' });
+    }
+
+    const bill = await Bill.findOneAndUpdate(
+      { invoiceId: req.params.invoiceId },
+      { paymentStatus, updatedAt: Date.now() },
+      { new: true }
+    );
+
+    if (!bill) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    logger.info('Payment status updated', { invoiceId: req.params.invoiceId, paymentStatus });
+    res.json({ message: 'Payment status updated successfully', bill });
+  } catch (error) {
+    logger.error('Error updating payment status', error);
+    res.status(500).json({ message: 'Unable to update payment status' });
+  }
+});
+
+// Get all invoices with filtering and sorting
+router.get('/invoices', async (req, res) => {
+  try {
+    const { status, customerId, sortBy = 'createdAt', order = 'desc' } = req.query;
+
+    let query = {};
+
+    // Filter by payment status
+    if (status && status !== 'all') {
+      query.paymentStatus = status;
+    }
+
+    // Filter by customer
+    if (customerId) {
+      query.customerId = customerId;
+    }
+
+    // Build sort object
+    const sortOrder = order === 'asc' ? 1 : -1;
+    const sortObj = { [sortBy]: sortOrder };
+
+    const bills = await Bill.find(query)
+      .populate('customerId', 'name city state')
+      .sort(sortObj);
+
+    // Calculate summary statistics
+    const summary = {
+      total: bills.length,
+      pending: bills.filter(b => b.paymentStatus === 'Pending').length,
+      processing: bills.filter(b => b.paymentStatus === 'Processing').length,
+      completed: bills.filter(b => b.paymentStatus === 'Completed').length,
+      failed: bills.filter(b => b.paymentStatus === 'Failed').length,
+      totalAmount: bills.reduce((sum, b) => sum + b.totalAmount, 0),
+      completedAmount: bills.filter(b => b.paymentStatus === 'Completed').reduce((sum, b) => sum + b.totalAmount, 0),
+      pendingAmount: bills.filter(b => b.paymentStatus === 'Pending').reduce((sum, b) => sum + b.totalAmount, 0)
+    };
+
+    res.json({ invoices: bills, summary });
+  } catch (error) {
+    logger.error('Error fetching invoices', error);
+    res.status(500).json({ message: 'Unable to fetch invoices' });
   }
 });
 

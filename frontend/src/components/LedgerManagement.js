@@ -3,15 +3,15 @@ import { ledgerService } from '../services/ledgerService';
 import { showToast } from '../utils/toastNotifications';
 import './LedgerManagement.css';
 
-function LedgerManagement({ onClose }) {
+function LedgerManagement({ customerId: propCustomerId, customerName: propCustomerName, onClose }) {
     const [invoiceId, setInvoiceId] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('Cash');
     const [isFullPayment, setIsFullPayment] = useState(true);
     const [remainingBalance, setRemainingBalance] = useState('');
     const [notes, setNotes] = useState('');
-    const [customerId, setCustomerId] = useState('');
-    const [customerName, setCustomerName] = useState('');
+    const [customerId, setCustomerId] = useState(propCustomerId || '');
+    const [customerName, setCustomerName] = useState(propCustomerName || '');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e) => {
@@ -69,28 +69,44 @@ function LedgerManagement({ onClose }) {
                 <form onSubmit={handleSubmit} className="payment-form">
                     <div className="form-section">
                         <h3>Customer Information</h3>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Customer ID *</label>
-                                <input
-                                    type="text"
-                                    value={customerId}
-                                    onChange={(e) => setCustomerId(e.target.value)}
-                                    placeholder="Enter customer ID"
-                                    required
-                                />
+                        {propCustomerId && propCustomerName ? (
+                            <div className="customer-info-display" style={{
+                                padding: '15px',
+                                background: '#f0f9ff',
+                                borderRadius: '8px',
+                                border: '2px solid #3b82f6'
+                            }}>
+                                <p style={{ margin: '5px 0', color: '#1e40af' }}>
+                                    <strong>Customer:</strong> {customerName}
+                                </p>
+                                <p style={{ margin: '5px 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                    <strong>ID:</strong> {customerId}
+                                </p>
                             </div>
-                            <div className="form-group">
-                                <label>Customer Name *</label>
-                                <input
-                                    type="text"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    placeholder="Enter customer name"
-                                    required
-                                />
+                        ) : (
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Customer ID *</label>
+                                    <input
+                                        type="text"
+                                        value={customerId}
+                                        onChange={(e) => setCustomerId(e.target.value)}
+                                        placeholder="Enter customer ID"
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Customer Name *</label>
+                                    <input
+                                        type="text"
+                                        value={customerName}
+                                        onChange={(e) => setCustomerName(e.target.value)}
+                                        placeholder="Enter customer name"
+                                        required
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     <div className="form-section">

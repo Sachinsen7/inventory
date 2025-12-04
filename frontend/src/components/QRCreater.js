@@ -21,7 +21,10 @@ const QRCreater = () => {
   const [skuc, setSku] = useState("");
   const [skun, setSKU] = useState("");
   const [barcodeNumbers, setBarcodeNumbers] = useState([]);
-  const [barcodeWeights, setBarcodeWeights] = useState({}); // Store weight for each barcode
+  const [barcodeCoreWeights, setBarcodeCoreWeights] = useState({}); // Store core weight for each barcode
+  const [barcodeGrossWeights, setBarcodeGrossWeights] = useState({}); // Store gross weight for each barcode (renamed from barcodeWeights)
+  const [barcodeNetWeights, setBarcodeNetWeights] = useState({}); // Store calculated net weight for each barcode
+  const [printedBarcodes, setPrintedBarcodes] = useState({}); // Track which barcodes have been printed
   const [isDownloading, setIsDownloading] = useState(false);
   const [excelData, setExcelData] = useState([]); // To store parsed Excel data
   const [productSuggestions, setProductSuggestions] = useState([]); // For autocomplete
@@ -313,11 +316,13 @@ const QRCreater = () => {
   // Function to handle printing of individual barcode
   const handlePrintIndividualBarcode = async (index) => {
     const barcodeNumber = barcodeNumbers[index];
-    const weight = barcodeWeights[barcodeNumber];
+    const coreWeight = barcodeCoreWeights[barcodeNumber] || "";
+    const grossWeight = barcodeGrossWeights[barcodeNumber];
+    const netWeight = barcodeNetWeights[barcodeNumber] || "";
 
-    // Check if weight is entered
-    if (!weight) {
-      showToast.error("⚠️ Please enter weight before printing!");
+    // Check if gross weight is entered (required)
+    if (!grossWeight) {
+      showToast.error("⚠️ Please enter Gross Weight before printing!");
       return;
     }
 
@@ -341,7 +346,9 @@ const QRCreater = () => {
         skuc,
         skun,
         batchNumbers: [parseInt(barcodeNumber.replace(skuc, "")) || 0],
-        barcodeWeights: { [barcodeNumber]: weight }
+        coreWeight: coreWeight,
+        grossWeight: grossWeight,
+        netWeight: netWeight
       };
 
       await axios.post(`${backendUrl}/api/saved`, singleBarcodeData);
@@ -354,72 +361,91 @@ const QRCreater = () => {
       showToast.success(`✅ Barcode ${barcodeNumber} saved to database & inventory!`);
 
       // Print using browser's native print (works better in production)
-      const content = document.getElementById(`barcode-div-${index}`);
-      if (content) {
-        // Create a temporary print container
-        const printContent = content.cloneNode(true);
-        const printWindow = document.createElement('iframe');
-        printWindow.style.position = 'absolute';
-        printWindow.style.width = '0';
-        printWindow.style.height = '0';
-        printWindow.style.border = 'none';
+      // Create custom print content showing ONLY Gross Weight
+      const printWindow = document.createElement('iframe');
+      printWindow.style.position = 'absolute';
+      printWindow.style.width = '0';
+      printWindow.style.height = '0';
+      printWindow.style.border = 'none';
 
-        document.body.appendChild(printWindow);
+      document.body.appendChild(printWindow);
 
-        const doc = printWindow.contentWindow.document;
-        doc.open();
-        doc.write(`
-          <html>
-            <head>
-              <title>Print Barcode ${barcodeNumber}</title>
-              <style>
-                @media print {
-                  @page { size: 4in 6in; margin: 0; }
-                  body { margin: 0; padding: 20px; }
-                }
-                body {
-                  font-family: Arial, sans-serif;
-                  width: 4in;
-                  height: 6in;
-                }
-                .barcode-container {
-                  text-align: left;
-                  font-weight: bold;
-                  border: 1px solid #000;
-                  padding: 20px;
-                }
-                .barcode-info {
-                  padding: 4px 0;
-                  font-size: 13px;
-                }
-              </style>
-            </head>
-            <body>
-              ${printContent.innerHTML}
-            </body>
-          </html>
-        `);
-        doc.close();
+      const doc = printWindow.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <html>
+          <head>
+            <title>Print Barcode ${barcodeNumber}</title>
+            <style>
+              @media print {
+                @page { size: 4in 6in; margin: 0; }
+                body { margin: 0; padding: 20px; }
+              }
+              body {
+                font-family: Arial, sans-serif;
+                width: 4in;
+                height: 6in;
+              }
+              .barcode-container {
+                text-align: left;
+                font-weight: bold;
+                border: 1px solid #000;
+                padding: 20px;
+              }
+              .barcode-info {
+                padding: 4px 0;
+                font-size: 13px;
+              }
+            </style>
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+          </head>
+          <body>
+            <div class="barcode-container">
+              <svg id="barcode"></svg>
+              <div class="barcode-info"><strong>Barcode:</strong> ${barcodeNumber}</div>
+              <div class="barcode-info"><strong>SKU Code:</strong> ${skuc}</div>
+              <div class="barcode-info"><strong>SKU Name:</strong> ${skun}</div>
+              <div class="barcode-info"><strong>Gross Weight:</strong> ${grossWeight}</div>
+              <div class="barcode-info"><strong>Location:</strong> ${location}</div>
+              <div class="barcode-info"><strong>Date:</strong> ${currentTime}</div>
+            </div>
+            <script>
+              JsBarcode("#barcode", "${barcodeNumber}", {
+                format: "CODE128",
+                width: 3,
+                height: 80,
+                fontSize: 32,
+                margin: 0,
+                displayValue: true
+              });
+              setTimeout(() => window.print(), 250);
+            </script>
+          </body>
+        </html>
+      `);
+      doc.close();
 
-        // Wait for content to load, then print
+      // Wait for content to load, then print
+      setTimeout(() => {
+        printWindow.contentWindow.print();
+        // Remove iframe after printing
         setTimeout(() => {
-          printWindow.contentWindow.print();
-          // Remove iframe after printing
-          setTimeout(() => document.body.removeChild(printWindow), 1000);
-        }, 250);
-      }
+          if (document.body.contains(printWindow)) {
+            document.body.removeChild(printWindow);
+          }
+        }, 1000);
+      }, 250);
 
-      // Remove this barcode from the list after successful save
-      setBarcodeNumbers(prev => prev.filter((_, i) => i !== index));
+      // Mark this barcode as printed instead of removing it
+      setPrintedBarcodes(prev => ({
+        ...prev,
+        [barcodeNumber]: {
+          printedAt: new Date().toLocaleTimeString(),
+          serialNumber: index + 1
+        }
+      }));
 
-      // Also remove the weight from barcodeWeights
-      setBarcodeWeights(prev => {
-        const newWeights = { ...prev };
-        delete newWeights[barcodeNumber];
-        return newWeights;
-      });
-
-      showToast.info(`🗑️ Barcode ${barcodeNumber} removed from list (already in inventory)`);
+      showToast.success(`✅ Barcode #${index + 1} (${barcodeNumber}) saved & printed!`);
 
     } catch (error) {
       console.error("Error saving barcode:", error);
@@ -527,7 +553,10 @@ const QRCreater = () => {
       skuc,
       skun,
       batchNumbers,
-      barcodeWeights, // Include individual barcode weights
+      // Send all three weight types
+      barcodeCoreWeights,
+      barcodeGrossWeights,
+      barcodeNetWeights
     };
 
     try {
@@ -1262,115 +1291,238 @@ const QRCreater = () => {
             width: "100%",
           }}
         >
-          {Array.from({ length: barcodeNumbers.length }).map((_, index) => (
-            <div
-              id={`barcode-div-${index}`}
-              key={index}
-              style={{
-                ...styles.barcodeContainer,
-                backgroundColor: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "15px",
-                padding: "20px",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                border: "2px solid rgba(153, 0, 239, 0.2)"
-              }}
-            >
-              {/* Barcode value is SKU Code No + running number */}
-              <Barcode
-                value={barcodeNumbers[index]}
-                width={3}
-                height={80}
-                fontSize={32}
-                margin={0}
-              />
-              <div style={styles.barcodeDetails}>
-                <div style={styles.barcodeInfo}>
-                  <strong>Barcode:</strong> {barcodeNumbers[index]}
-                </div>
-                <div style={styles.barcodeInfo}>
-                  <strong>SKU Code:</strong> {skuc}
-                </div>
-                <div style={styles.barcodeInfo}>
-                  <strong>SKU Name:</strong> {skun}
-                </div>
-                <div style={{
-                  ...styles.barcodeInfo,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  marginTop: "10px",
-                  padding: "10px",
-                  backgroundColor: "rgba(153, 0, 239, 0.05)",
-                  borderRadius: "8px"
-                }}>
-                  <strong>⚖️ Weight:</strong>
-                  <input
-                    type="text"
-                    placeholder="Enter weight"
-                    value={barcodeWeights[barcodeNumbers[index]] || ""}
-                    onChange={(e) => {
-                      setBarcodeWeights({
-                        ...barcodeWeights,
-                        [barcodeNumbers[index]]: e.target.value
-                      });
-                    }}
-                    style={{
-                      padding: "8px 12px",
-                      fontSize: "14px",
-                      border: "2px solid #9900ef",
-                      borderRadius: "8px",
-                      width: "150px",
-                      backgroundColor: "white"
-                    }}
-                  />
-                  <span style={{
-                    color: barcodeWeights[barcodeNumbers[index]] ? "#10b981" : "#ef4444",
-                    fontWeight: "bold"
-                  }}>
-                    {barcodeWeights[barcodeNumbers[index]] ? "✓" : "⚠️ Required"}
-                  </span>
-                </div>
-                <div style={styles.barcodeInfo}>
-                  <strong>Location:</strong> {location}
-                </div>
-                <div style={styles.barcodeInfo}>
-                  <strong>Date:</strong> {currentTime}
-                </div>
+          {Array.from({ length: barcodeNumbers.length }).map((_, index) => {
+            const barcodeNumber = barcodeNumbers[index];
+            const isPrinted = printedBarcodes[barcodeNumber];
 
-                {/* Print Button */}
-                <div style={{ marginTop: "15px", textAlign: "center" }}>
-                  <button
-                    className="styled-button"
-                    onClick={() => handlePrintIndividualBarcode(index)}
-                    style={{
-                      padding: "12px 24px",
-                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: "bold",
-                      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
-                      transition: "all 0.3s ease",
-                      minWidth: "auto",
-                      width: "100%"
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.background = "linear-gradient(135deg, #059669 0%, #047857 100%)";
-                      e.target.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
-                      e.target.style.transform = "translateY(0)";
-                    }}
-                  >
-                    �  Print & Save Barcode #{index + 1}
-                  </button>
+            return (
+              <div
+                id={`barcode-div-${index}`}
+                key={index}
+                style={{
+                  ...styles.barcodeContainer,
+                  backgroundColor: isPrinted ? "rgba(16, 185, 129, 0.05)" : "rgba(255, 255, 255, 0.95)",
+                  borderRadius: "15px",
+                  padding: "20px",
+                  boxShadow: isPrinted
+                    ? "0 4px 12px rgba(16, 185, 129, 0.3)"
+                    : "0 4px 12px rgba(0, 0, 0, 0.1)",
+                  border: isPrinted
+                    ? "2px solid rgba(16, 185, 129, 0.5)"
+                    : "2px solid rgba(153, 0, 239, 0.2)",
+                  position: "relative"
+                }}
+              >
+                {/* Printed Status Badge */}
+                {isPrinted && (
+                  <div style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                    color: "white",
+                    padding: "8px 16px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    zIndex: 10
+                  }}>
+                    <span>✅ SAVED & PRINTED</span>
+                    <span style={{
+                      background: "rgba(255, 255, 255, 0.2)",
+                      padding: "2px 8px",
+                      borderRadius: "10px",
+                      fontSize: "11px"
+                    }}>
+                      #{isPrinted.serialNumber}
+                    </span>
+                  </div>
+                )}
+
+                {/* Barcode value is SKU Code No + running number */}
+                <Barcode
+                  value={barcodeNumbers[index]}
+                  width={3}
+                  height={80}
+                  fontSize={32}
+                  margin={0}
+                />
+                <div style={styles.barcodeDetails}>
+                  <div style={styles.barcodeInfo}>
+                    <strong>Barcode:</strong> {barcodeNumbers[index]}
+                  </div>
+                  <div style={styles.barcodeInfo}>
+                    <strong>SKU Code:</strong> {skuc}
+                  </div>
+                  <div style={styles.barcodeInfo}>
+                    <strong>SKU Name:</strong> {skun}
+                  </div>
+                  {/* Weight Fields Section */}
+                  <div style={{
+                    ...styles.barcodeInfo,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    marginTop: "15px",
+                    padding: "15px",
+                    backgroundColor: "rgba(153, 0, 239, 0.05)",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(153, 0, 239, 0.2)"
+                  }}>
+                    <div style={{ fontWeight: "bold", color: "#9900ef", marginBottom: "5px" }}>
+                      ⚖️ Weight Information
+                    </div>
+
+                    {/* Core Weight */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <strong style={{ minWidth: "120px" }}>Core Weight:</strong>
+                      <input
+                        type="text"
+                        placeholder="Enter core weight (optional)"
+                        value={barcodeCoreWeights[barcodeNumbers[index]] || ""}
+                        onChange={(e) => {
+                          const newCoreWeight = e.target.value;
+                          setBarcodeCoreWeights({
+                            ...barcodeCoreWeights,
+                            [barcodeNumbers[index]]: newCoreWeight
+                          });
+
+                          // Auto-calculate net weight if both core and gross weights exist
+                          const grossWeight = barcodeGrossWeights[barcodeNumbers[index]];
+                          if (grossWeight && newCoreWeight) {
+                            const gross = parseFloat(grossWeight) || 0;
+                            const core = parseFloat(newCoreWeight) || 0;
+                            const net = gross - core;
+                            setBarcodeNetWeights({
+                              ...barcodeNetWeights,
+                              [barcodeNumbers[index]]: net >= 0 ? net.toString() : "0"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: "14px",
+                          border: "2px solid #9900ef",
+                          borderRadius: "8px",
+                          flex: 1,
+                          backgroundColor: "white"
+                        }}
+                      />
+                    </div>
+
+                    {/* Gross Weight */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <strong style={{ minWidth: "120px" }}>Gross Weight:</strong>
+                      <input
+                        type="text"
+                        placeholder="Enter gross weight (required)"
+                        value={barcodeGrossWeights[barcodeNumbers[index]] || ""}
+                        onChange={(e) => {
+                          const newGrossWeight = e.target.value;
+                          setBarcodeGrossWeights({
+                            ...barcodeGrossWeights,
+                            [barcodeNumbers[index]]: newGrossWeight
+                          });
+
+                          // Auto-calculate net weight if both core and gross weights exist
+                          const coreWeight = barcodeCoreWeights[barcodeNumbers[index]];
+                          if (coreWeight && newGrossWeight) {
+                            const gross = parseFloat(newGrossWeight) || 0;
+                            const core = parseFloat(coreWeight) || 0;
+                            const net = gross - core;
+                            setBarcodeNetWeights({
+                              ...barcodeNetWeights,
+                              [barcodeNumbers[index]]: net >= 0 ? net.toString() : "0"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: "14px",
+                          border: "2px solid #10b981",
+                          borderRadius: "8px",
+                          flex: 1,
+                          backgroundColor: "white"
+                        }}
+                      />
+                      <span style={{
+                        color: barcodeGrossWeights[barcodeNumbers[index]] ? "#10b981" : "#ef4444",
+                        fontWeight: "bold"
+                      }}>
+                        {barcodeGrossWeights[barcodeNumbers[index]] ? "✓" : "⚠️ Required"}
+                      </span>
+                    </div>
+
+                    {/* Net Weight (Calculated) */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <strong style={{ minWidth: "120px" }}>Net Weight:</strong>
+                      <input
+                        type="text"
+                        placeholder="Auto-calculated"
+                        value={barcodeNetWeights[barcodeNumbers[index]] || ""}
+                        readOnly
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: "14px",
+                          border: "2px solid #6b7280",
+                          borderRadius: "8px",
+                          flex: 1,
+                          backgroundColor: "#f3f4f6",
+                          color: "#374151",
+                          cursor: "not-allowed"
+                        }}
+                      />
+                      <span style={{ color: "#6b7280", fontSize: "12px" }}>
+                        (Gross - Core)
+                      </span>
+                    </div>
+                  </div>
+                  <div style={styles.barcodeInfo}>
+                    <strong>Location:</strong> {location}
+                  </div>
+                  <div style={styles.barcodeInfo}>
+                    <strong>Date:</strong> {currentTime}
+                  </div>
+
+                  {/* Print Button */}
+                  <div style={{ marginTop: "15px", textAlign: "center" }}>
+                    <button
+                      className="styled-button"
+                      onClick={() => handlePrintIndividualBarcode(index)}
+                      style={{
+                        padding: "12px 24px",
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "12px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                        boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                        transition: "all 0.3s ease",
+                        minWidth: "auto",
+                        width: "100%"
+                      }}
+                      onMouseOver={(e) => {
+                        e.target.style.background = "linear-gradient(135deg, #059669 0%, #047857 100%)";
+                        e.target.style.transform = "translateY(-2px)";
+                      }}
+                      onMouseOut={(e) => {
+                        e.target.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+                        e.target.style.transform = "translateY(0)";
+                      }}
+                    >
+                      �  Print & Save Barcode #{index + 1}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Final barcode with the start and end batch numbers */}

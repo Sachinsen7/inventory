@@ -48,7 +48,9 @@ const SelectForm = () => {
               const skuCode = String(barcode.skuc) + String(bn);
 
               // Get individual weight for this specific barcode
-              const individualWeight = barcodeWeights[skuCode] || barcode.weight || "";
+              const individualGrossWeight = barcodeWeights[skuCode] || barcode.grossWeight || "";
+              const coreWeight = barcode.coreWeight || "";
+              const netWeight = barcode.netWeight || "";
 
               products.push({
                 sku: skuCode,
@@ -56,7 +58,9 @@ const SelectForm = () => {
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
-                weight: individualWeight, // Individual weight for this barcode
+                coreWeight: coreWeight,
+                grossWeight: individualGrossWeight,
+                netWeight: netWeight,
                 shift: shift,
                 location: location,
                 currentTime: currentTime,
@@ -70,7 +74,9 @@ const SelectForm = () => {
                 skuName: skuName,
                 packed: packed,
                 batch: batch,
-                weight: individualWeight, // Individual weight for this barcode
+                coreWeight: coreWeight,
+                grossWeight: individualGrossWeight,
+                netWeight: netWeight,
                 shift: shift,
                 location: location,
                 currentTime: currentTime,
@@ -119,7 +125,9 @@ const SelectForm = () => {
         skuName: "",
         packed: "",
         batch: "",
-        weight: "",
+        coreWeight: "",
+        grossWeight: "",
+        netWeight: "",
         shift: "",
         location: "",
         currentTime: "",
@@ -257,8 +265,8 @@ const SelectForm = () => {
               <div class="detail-value">${item.skuName || "N/A"}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-label">Weight</div>
-              <div class="detail-value">${item.weight || "N/A"}</div>
+              <div class="detail-label">Gross Weight</div>
+              <div class="detail-value">${item.grossWeight || "N/A"}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">Packed By</div>
@@ -595,10 +603,10 @@ const SelectForm = () => {
                           <span className="detail-value-mobile"> {item.skuName}</span>
                         </div>
                       )}
-                      {item.weight && (
+                      {item.grossWeight && (
                         <div className="detail-row-mobile">
-                          <span className="detail-label-mobile">⚖️ Weight:</span>
-                          <span className="detail-value-mobile"> {item.weight}</span>
+                          <span className="detail-label-mobile">⚖️ Gross Weight:</span>
+                          <span className="detail-value-mobile"> {item.grossWeight}</span>
                         </div>
                       )}
                       {item.packed && (
@@ -744,7 +752,7 @@ const SelectForm = () => {
                       <div style={styles.productDetails}>
                         <strong style={{ color: "#9900ef" }}>SKU: {item.sku}</strong>
                         {item.skuName && ` | ${item.skuName}`}
-                        {item.weight && ` | Weight: ${item.weight}`}
+                        {item.grossWeight && ` | Gross Weight: ${item.grossWeight}`}
                         <br />
                         {item.packed && `Packed: ${item.packed}`}
                         {item.batch && ` | Batch: ${item.batch}`}

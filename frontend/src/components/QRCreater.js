@@ -320,6 +320,12 @@ const QRCreater = () => {
     const grossWeight = barcodeGrossWeights[barcodeNumber];
     const netWeight = barcodeNetWeights[barcodeNumber] || "";
 
+    // Check if already printed (prevent duplicates)
+    if (printedBarcodes[barcodeNumber]) {
+      showToast.warning("⚠️ This barcode has already been printed and saved!");
+      return;
+    }
+
     // Check if gross weight is entered (required)
     if (!grossWeight) {
       showToast.error("⚠️ Please enter Gross Weight before printing!");
@@ -418,14 +424,13 @@ const QRCreater = () => {
                 margin: 0,
                 displayValue: true
               });
-              setTimeout(() => window.print(), 250);
             </script>
           </body>
         </html>
       `);
       doc.close();
 
-      // Wait for content to load, then print
+      // Wait for content to load, then print ONCE
       setTimeout(() => {
         printWindow.contentWindow.print();
         // Remove iframe after printing
@@ -434,7 +439,7 @@ const QRCreater = () => {
             document.body.removeChild(printWindow);
           }
         }, 1000);
-      }, 250);
+      }, 500);
 
       // Mark this barcode as printed instead of removing it
       setPrintedBarcodes(prev => ({
@@ -1493,30 +1498,40 @@ const QRCreater = () => {
                     <button
                       className="styled-button"
                       onClick={() => handlePrintIndividualBarcode(index)}
+                      disabled={isPrinted}
                       style={{
                         padding: "12px 24px",
-                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        background: isPrinted
+                          ? "linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)"
+                          : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                         color: "white",
                         border: "none",
                         borderRadius: "12px",
-                        cursor: "pointer",
+                        cursor: isPrinted ? "not-allowed" : "pointer",
                         fontSize: "14px",
                         fontWeight: "bold",
-                        boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                        boxShadow: isPrinted
+                          ? "0 2px 6px rgba(107, 114, 128, 0.2)"
+                          : "0 4px 12px rgba(16, 185, 129, 0.3)",
                         transition: "all 0.3s ease",
                         minWidth: "auto",
-                        width: "100%"
+                        width: "100%",
+                        opacity: isPrinted ? 0.6 : 1
                       }}
                       onMouseOver={(e) => {
-                        e.target.style.background = "linear-gradient(135deg, #059669 0%, #047857 100%)";
-                        e.target.style.transform = "translateY(-2px)";
+                        if (!isPrinted) {
+                          e.target.style.background = "linear-gradient(135deg, #059669 0%, #047857 100%)";
+                          e.target.style.transform = "translateY(-2px)";
+                        }
                       }}
                       onMouseOut={(e) => {
-                        e.target.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
-                        e.target.style.transform = "translateY(0)";
+                        if (!isPrinted) {
+                          e.target.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+                          e.target.style.transform = "translateY(0)";
+                        }
                       }}
                     >
-                      �  Print & Save Barcode #{index + 1}
+                      {isPrinted ? "✅ Already Printed" : `🖨️ Print & Save Barcode #${index + 1}`}
                     </button>
                   </div>
                 </div>

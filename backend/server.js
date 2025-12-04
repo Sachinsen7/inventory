@@ -222,7 +222,9 @@ const barcodeSchema = new mongoose.Schema({
   mixer: String,
   skuc: String,
   skun: String,
-  weight: String,
+  coreWeight: String, // Weight of core/packaging
+  grossWeight: String, // Total weight (renamed from 'weight')
+  netWeight: String, // Calculated: grossWeight - coreWeight
   batchNumbers: [Number],
   barcodeWeights: { type: Map, of: String }, // Store individual barcode weights as key-value pairs
   is_scanned: { type: Boolean, default: false }, // Track if barcode has been scanned
@@ -249,6 +251,95 @@ const transitSchema = new mongoose.Schema({
 });
 
 const Transit = mongoose.model("Transit", transitSchema, "transits");
+
+// Ledger Schema - Append-only audit trail for billing workflow
+const ledgerSchema = new mongoose.Schema({
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      'INVOICE_CREATED',
+      'INVOICE_UPDATED',
+      'INVOICE_DELETED',
+      'ITEM_WEIGHT_CHANGED',
+      'BARCODE_REMOVED',
+      'ITEM_ADDED',
+      'ITEM_REMOVED',
+      'QUANTITY_CHANGED',
+      'PRICE_CHANGED',
+      'PAYMENT_RECEIVED',
+      'PARTIAL_PAYMENT',
+      'PAYMENT_STATUS_UPDATED'
+    ]
+  },
+  entityType: {
+    type: String,
+    required: true,
+    enum: ['INVOICE', 'ITEM', 'BARCODE', 'PAYMENT']
+  },
+  entityId: {
+    type: String,
+    required: true,
+    index: true
+  },
+  invoiceId: {
+    type: String,
+    index: true
+  },
+  changedValues: {
+    before: mongoose.Schema.Types.Mixed,
+    after: mongoose.Schema.Types.Mixed
+  },
+  user: {
+    userId: String,
+    username: String,
+    email: String
+  },
+  metadata: {
+    ipAddress: String,
+    userAgent: String,
+    customerId: String,
+    customerName: String,
+    paymentAmount: Number,
+    paymentMethod: String,
+    remainingBalance: Number,
+    notes: String
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+    immutable: true,
+    index: true
+  }
+}, {
+  timestamps: false,
+  strict: true
+});
+
+// Prevent updates and deletes - enforce append-only
+ledgerSchema.pre('findOneAndUpdate', function () {
+  throw new Error('Ledger entries cannot be updated - append-only');
+});
+
+ledgerSchema.pre('findOneAndDelete', function () {
+  throw new Error('Ledger entries cannot be deleted - append-only');
+});
+
+ledgerSchema.pre('updateOne', function () {
+  throw new Error('Ledger entries cannot be updated - append-only');
+});
+
+ledgerSchema.pre('deleteOne', function () {
+  throw new Error('Ledger entries cannot be deleted - append-only');
+});
+
+// Indexes for efficient querying
+ledgerSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
+ledgerSchema.index({ invoiceId: 1, timestamp: -1 });
+ledgerSchema.index({ action: 1, timestamp: -1 });
+ledgerSchema.index({ 'metadata.customerId': 1, timestamp: -1 });
+
+const Ledger = mongoose.model("Ledger", ledgerSchema);
 
 // Routes
 
@@ -350,7 +441,9 @@ app.get("/api/product-details/:barcode", async (req, res) => {
               skuName: barcodeDoc.skun || "",
               packed: barcodeDoc.packed || "",
               batch: barcodeDoc.batch || "",
-              weight: barcodeDoc.weight || "",
+              coreWeight: barcodeDoc.coreWeight || "",
+              grossWeight: barcodeDoc.grossWeight || "",
+              netWeight: barcodeDoc.netWeight || "",
               shift: barcodeDoc.shift || "",
               location: barcodeDoc.location || "",
               currentTime: barcodeDoc.currentTime || "",
@@ -1096,7 +1189,9 @@ app.get("/api/product-details/:barcode", async (req, res) => {
       data: {
         product: barcodeData.product || "N/A",
         skuName: barcodeData.skun || "N/A",
-        weight: barcodeData.weight || "N/A",
+        coreWeight: barcodeData.coreWeight || "N/A",
+        grossWeight: barcodeData.grossWeight || "N/A",
+        netWeight: barcodeData.netWeight || "N/A",
         packed: barcodeData.packed || "N/A",
         batch: barcodeData.batch || "N/A",
         shift: barcodeData.shift || "N/A",
@@ -1266,7 +1361,9 @@ app.post(
     "mixer",
     "skuc",
     "skun",
-    "weight",
+    "coreWeight",
+    "grossWeight",
+    "netWeight",
     "batchNumbers",
     "barcodeWeights",
   ]),
@@ -1284,7 +1381,9 @@ app.post(
     body("mixer").optional().isString().trim(),
     body("skuc").optional().isString().trim(),
     body("skun").optional().isString().trim(),
-    body("weight").optional().isString().trim(),
+    body("coreWeight").optional().isString().trim(),
+    body("grossWeight").optional().isString().trim(),
+    body("netWeight").optional().isString().trim(),
     body("batchNumbers").optional().isArray(),
     body("barcodeWeights").optional().isObject(),
   ],
@@ -1340,7 +1439,9 @@ app.get("/api/product-details/:barcode", async (req, res) => {
       data: {
         product: foundProduct.product || "N/A",
         skuName: foundProduct.skun || "N/A",
-        weight: foundProduct.weight || "N/A",
+        coreWeight: foundProduct.coreWeight || "N/A",
+        grossWeight: foundProduct.grossWeight || "N/A",
+        netWeight: foundProduct.netWeight || "N/A",
         packed: foundProduct.packed || "N/A",
         batch: foundProduct.batch || "N/A",
         shift: foundProduct.shift || "N/A",
@@ -1954,6 +2055,85 @@ app.get("/api/transits/summary", async (req, res) => {
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
 
+// ============================================
+// LEDGER API ENDPOINTS
+// ============================================
+
+// Helper function to create ledger entry
+async function createLedgerEntry(entryData) {
+  try {
+    const ledgerEntry = new Ledger({
+      ...entryData,
+      timestamp: new Date()
+    });
+    await ledgerEntry.save();
+    logger.info('Ledger entry created:', { action: entryData.action, entityId: entryData.entityId });
+    return ledgerEntry;
+  } catch (error) {
+    logger.error('Error creating ledger entry:', error);
+    throw error;
+  }
+}
+
+// API: Create ledger entry
+app.post('/api/ledger', async (req, res) => {
+  try {
+    const ledgerEntry = await createLedgerEntry(req.body);
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get customer history
+app.get('/api/ledger/customer/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const entries = await Ledger.find({ 'metadata.customerId': customerId }).sort({ timestamp: -1 }).lean();
+    const paymentEntries = entries.filter(e => e.action === 'PAYMENT_RECEIVED' || e.action === 'PARTIAL_PAYMENT');
+    const totalPaid = paymentEntries.reduce((sum, entry) => sum + (entry.metadata.paymentAmount || 0), 0);
+    const invoiceEntries = entries.filter(e => e.action === 'INVOICE_CREATED');
+    const customerName = entries[0]?.metadata?.customerName || 'Unknown';
+    res.json({ success: true, data: { customer: { id: customerId, name: customerName }, totalInvoices: invoiceEntries.length, totalPaid, history: entries } });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/customer:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get invoice history
+app.get('/api/ledger/invoice/:invoiceId', async (req, res) => {
+  try {
+    const entries = await Ledger.find({ invoiceId: req.params.invoiceId }).sort({ timestamp: -1 }).lean();
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Record payment
+app.post('/api/ledger/payment', async (req, res) => {
+  try {
+    const { invoiceId, paymentAmount, paymentMethod, isFullPayment, notes, customerId, customerName } = req.body;
+    const previousPayments = await Ledger.find({ invoiceId, action: { $in: ['PAYMENT_RECEIVED', 'PARTIAL_PAYMENT'] } }).sort({ timestamp: -1 });
+    const previousPaid = previousPayments.reduce((sum, entry) => sum + (entry.metadata.paymentAmount || 0), 0);
+    const ledgerEntry = await createLedgerEntry({
+      action: isFullPayment ? 'PAYMENT_RECEIVED' : 'PARTIAL_PAYMENT',
+      entityType: 'PAYMENT',
+      entityId: `payment_${Date.now()}`,
+      invoiceId,
+      changedValues: { before: { paidAmount: previousPaid }, after: { paidAmount: previousPaid + paymentAmount } },
+      metadata: { customerId, customerName, paymentAmount, paymentMethod, remainingBalance: req.body.remainingBalance || 0, notes }
+    });
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger/payment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Serve static files from React build
 const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/build')));
@@ -1979,3 +2159,130 @@ app.listen(PORT, '0.0.0.0', () => {
   });
   console.log(`Server is listening on 0.0.0.0:${PORT}`);
 });
+
+// ============================================
+// LEDGER API ENDPOINTS
+// ============================================
+
+// Helper function to create ledger entry
+async function createLedgerEntry(entryData) {
+  try {
+    const ledgerEntry = new Ledger({
+      ...entryData,
+      timestamp: new Date()
+    });
+    await ledgerEntry.save();
+    logger.info('Ledger entry created:', { action: entryData.action, entityId: entryData.entityId });
+    return ledgerEntry;
+  } catch (error) {
+    logger.error('Error creating ledger entry:', error);
+    throw error;
+  }
+}
+
+// API: Create ledger entry
+app.post('/api/ledger', async (req, res) => {
+  try {
+    const ledgerEntry = await createLedgerEntry(req.body);
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get customer history (all invoices + actions)
+app.get('/api/ledger/customer/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const entries = await Ledger.find({ 'metadata.customerId': customerId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    const paymentEntries = entries.filter(e =>
+      e.action === 'PAYMENT_RECEIVED' || e.action === 'PARTIAL_PAYMENT'
+    );
+
+    const totalPaid = paymentEntries.reduce((sum, entry) =>
+      sum + (entry.metadata.paymentAmount || 0), 0
+    );
+
+    const invoiceEntries = entries.filter(e => e.action === 'INVOICE_CREATED');
+    const totalInvoices = invoiceEntries.length;
+
+    const customerName = entries[0]?.metadata?.customerName || 'Unknown';
+
+    res.json({
+      success: true,
+      data: {
+        customer: { id: customerId, name: customerName },
+        totalInvoices,
+        totalPaid,
+        history: entries
+      }
+    });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/customer:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get invoice history
+app.get('/api/ledger/invoice/:invoiceId', async (req, res) => {
+  try {
+    const { invoiceId } = req.params;
+
+    const entries = await Ledger.find({ invoiceId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Record payment
+app.post('/api/ledger/payment', async (req, res) => {
+  try {
+    const { invoiceId, paymentAmount, paymentMethod, isFullPayment, notes, customerId, customerName } = req.body;
+
+    const previousPayments = await Ledger.find({
+      invoiceId,
+      action: { $in: ['PAYMENT_RECEIVED', 'PARTIAL_PAYMENT'] }
+    }).sort({ timestamp: -1 });
+
+    const previousPaid = previousPayments.reduce((sum, entry) =>
+      sum + (entry.metadata.paymentAmount || 0), 0
+    );
+
+    const action = isFullPayment ? 'PAYMENT_RECEIVED' : 'PARTIAL_PAYMENT';
+
+    const ledgerEntry = await createLedgerEntry({
+      action,
+      entityType: 'PAYMENT',
+      entityId: `payment_${Date.now()}`,
+      invoiceId,
+      changedValues: {
+        before: { paidAmount: previousPaid },
+        after: { paidAmount: previousPaid + paymentAmount }
+      },
+      metadata: {
+        customerId,
+        customerName,
+        paymentAmount,
+        paymentMethod,
+        remainingBalance: req.body.remainingBalance || 0,
+        notes
+      }
+    });
+
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger/payment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+

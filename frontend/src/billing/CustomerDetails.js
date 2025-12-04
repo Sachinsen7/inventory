@@ -215,11 +215,41 @@ const BillHistory = ({ bills, customer }) => {
     );
   }
 
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'Completed':
+        return '#10b981';
+      case 'Processing':
+        return '#f59e0b';
+      case 'Failed':
+        return '#ef4444';
+      case 'Pending':
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const getPaymentStatusIcon = (status) => {
+    switch (status) {
+      case 'Completed':
+        return '✅';
+      case 'Processing':
+        return '🔄';
+      case 'Failed':
+        return '❌';
+      case 'Pending':
+      default:
+        return '⏳';
+    }
+  };
+
   return (
     <div className="table-responsive">
       <table className="table">
         <thead>
           <tr>
+            <th>STATUS</th>
+            <th>INVOICE ID</th>
             <th>BILL NUMBER</th>
             <th>DATE</th>
             <th>ITEMS COUNT</th>
@@ -231,6 +261,34 @@ const BillHistory = ({ bills, customer }) => {
         <tbody>
           {bills.map((bill) => (
             <tr key={bill._id}>
+              <td>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {bill.paymentStatus !== 'Completed' && (
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ef4444',
+                      display: 'inline-block',
+                      animation: 'pulse 2s infinite'
+                    }}></span>
+                  )}
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    backgroundColor: getPaymentStatusColor(bill.paymentStatus || 'Pending'),
+                    color: 'white',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {getPaymentStatusIcon(bill.paymentStatus || 'Pending')} {bill.paymentStatus || 'Pending'}
+                  </span>
+                </div>
+              </td>
+              <td style={{ fontWeight: '600', color: '#a78bfa' }}>{bill.invoiceId || 'N/A'}</td>
               <td>{bill.billNumber}</td>
               <td>{new Date(bill.createdAt).toLocaleDateString()}</td>
               <td>{bill.items.length}</td>
@@ -259,6 +317,18 @@ const BillHistory = ({ bills, customer }) => {
           ))}
         </tbody>
       </table>
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.5;
+            }
+          }
+        `}
+      </style>
     </div>
   );
 };

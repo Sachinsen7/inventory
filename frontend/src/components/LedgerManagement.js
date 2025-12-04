@@ -13,6 +13,39 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
     const [customerId, setCustomerId] = useState(propCustomerId || '');
     const [customerName, setCustomerName] = useState(propCustomerName || '');
     const [loading, setLoading] = useState(false);
+    const [invoices, setInvoices] = useState([]);
+    const [loadingInvoices, setLoadingInvoices] = useState(false);
+
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+    // Fetch invoices when customer is selected
+    React.useEffect(() => {
+        if (customerId) {
+            fetchInvoices();
+        }
+    }, [customerId]);
+
+    const fetchInvoices = async () => {
+        try {
+            setLoadingInvoices(true);
+            const response = await fetch(`${backendUrl}/api/invoices?customerId=${customerId}`);
+            const data = await response.json();
+            setInvoices(data.invoices || []);
+        } catch (error) {
+            console.error('Error fetching invoices:', error);
+            showToast.error('Failed to load invoices');
+        } finally {
+            setLoadingInvoices(false);
+        }
+    };
+
+    const handleInvoiceSelect = (selectedInvoiceId) => {
+        setInvoiceId(selectedInvoiceId);
+        const invoice = invoices.find(inv => inv.invoiceId === selectedInvoiceId);
+        if (invoice) {
+            setPaymentAmount(invoice.totalAmount.toString());
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -22,21 +55,38 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
             return;
         }
 
+        // Validate payment amount is a valid number
+        if (isNaN(paymentAmount) || parseFloat(paymentAmount) <= 0) {
+            showToast.error('Please enter a valid payment amount greater than 0');
+            return;
+        }
+
+        // Validate remaining balance if partial payment
+        if (!isFullPayment && remainingBalance) {
+            if (isNaN(remainingBalance) || parseFloat(remainingBalance) < 0) {
+                showToast.error('Please enter a valid remaining balance');
+                return;
+            }
+        }
+
         try {
             setLoading(true);
 
+            const paymentAmountNum = parseFloat(paymentAmount);
+            const remainingBalanceNum = isFullPayment ? 0 : parseFloat(remainingBalance || 0);
+
             await ledgerService.recordPayment({
                 invoiceId,
-                paymentAmount: parseFloat(paymentAmount),
+                paymentAmount: paymentAmountNum,
                 paymentMethod,
                 isFullPayment,
-                remainingBalance: isFullPayment ? 0 : parseFloat(remainingBalance || 0),
+                remainingBalance: remainingBalanceNum,
                 notes,
                 customerId,
                 customerName
             });
 
-            showToast.success(`Payment of ₹${paymentAmount} recorded successfully!`);
+            showToast.success(`Payment of ₹${paymentAmountNum.toFixed(2)} recorded successfully!`);
 
             // Reset form
             setInvoiceId('');
@@ -45,8 +95,15 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
             setIsFullPayment(true);
             setRemainingBalance('');
             setNotes('');
-            setCustomerId('');
-            setCustomerName('');
+            if (!propCustomerId) {
+                setCustomerId('');
+                setCustomerName('');
+            }
+
+            // Refresh invoices
+            if (customerId) {
+                fetchInvoices();
+            }
 
         } catch (error) {
             console.error('Error recording payment:', error);
@@ -112,14 +169,61 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                     <div className="form-section">
                         <h3>Invoice Information</h3>
                         <div className="form-group">
-                            <label>Invoice ID *</label>
-                            <input
-                                type="text"
-                                value={invoiceId}
-                                onChange={(e) => setInvoiceId(e.target.value)}
-                                placeholder="Enter invoice ID"
-                                required
-                            />
+                            <label>Select Invoice *</label>
+                            {loadingInvoices ? (
+                                <div style={{ padding: '10px', color: '#666' }}>Loading invoices...</div>
+                            ) : invoices.length > 0 ? (
+                                <select
+                                    value={invoiceId}
+                                    onChange={(e) => handleInvoiceSelect(e.target.value)}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #ddd',
+                                        fontSize: '1rem'
+                                    }}
+                                >
+                                    <option value="">-- Select an Invoice --</option>
+                                    {invoices.map((invoice) => (
+                                        <option key={invoice._id} value={invoice.invoiceId}>
+                                            {invoice.invoiceId} - {invoice.billNumber} - ₹{invoice.totalAmount.toLocaleString()} ({invoice.paymentStatus})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div style={{
+                                    padding: '15px',
+                                    background: '#fff3cd',
+                                    border: '1px solid #ffc107',
+                                    borderRadius: '8px',
+                                    color: '#856404'
+                                }}>
+                                    {customerId ? 'No invoices found for this customer' : 'Please select a customer first'}
+                                </div>
+                            )}
+
+                            {invoiceId && (
+                                <div style={{
+                                    marginTop: '10px',
+                                    padding: '10px',
+                                    background: '#e7f3ff',
+                                    borderRadius: '8px',
+                                    fontSize: '0.9rem',
+                                    color: '#004085'
+                                }}>
+                                    <strong>Selected Invoice:</strong> {invoiceId}
+                                    {invoices.find(inv => inv.invoiceId === invoiceId) && (
+                                        <>
+                                            <br />
+                                            <strong>Status:</strong> {invoices.find(inv => inv.invoiceId === invoiceId).paymentStatus}
+                                            <br />
+                                            <strong>Amount:</strong> ₹{invoices.find(inv => inv.invoiceId === invoiceId).totalAmount.toLocaleString()}
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -129,14 +233,33 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                             <div className="form-group">
                                 <label>Payment Amount (₹) *</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={paymentAmount}
-                                    onChange={(e) => setPaymentAmount(e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // Allow only numbers and decimal point
+                                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                            setPaymentAmount(value);
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        // Format to 2 decimal places on blur if valid number
+                                        const value = e.target.value;
+                                        if (value && !isNaN(value)) {
+                                            setPaymentAmount(parseFloat(value).toFixed(2));
+                                        }
+                                    }}
                                     placeholder="0.00"
-                                    step="0.01"
-                                    min="0"
                                     required
+                                    style={{
+                                        borderColor: paymentAmount && isNaN(paymentAmount) ? '#dc3545' : ''
+                                    }}
                                 />
+                                {paymentAmount && isNaN(paymentAmount) && (
+                                    <small style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '4px', display: 'block' }}>
+                                        Please enter a valid number
+                                    </small>
+                                )}
                             </div>
                             <div className="form-group">
                                 <label>Payment Method *</label>
@@ -170,13 +293,32 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                             <div className="form-group">
                                 <label>Remaining Balance (₹)</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={remainingBalance}
-                                    onChange={(e) => setRemainingBalance(e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // Allow only numbers and decimal point
+                                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                            setRemainingBalance(value);
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        // Format to 2 decimal places on blur if valid number
+                                        const value = e.target.value;
+                                        if (value && !isNaN(value)) {
+                                            setRemainingBalance(parseFloat(value).toFixed(2));
+                                        }
+                                    }}
                                     placeholder="0.00"
-                                    step="0.01"
-                                    min="0"
+                                    style={{
+                                        borderColor: remainingBalance && isNaN(remainingBalance) ? '#dc3545' : ''
+                                    }}
                                 />
+                                {remainingBalance && isNaN(remainingBalance) && (
+                                    <small style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '4px', display: 'block' }}>
+                                        Please enter a valid number
+                                    </small>
+                                )}
                             </div>
                         )}
 

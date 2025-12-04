@@ -8,6 +8,7 @@ import { showToast } from '../utils/toastNotifications';
 import './Billing.css'; // Import the new stylesheet
 import CustomerHistory from '../components/CustomerHistory';
 import LedgerManagement from '../components/LedgerManagement';
+import PaymentTracker from '../components/PaymentTracker';
 
 
 function Billing() {
@@ -51,6 +52,10 @@ function Billing() {
   // Ledger states
   const [showCustomerHistory, setShowCustomerHistory] = useState(false);
   const [showLedgerManagement, setShowLedgerManagement] = useState(false);
+  const [showPaymentTracker, setShowPaymentTracker] = useState(false);
+
+  // Payment status state
+  const [paymentStatus, setPaymentStatus] = useState('Pending');
 
   const navigate = useNavigate();
   const billRef = useRef();
@@ -724,7 +729,8 @@ function Billing() {
         godownName: selectedGodownData?.name || '',
         items: selectedItems,
         totalAmount: totalAmount,
-        priceType: priceType
+        priceType: priceType,
+        paymentStatus: paymentStatus
       };
 
       // Include date range in bill metadata if dates are selected
@@ -1281,6 +1287,8 @@ function Billing() {
                   </div>
                 )}
 
+
+
                 {/* Action Buttons */}
                 <div className="row mt-4">
                   <div className="col-md-12">
@@ -1695,6 +1703,20 @@ function Billing() {
                 >
                   💰 Manage Ledger & Payments
                 </button>
+
+                <button
+                  onClick={() => setShowPaymentTracker(true)}
+                  className="btn"
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    padding: '14px 28px',
+                    fontSize: '15px',
+                    fontWeight: '600'
+                  }}
+                >
+                  💳 Payment Tracker
+                </button>
               </div>
             </div>
           </div>
@@ -1715,6 +1737,13 @@ function Billing() {
           customerId={selectedCustomer}
           customerName={customers.find(c => c._id === selectedCustomer)?.name || ''}
           onClose={() => setShowLedgerManagement(false)}
+        />
+      )}
+
+      {/* Payment Tracker Modal - Outside main container */}
+      {showPaymentTracker && (
+        <PaymentTracker
+          onClose={() => setShowPaymentTracker(false)}
         />
       )}
     </div>

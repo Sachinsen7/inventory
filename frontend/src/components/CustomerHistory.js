@@ -105,7 +105,25 @@ function CustomerHistory({ customerId, onClose }) {
                         <h2>📜 Customer History</h2>
                         <p className="customer-name">{customerData?.name}</p>
                     </div>
-                    <button onClick={onClose} className="btn-close-x">✕</button>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button
+                            onClick={loadHistory}
+                            className="btn-refresh"
+                            style={{
+                                padding: '8px 16px',
+                                background: '#10b981',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: '600'
+                            }}
+                        >
+                            🔄 Refresh
+                        </button>
+                        <button onClick={onClose} className="btn-close-x">✕</button>
+                    </div>
                 </div>
 
                 {/* Stats Summary */}

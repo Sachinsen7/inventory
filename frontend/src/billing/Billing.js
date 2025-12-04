@@ -6,6 +6,9 @@ import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
 import { showToast } from '../utils/toastNotifications';
 import './Billing.css'; // Import the new stylesheet
+import CustomerHistory from '../components/CustomerHistory';
+import LedgerManagement from '../components/LedgerManagement';
+
 
 function Billing() {
   const [customers, setCustomers] = useState([]);
@@ -44,6 +47,10 @@ function Billing() {
   const [showStockDialog, setShowStockDialog] = useState(false);
   const [stockDialogItems, setStockDialogItems] = useState([]);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
+
+  // Ledger states
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [showLedgerManagement, setShowLedgerManagement] = useState(false);
 
   const navigate = useNavigate();
   const billRef = useRef();
@@ -1651,8 +1658,65 @@ function Billing() {
               </div>
             </div>
           )}
+
+          {/* Ledger Management Buttons - Always visible on main page */}
+          <div className="card mb-4" style={cardStyle}>
+            <div className="card-header">
+              <h5>💼 Customer Management</h5>
+            </div>
+            <div className="card-body">
+              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {selectedCustomer && (
+                  <button
+                    onClick={() => setShowCustomerHistory(true)}
+                    className="btn"
+                    style={{
+                      background: 'linear-gradient(135deg, #9900ef 0%, #7700cc 100%)',
+                      color: 'white',
+                      padding: '14px 28px',
+                      fontSize: '15px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    📜 View Customer History
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowLedgerManagement(true)}
+                  className="btn"
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    padding: '14px 28px',
+                    fontSize: '15px',
+                    fontWeight: '600'
+                  }}
+                >
+                  💰 Manage Ledger & Payments
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Customer History Modal - Outside main container */}
+      {showCustomerHistory && (
+        <CustomerHistory
+          customerId={selectedCustomer}
+          onClose={() => setShowCustomerHistory(false)}
+        />
+      )}
+
+      {/* Ledger Management Modal - Outside main container */}
+      {showLedgerManagement && (
+        <LedgerManagement
+          customerId={selectedCustomer}
+          customerName={customers.find(c => c._id === selectedCustomer)?.name || ''}
+          onClose={() => setShowLedgerManagement(false)}
+        />
+      )}
     </div>
   );
 }

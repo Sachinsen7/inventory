@@ -2250,6 +2250,11 @@ app.post('/api/ledger/payment', async (req, res) => {
 
 
 // ============================================
+// MOUNT BILLING ROUTES
+// ============================================
+app.use('/api/bills', billingRoutes);
+
+// ============================================
 // SERVE STATIC FILES (Must be AFTER all API routes)
 // ============================================
 const path = require('path');

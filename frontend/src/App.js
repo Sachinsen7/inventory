@@ -39,6 +39,7 @@ import CustomersList from "./billing/CustomersList";
 import CustomerDetails from "./billing/CustomerDetails";
 import AllProductsPage from "./components/AllProductsPage";
 import ProductDetails from "./components/ProductDetails";
+import EWayBillDashboard from "./components/EWayBillDashboard";
 
 const App = () => {
   const [isAuthenticated] = useState(false);
@@ -103,6 +104,7 @@ const App = () => {
         <Route path="/all-products" element={<AllProductsPage />} />
         <Route path="/product/:barcode" element={<ProductDetails />} />
         <Route path="/product" element={<ProductDetails />} />
+        <Route path="/eway-dashboard" element={<EWayBillDashboard />} />
       </Routes>
     </Router>
   );

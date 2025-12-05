@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { showToast } from "../utils/toastNotifications";
 import * as XLSX from "xlsx";
+import EWayBillGenerator from "../components/EWayBillGenerator";
 
 // A component to display and edit a single item
 const Item = ({ item, onDelete, onUpdate }) => {
@@ -254,7 +255,7 @@ const BillHistory = ({ bills, customer }) => {
             <th>DATE</th>
             <th>ITEMS COUNT</th>
             <th>TOTAL AMOUNT</th>
-            <th>PRICE TYPE</th>
+            <th>E-WAY BILL</th>
             <th>ACTIONS</th>
           </tr>
         </thead>
@@ -294,24 +295,43 @@ const BillHistory = ({ bills, customer }) => {
               <td>{bill.items.length}</td>
               <td>₹{bill.totalAmount}</td>
               <td>
-                <span
-                  className={`badge ${bill.priceType === "masterPrice"
-                    ? "bg-warning"
-                    : "bg-info"
-                    }`}
-                >
-                  {bill.priceType === "masterPrice"
-                    ? "Special Price"
-                    : "Regular Price"}
-                </span>
+                {bill.eWayBill?.generated ? (
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <span className="badge bg-success" style={{ display: 'block', marginBottom: '5px' }}>
+                      ✅ {bill.eWayBill.eWayBillNo}
+                    </span>
+                    <small style={{ color: 'rgba(255,255,255,0.7)' }}>
+                      Valid: {new Date(bill.eWayBill.validUpto).toLocaleDateString()}
+                    </small>
+                  </div>
+                ) : bill.eWayBill?.jsonGenerated ? (
+                  <span className="badge bg-warning">📥 JSON Generated</span>
+                ) : (
+                  <span className="badge bg-secondary">Not Generated</span>
+                )}
               </td>
               <td>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => downloadBillPDF(bill)}
-                >
-                  Download PDF
-                </button>
+                <div style={{ display: 'flex', gap: '5px', flexDirection: 'column' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => downloadBillPDF(bill)}
+                  >
+                    📄 Invoice PDF
+                  </button>
+                  {!bill.eWayBill?.generated && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => {
+                        if (window.setSelectedBillForEWay) {
+                          window.setSelectedBillForEWay(bill);
+                          window.setShowEWayBillGenerator(true);
+                        }
+                      }}
+                    >
+                      🚛 E-Way Bill
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -339,9 +359,28 @@ function CustomerDetails() {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // E-Way Bill states
+  const [showEWayBillGenerator, setShowEWayBillGenerator] = useState(false);
+  const [selectedBillForEWay, setSelectedBillForEWay] = useState(null);
+
   // Backend URL from environment variable
   const backendUrl =
     process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
+  // Set up global functions for E-Way Bill button
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.setSelectedBillForEWay = setSelectedBillForEWay;
+      window.setShowEWayBillGenerator = setShowEWayBillGenerator;
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.setSelectedBillForEWay = null;
+        window.setShowEWayBillGenerator = null;
+      }
+    };
+  }, []);
   // Excel upload state
   const [excelData, setExcelData] = useState([]);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
@@ -1343,8 +1382,28 @@ function CustomerDetails() {
           <BillHistory bills={filteredBills} customer={customer} />
         </div>
       </div>
+
+      {/* E-Way Bill Generator Modal */}
+      {showEWayBillGenerator && selectedBillForEWay && (
+        <EWayBillGenerator
+          bill={selectedBillForEWay}
+          onClose={() => {
+            setShowEWayBillGenerator(false);
+            setSelectedBillForEWay(null);
+          }}
+          onSuccess={() => {
+            fetchBills(); // Refresh bills to show updated E-Way Bill status
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// Set up global functions for E-Way Bill button
+if (typeof window !== 'undefined') {
+  window.setSelectedBillForEWay = null;
+  window.setShowEWayBillGenerator = null;
 }
 
 export default CustomerDetails;

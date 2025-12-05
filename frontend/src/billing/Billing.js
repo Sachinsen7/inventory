@@ -220,11 +220,20 @@ function Billing() {
     setSelectedItems([]);
     setShowInventoryStatus(false);
     setShowQRCode(false);
+    setSelectedGodown('');
+    setSelectedGodownData(null);
 
-    // If godown is also selected, fetch and match items
-    if (customerId && selectedGodown) {
-      await fetchAndMatchItems(customerId, selectedGodown);
+    // Fetch godowns sorted by location matching
+    if (customerId) {
+      try {
+        const response = await axios.get(`${backendUrl}/api/bills/godowns/sorted/${customerId}`);
+        setGodowns(response.data);
+      } catch (error) {
+        console.error('Error fetching godowns:', error);
+        setGodowns({ matchingGodowns: [], nonMatchingGodowns: [] });
+      }
     } else {
+      setGodowns({ matchingGodowns: [], nonMatchingGodowns: [] });
       setAvailableItems([]);
     }
   };
@@ -466,10 +475,37 @@ function Billing() {
     console.log('Calculated total:', calculatedTotal);
     console.log('Current totalAmount state:', totalAmount);
 
+    // Generate invoice number
+    const invoiceNumber = `INV/${new Date().getFullYear().toString().slice(-2)}-${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0')}`;
+
+    // Convert amount to words
+    const numberToWords = (num) => {
+      const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+      const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+      const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+      if (num === 0) return 'Zero';
+
+      const convertLessThanThousand = (n) => {
+        if (n === 0) return '';
+        if (n < 10) return ones[n];
+        if (n < 20) return teens[n - 10];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+        return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convertLessThanThousand(n % 100) : '');
+      };
+
+      if (num < 1000) return convertLessThanThousand(num);
+      if (num < 100000) return convertLessThanThousand(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 !== 0 ? ' ' + convertLessThanThousand(num % 1000) : '');
+      if (num < 10000000) return convertLessThanThousand(Math.floor(num / 100000)) + ' Lakh' + (num % 100000 !== 0 ? ' ' + numberToWords(num % 100000) : '');
+      return convertLessThanThousand(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 !== 0 ? ' ' + numberToWords(num % 10000000) : '');
+    };
+
+    const amountInWords = numberToWords(Math.floor(grandTotal)) + ' Rupees Only';
+
     try {
       // Create a temporary div for PDF generation
       const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '20px';
+      pdfContent.style.padding = '30px';
       pdfContent.style.fontFamily = 'Arial, sans-serif';
       pdfContent.style.backgroundColor = 'white';
       pdfContent.style.color = 'black';
@@ -480,107 +516,183 @@ function Billing() {
       pdfContent.style.top = '0';
 
       pdfContent.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #2c3e50; margin-bottom: 10px;">INVOICE</h1>
-          <div style="border-bottom: 2px solid #3498db; width: 100px; margin: 0 auto;"></div>
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 25px; border-bottom: 3px solid #2c3e50; padding-bottom: 15px;">
+          <h1 style="color: #2c3e50; margin: 0 0 5px 0; font-size: 32px; letter-spacing: 2px;">TAX INVOICE</h1>
+          <p style="margin: 0; color: #7f8c8d; font-size: 12px;">GST Compliant Invoice</p>
         </div>
-        
-        <div style="margin-bottom: 30px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-            <div>
-              <h3 style="color: #2c3e50; margin-bottom: 10px;">Bill To:</h3>
-              <p style="margin: 5px 0;"><strong>Name:</strong> ${selectedCustomerData.name}</p>
-              <p style="margin: 5px 0;"><strong>GST No:</strong> ${selectedCustomerData.gstNo || 'N/A'}</p>
-              <p style="margin: 5px 0;"><strong>Address:</strong> ${selectedCustomerData.address}</p>
-              <p style="margin: 5px 0;"><strong>City:</strong> ${selectedCustomerData.city}</p>
-              <p style="margin: 5px 0;"><strong>State:</strong> ${selectedCustomerData.state}</p>
-              <p style="margin: 5px 0;"><strong>Phone:</strong> ${selectedCustomerData.phoneNumber || 'N/A'}</p>
+
+        <!-- Company & Invoice Details -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <div style="flex: 1;">
+            <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Seller Details</h3>
+            <p style="margin: 3px 0; font-weight: bold; font-size: 16px;">Your Company Name</p>
+            <p style="margin: 3px 0; font-size: 13px;">Your Company Address</p>
+            <p style="margin: 3px 0; font-size: 13px;">City, State - 400001</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>GSTIN:</strong> 27XXXXXXXXXXXXX</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Phone:</strong> +91 XXXXXXXXXX</p>
+          </div>
+          <div style="flex: 1; text-align: right;">
+            <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Invoice Details</h3>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Invoice No:</strong> ${invoiceNumber}</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Invoice Date:</strong> ${new Date().toLocaleDateString('en-IN')}</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Place of Supply:</strong> ${selectedCustomerData.state}</p>
+            ${selectedGodownData ? `<p style="margin: 3px 0; font-size: 13px;"><strong>Dispatch From:</strong> ${selectedGodownData.name}</p>` : ''}
+          </div>
+        </div>
+
+        <!-- Buyer Details -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Buyer Details (Bill To)</h3>
+          <div style="display: flex; justify-content: space-between;">
+            <div style="flex: 1;">
+              <p style="margin: 3px 0; font-weight: bold; font-size: 16px;">${selectedCustomerData.name}</p>
+              <p style="margin: 3px 0; font-size: 13px;">${selectedCustomerData.address}</p>
+              <p style="margin: 3px 0; font-size: 13px;">${selectedCustomerData.city}, ${selectedCustomerData.state}</p>
             </div>
-            <div style="text-align: right;">
-              <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-              <p style="margin: 5px 0;"><strong>Price Type:</strong> ${priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}</p>
-              ${selectedGodownData ? `<p style="margin: 5px 0;"><strong>Godown:</strong> ${selectedGodownData.name}</p>` : ''}
-              ${startDate || endDate ? `<p style="margin: 5px 0;"><strong>Date Range:</strong> ${startDate ? new Date(startDate).toLocaleDateString() : 'N/A'} - ${endDate ? new Date(endDate).toLocaleDateString() : 'N/A'}</p>` : ''}
+            <div style="flex: 1; text-align: right;">
+              <p style="margin: 3px 0; font-size: 13px;"><strong>GSTIN:</strong> ${selectedCustomerData.gstNo || 'Unregistered'}</p>
+              <p style="margin: 3px 0; font-size: 13px;"><strong>Phone:</strong> ${selectedCustomerData.phoneNumber || 'N/A'}</p>
+              <p style="margin: 3px 0; font-size: 13px;"><strong>State Code:</strong> ${selectedCustomerData.state === 'Maharashtra' ? '27' : 'XX'}</p>
             </div>
           </div>
         </div>
         
-        <div style="margin-bottom: 30px;">
-          <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+        <!-- Items Table -->
+        <div style="margin-bottom: 25px;">
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #2c3e50;">
             <thead>
-              <tr style="background-color: #f8f9fa;">
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Item Name</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: center;">Price (₹)</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: center;">Quantity</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">Total (₹)</th>
+              <tr style="background-color: #2c3e50; color: white;">
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Sr.</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: left; font-size: 12px;">Item Description</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">HSN</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Qty</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Unit</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Rate</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Taxable Value</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">GST</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Total</th>
               </tr>
             </thead>
             <tbody>
-              ${selectedItems.map(item => `
-                <tr>
-                  <td style="border: 1px solid #ddd; padding: 12px;">${item.itemName}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">₹${item.selectedPrice}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${item.quantity}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">₹${item.total}</td>
+              ${selectedItems.map((item, index) => `
+                <tr style="background-color: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'};">
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">${index + 1}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; font-size: 12px;">${item.itemName}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">0000</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">${item.quantity}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">PCS</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px;">₹${item.selectedPrice.toFixed(2)}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px;">₹${item.total.toFixed(2)}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">18%</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px; font-weight: bold;">₹${(item.total * 1.18).toFixed(2)}</td>
                 </tr>
               `).join('')}
+              <!-- Totals Row -->
               <tr style="background-color: #f8f9fa;">
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  <strong>Subtotal:</strong>
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  <strong>₹${subtotal.toFixed(2)}</strong>
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;"><strong>Taxable Amount:</strong></td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px; font-weight: bold;">₹${subtotal.toFixed(2)}</td>
               </tr>
               ${sgst > 0 ? `
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  SGST (9%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${sgst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">CGST @ 9%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${cgst.toFixed(2)}</td>
               </tr>
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  CGST (9%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${cgst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">SGST @ 9%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${sgst.toFixed(2)}</td>
               </tr>
               ` : ''}
               ${igst > 0 ? `
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  IGST (18%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${igst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">IGST @ 18%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${igst.toFixed(2)}</td>
               </tr>
               ` : ''}
-              <tr style="background-color: #3498db; color: white; font-weight: bold;">
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  <strong>GRAND TOTAL:</strong>
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-size: 18px;">
-                  <strong>₹${grandTotal.toFixed(2)}</strong>
-                </td>
+              <tr>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">Round Off:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹0.00</td>
+              </tr>
+              <tr style="background-color: #2c3e50; color: white;">
+                <td colspan="6" style="border: 1px solid #2c3e50; padding: 12px; text-align: right; font-size: 16px; font-weight: bold;">INVOICE TOTAL:</td>
+                <td colspan="3" style="border: 1px solid #2c3e50; padding: 12px; text-align: right; font-size: 18px; font-weight: bold;">₹${grandTotal.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <div style="text-align: right; margin-top: 20px; margin-bottom: 30px;">
-          <h2 style="color: #2c3e50; margin: 0; font-size: 24px;">Grand Total: ₹${grandTotal.toFixed(2)}</h2>
-          <p style="color: #7f8c8d; font-size: 14px; margin-top: 10px;">
-            ${sgst > 0 ? '(Includes SGST 9% + CGST 9%)' : igst > 0 ? '(Includes IGST 18%)' : ''}
-          </p>
+        <!-- Amount in Words -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <p style="margin: 0; font-size: 13px;"><strong>Amount in Words:</strong></p>
+          <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: bold; color: #2c3e50;">${amountInWords}</p>
         </div>
-        
-        <div style="margin-top: 50px; text-align: center; color: #7f8c8d; font-size: 12px;">
-          <p>Thank you for your business!</p>
+
+        <!-- Tax Summary -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #fff3cd;">
+          <h4 style="margin: 0 0 10px 0; color: #856404; font-size: 14px;">Tax Summary</h4>
+          <table style="width: 100%; font-size: 12px;">
+            <tr>
+              <td style="padding: 3px;"><strong>Tax Type:</strong></td>
+              <td style="padding: 3px;">${sgst > 0 ? 'Intra-State (CGST + SGST)' : 'Inter-State (IGST)'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 3px;"><strong>Taxable Amount:</strong></td>
+              <td style="padding: 3px;">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            ${sgst > 0 ? `
+            <tr>
+              <td style="padding: 3px;"><strong>CGST (9%):</strong></td>
+              <td style="padding: 3px;">₹${cgst.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 3px;"><strong>SGST (9%):</strong></td>
+              <td style="padding: 3px;">₹${sgst.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+            ${igst > 0 ? `
+            <tr>
+              <td style="padding: 3px;"><strong>IGST (18%):</strong></td>
+              <td style="padding: 3px;">₹${igst.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+            <tr style="border-top: 2px solid #856404;">
+              <td style="padding: 3px;"><strong>Total Tax:</strong></td>
+              <td style="padding: 3px;"><strong>₹${(cgst + sgst + igst).toFixed(2)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Terms & Conditions -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px;">
+          <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Terms & Conditions:</h4>
+          <ol style="margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.6;">
+            <li>Goods once sold will not be taken back or exchanged</li>
+            <li>Interest @ 18% p.a. will be charged on delayed payment</li>
+            <li>Subject to ${selectedCustomerData.city} Jurisdiction</li>
+            <li>Our responsibility ceases as soon as goods leave our premises</li>
+            <li>Delivery subject to availability of stock</li>
+          </ol>
+        </div>
+
+        <!-- Bank Details & Signature -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+          <div style="flex: 1; border: 2px solid #e0e0e0; padding: 15px; margin-right: 10px;">
+            <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Bank Details:</h4>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>Bank Name:</strong> Your Bank Name</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>A/C No:</strong> XXXXXXXXXXXX</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>IFSC Code:</strong> XXXXXX</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>Branch:</strong> Your Branch</p>
+          </div>
+          <div style="flex: 1; border: 2px solid #e0e0e0; padding: 15px; text-align: right;">
+            <h4 style="margin: 0 0 40px 0; color: #2c3e50; font-size: 14px;">For Your Company Name</h4>
+            <p style="margin: 40px 0 0 0; font-size: 12px; border-top: 1px solid #000; padding-top: 5px; display: inline-block;">Authorized Signatory</p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; padding: 15px; background-color: #2c3e50; color: white; border-radius: 5px;">
+          <p style="margin: 0; font-size: 11px;">This is a computer-generated invoice and does not require a physical signature</p>
+          <p style="margin: 5px 0 0 0; font-size: 11px;">For any queries, please contact: info@yourcompany.com | +91 XXXXXXXXXX</p>
         </div>
       `;
 
@@ -1036,6 +1148,68 @@ function Billing() {
               </div>
             </div>
           </div>
+
+          {/* Godown Selection */}
+          {selectedCustomer && (
+            <div className="card mb-4" style={cardStyle}>
+              <div className="card-header">
+                <h5>Select Godown</h5>
+              </div>
+              <div className="card-body">
+                <select
+                  className="form-select"
+                  value={selectedGodown}
+                  onChange={async (e) => {
+                    const godownId = e.target.value;
+                    setSelectedGodown(godownId);
+                    setShowInventoryStatus(false);
+
+                    if (godownId) {
+                      // Fetch godown details
+                      try {
+                        const godownResponse = await axios.get(`${backendUrl}/api/godowns/${godownId}`);
+                        setSelectedGodownData(godownResponse.data);
+                      } catch (error) {
+                        console.error('Error fetching godown details:', error);
+                      }
+
+                      // Fetch and match items if customer is selected
+                      if (selectedCustomer) {
+                        await fetchAndMatchItems(selectedCustomer, godownId);
+                      }
+                    } else {
+                      setSelectedGodownData(null);
+                    }
+                  }}
+                >
+                  <option value="">Choose a godown...</option>
+                  {godowns.matchingGodowns && godowns.matchingGodowns.length > 0 && (
+                    <optgroup label="📍 Matching Location">
+                      {godowns.matchingGodowns.map(godown => (
+                        <option key={godown._id} value={godown._id}>
+                          🏢 {godown.name} - {godown.city}, {godown.state}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {godowns.nonMatchingGodowns && godowns.nonMatchingGodowns.length > 0 && (
+                    <optgroup label="🌍 Other Locations">
+                      {godowns.nonMatchingGodowns.map(godown => (
+                        <option key={godown._id} value={godown._id}>
+                          🏢 {godown.name} - {godown.city}, {godown.state}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                {selectedGodown && selectedGodownData && (
+                  <small style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: '8px', display: 'block' }}>
+                    Selected Godown: {selectedGodownData.name} - {selectedGodownData.city}, {selectedGodownData.state}
+                  </small>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Available Items Section */}
           {customerItems.length > 0 && (

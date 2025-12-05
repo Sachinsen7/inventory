@@ -28,6 +28,11 @@ function Navbar() {
               Billing
             </Link>
           </li>
+          {/* <li className="nav-item">
+            <Link to="/eway-dashboard" className="nav-links" onClick={closeMobileMenu}>
+              🚛 E-Way Dashboard
+            </Link>
+          </li> */}
         </ul>
       </div>
     </nav>

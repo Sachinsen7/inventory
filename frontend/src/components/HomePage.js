@@ -42,12 +42,12 @@ const HomePage = () => {
           marginBottom: '29px',
           animation: 'fadeIn 1.5s ease-out',
           position: 'absolute',
-          fontFamily:'Arial Rounded MT Bold',
+          fontFamily: 'Arial Rounded MT Bold',
           top: '20px', // Positioned at the top
-          fontWeight:'bold',
+          fontWeight: 'bold',
         }}
       >
-        Welcome 
+        Welcome
       </h1>
 
       <div style={{ marginTop: '100px' }}>
@@ -86,7 +86,7 @@ const HomePage = () => {
           style={{
             backgroundColor: 'rgba(218, 216, 224, 0.8)',
             color: 'white',
-            border: 'none', 
+            border: 'none',
             padding: '15px 32px',
             textAlign: 'center',
             textDecoration: 'none',

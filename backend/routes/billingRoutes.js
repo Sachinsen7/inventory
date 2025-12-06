@@ -4,21 +4,19 @@ const mongoose = require('mongoose');
 const { body } = require('express-validator');
 const Godown = require('../models/Godowns');
 const GodownInventory = require('../models/GodownInventory');
+const Settings = require('../models/Settings');
+const LedgerEntry = require('../models/LedgerEntry');
 const logger = require('../utils/logger');
 const validators = require('../utils/validators');
 
-// Customer Schema
-const customerSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  address: { type: String, required: true },
-  city: { type: String, required: true },
-  state: { type: String, required: true },
-  gstNo: { type: String },
-  phoneNumber: { type: String },
-  specialPriceStartDate: { type: Date },
-  specialPriceEndDate: { type: Date },
-  createdAt: { type: Date, default: Date.now }
-});
+// Import Customer model (now defined in models/Customer.js)
+let Customer;
+try {
+  Customer = mongoose.model('Customer');
+} catch (error) {
+  // If not already defined, require it
+  Customer = require('../models/Customer');
+}
 
 // Item Schema
 const itemSchema = new mongoose.Schema({
@@ -125,42 +123,94 @@ const billSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-const Customer = mongoose.model('Customer', customerSchema);
+// Customer model is imported at the top
 const BillingItem = mongoose.model('BillingItem', itemSchema);
 const BillingInventory = mongoose.model('BillingInventory', inventorySchema);
 const Bill = mongoose.model('Bill', billSchema);
 
 // Generate unique bill number
 const generateBillNumber = async () => {
-  // HARDCODED FOR TESTING - Change this later for production
-  return `BILL-TEST-001`;
-
-  // Original code (uncomment for production):
-  // const count = await Bill.countDocuments();
-  // return `BILL-${String(count + 1).padStart(6, '0')}`;
+  try {
+    const count = await Bill.countDocuments();
+    return `BILL-${String(count + 1).padStart(6, '0')}`;
+  } catch (error) {
+    console.error('Error generating bill number:', error);
+    // Fallback with timestamp to ensure uniqueness
+    return `BILL-${Date.now()}`;
+  }
 };
 
 // Generate unique invoice ID
 const generateInvoiceId = async () => {
-  // HARDCODED FOR TESTING - Change this later for production
-  return `INV-TEST-001`;
-
-  // Original code (uncomment for production):
-  // const count = await Bill.countDocuments();
-  // const timestamp = Date.now().toString().slice(-6);
-  // return `INV-${timestamp}-${String(count + 1).padStart(4, '0')}`;
+  try {
+    const count = await Bill.countDocuments();
+    const timestamp = Date.now().toString().slice(-6);
+    return `INV-${timestamp}-${String(count + 1).padStart(4, '0')}`;
+  } catch (error) {
+    console.error('Error generating invoice ID:', error);
+    // Fallback with timestamp to ensure uniqueness
+    return `INV-${Date.now()}`;
+  }
 };
 
 // Generate unique invoice number (GST compliant format)
 const generateInvoiceNumber = async () => {
-  // HARDCODED FOR TESTING - Change this later for production
-  return `INV/25-12/TEST001`;
+  try {
+    console.log('Attempting to generate invoice number from settings...');
 
-  // Original code (uncomment for production):
-  // const count = await Bill.countDocuments();
-  // const year = new Date().getFullYear().toString().slice(-2);
-  // const month = String(new Date().getMonth() + 1).padStart(2, '0');
-  // return `INV/${year}-${month}/${String(count + 1).padStart(5, '0')}`;
+    // Try to use Settings-based generation
+    const settings = await Settings.getSettings();
+    console.log('Settings retrieved:', settings);
+
+    if (!settings || !settings.invoiceFormat || !settings.nextInvoiceNumber) {
+      console.log('Settings not properly configured, using fallback');
+      return `INV/25-12/TEST001`;
+    }
+
+    const { invoiceFormat, nextInvoiceNumber } = settings;
+
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const fullYear = now.getFullYear().toString();
+
+    // Determine financial year
+    const financialYearStart = settings.financialYearStart || '04-01';
+    const [fyMonth] = financialYearStart.split('-').map(Number);
+    let fyStartYear, fyEndYear;
+
+    if (now.getMonth() + 1 >= fyMonth) {
+      fyStartYear = now.getFullYear();
+      fyEndYear = now.getFullYear() + 1;
+    } else {
+      fyStartYear = now.getFullYear() - 1;
+      fyEndYear = now.getFullYear();
+    }
+
+    // Replace placeholders
+    let invoiceNumber = invoiceFormat
+      .replace('{YY}', year)
+      .replace('{YYYY}', fullYear)
+      .replace('{MM}', month)
+      .replace('{FY}', `${fyStartYear.toString().slice(-2)}-${fyEndYear.toString().slice(-2)}`)
+      .replace('{####}', String(nextInvoiceNumber).padStart(4, '0'))
+      .replace('{#####}', String(nextInvoiceNumber).padStart(5, '0'))
+      .replace('{######}', String(nextInvoiceNumber).padStart(6, '0'));
+
+    console.log('Generated invoice number:', invoiceNumber);
+
+    // Increment next invoice number
+    settings.nextInvoiceNumber = nextInvoiceNumber + 1;
+    await settings.save();
+
+    console.log('Settings updated, next number:', settings.nextInvoiceNumber);
+
+    return invoiceNumber;
+  } catch (error) {
+    // Fallback to hardcoded for testing if Settings fails
+    console.error('Error generating invoice from settings, using fallback:', error);
+    return `INV/25-12/TEST001`;
+  }
 };
 
 // ==================== CUSTOMER ROUTES ====================
@@ -851,7 +901,12 @@ router.post('/bills/add',
 
     } catch (error) {
       logger.error('Error creating bill', error);
-      res.status(400).json({ message: 'Unable to create bill' });
+      console.error('Full error details:', error);
+      res.status(400).json({
+        message: 'Unable to create bill',
+        error: error.message,
+        details: error.toString()
+      });
     }
   });
 

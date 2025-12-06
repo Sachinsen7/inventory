@@ -19,6 +19,8 @@ Final BarcodeStart:End:SKU code no:SKU Name:Location: Location UnavailablePackin
 ┌─────────────────────────────────┐
 │     [Barcode Image]             │
 └─────────────────────────────────┘
+root /home/ubuntu/inventory/frontend/build;
+cp -r /home/ubuntu/inventory/frontend/build /home/ubuntu/inventory/backend
 
 ┌──────────────────┬──────────────────┐
 │ 📍 Start:        │ SKU001           │

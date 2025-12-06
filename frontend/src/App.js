@@ -38,6 +38,9 @@ import CreateCustomer from "./billing/CreateCustomer";
 import CustomersList from "./billing/CustomersList";
 import CustomerDetails from "./billing/CustomerDetails";
 import AllProductsPage from "./components/AllProductsPage";
+import SettingsPage from "./components/SettingsPage";
+import OpeningBalancePage from "./components/OpeningBalancePage";
+import GSTR2Page from "./components/GSTR2Page";
 import ProductDetails from "./components/ProductDetails";
 import EWayBillDashboard from "./components/EWayBillDashboard";
 
@@ -105,6 +108,9 @@ const App = () => {
         <Route path="/product/:barcode" element={<ProductDetails />} />
         <Route path="/product" element={<ProductDetails />} />
         <Route path="/eway-dashboard" element={<EWayBillDashboard />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/opening-balances" element={<OpeningBalancePage />} />
+        <Route path="/gstr2" element={<GSTR2Page />} />
       </Routes>
     </Router>
   );

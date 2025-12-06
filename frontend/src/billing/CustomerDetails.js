@@ -363,6 +363,12 @@ function CustomerDetails() {
   const [showEWayBillGenerator, setShowEWayBillGenerator] = useState(false);
   const [selectedBillForEWay, setSelectedBillForEWay] = useState(null);
 
+  // Opening Balance states
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [balanceType, setBalanceType] = useState('debit');
+  const [balanceDate, setBalanceDate] = useState(new Date().toISOString().split('T')[0]);
+
   // Backend URL from environment variable
   const backendUrl =
     process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
@@ -495,47 +501,48 @@ function CustomerDetails() {
     }
   }, [customer]);
 
-  useEffect(() => {
-    const fetchCustomerDetails = async () => {
-      setLoading(true);
-      try {
-        console.log("Fetching customer details for ID:", id);
-        const customerRes = await axios.get(
-          `${backendUrl}/api/customers/${id}`
+  // Fetch customer details function
+  const fetchCustomerDetails = useCallback(async () => {
+    setLoading(true);
+    try {
+      console.log("Fetching customer details for ID:", id);
+      const customerRes = await axios.get(
+        `${backendUrl}/api/customers/${id}`
+      );
+      console.log("Customer details received:", customerRes.data);
+      setCustomer(customerRes.data);
+    } catch (error) {
+      console.log("Error fetching customer details:", error);
+      console.log("Error response:", error.response?.data);
+      const errorMsg =
+        error.response?.data?.message ||
+        error.message ||
+        "Error fetching customer details";
+      if (
+        error.code === "ECONNABORTED" ||
+        error.message.includes("timeout")
+      ) {
+        showToast.error(
+          "Connection timeout. Please check your internet connection."
         );
-        console.log("Customer details received:", customerRes.data);
-        setCustomer(customerRes.data);
-      } catch (error) {
-        console.log("Error fetching customer details:", error);
-        console.log("Error response:", error.response?.data);
-        const errorMsg =
-          error.response?.data?.message ||
-          error.message ||
-          "Error fetching customer details";
-        if (
-          error.code === "ECONNABORTED" ||
-          error.message.includes("timeout")
-        ) {
-          showToast.error(
-            "Connection timeout. Please check your internet connection."
-          );
-        } else if (error.response) {
-          showToast.error(
-            `Backend error: ${error.response.status} - ${errorMsg}`
-          );
-        } else if (error.request) {
-          showToast.error(
-            "Unable to connect to the server. Please check if the backend is running."
-          );
-        } else {
-          showToast.error(errorMsg);
-        }
+      } else if (error.response) {
+        showToast.error(
+          `Backend error: ${error.response.status} - ${errorMsg}`
+        );
+      } else if (error.request) {
+        showToast.error(
+          "Unable to connect to the server. Please check if the backend is running."
+        );
+      } else {
+        showToast.error(errorMsg);
       }
-      setLoading(false);
-    };
+    }
+    setLoading(false);
+  }, [id, backendUrl]);
 
+  useEffect(() => {
     fetchCustomerDetails();
-  }, [id]);
+  }, [fetchCustomerDetails]);
 
   // Fetch items and bills after customer is loaded
   useEffect(() => {
@@ -669,6 +676,36 @@ function CustomerDetails() {
       showToast.error(
         "Error updating customer: " + (err.response?.data?.message || err.message)
       );
+    }
+  };
+
+  // Handle Set Opening Balance
+  const handleSetOpeningBalance = async () => {
+    if (!openingBalance || openingBalance <= 0) {
+      showToast.error('Please enter a valid opening balance');
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${backendUrl}/api/ledger/customers/${customer._id}/opening-balance`,
+        {
+          openingBalance: parseFloat(openingBalance),
+          openingBalanceType: balanceType,
+          openingBalanceDate: balanceDate
+        }
+      );
+
+      setCustomer(response.data.customer);
+      setShowBalanceModal(false);
+      setOpeningBalance('');
+      showToast.success('Opening balance set successfully!');
+
+      // Refresh customer data
+      fetchCustomerDetails();
+    } catch (error) {
+      console.error('Error setting opening balance:', error);
+      showToast.error('Error setting opening balance: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -991,6 +1028,40 @@ function CustomerDetails() {
             <p style={{ margin: "8px 0" }}>
               <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
             </p>
+          </div>
+
+          {/* Opening & Closing Balance */}
+          <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(76, 175, 80, 0.1)", borderRadius: "8px", border: "2px solid rgba(76, 175, 80, 0.3)" }}>
+            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>💰 Account Balance:</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>Opening Balance:</span>{' '}
+                <strong>₹{(customer.openingBalance || 0).toLocaleString()}</strong>
+                <span style={{ fontSize: "11px", marginLeft: "5px", opacity: 0.7 }}>
+                  ({customer.openingBalanceType || 'debit'})
+                </span>
+              </p>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>Closing Balance:</span>{' '}
+                <strong style={{ color: (customer.closingBalance || 0) >= 0 ? '#4CAF50' : '#f44336' }}>
+                  ₹{Math.abs(customer.closingBalance || 0).toLocaleString()}
+                </strong>
+              </p>
+              <p style={{ margin: "0" }}>
+                <button
+                  onClick={() => setShowBalanceModal(true)}
+                  style={{
+                    ...buttonStyle,
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                  }}
+                  className="custom-btn"
+                >
+                  ✏️ Set Opening Balance
+                </button>
+              </p>
+            </div>
           </div>
 
           {/* Always show special pricing dates */}
@@ -1382,6 +1453,124 @@ function CustomerDetails() {
           <BillHistory bills={filteredBills} customer={customer} />
         </div>
       </div>
+
+      {/* Opening Balance Modal */}
+      {showBalanceModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '15px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
+          }}>
+            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>💰 Set Opening Balance</h2>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Opening Balance Amount *
+              </label>
+              <input
+                type="number"
+                value={openingBalance}
+                onChange={(e) => setOpeningBalance(e.target.value)}
+                placeholder="Enter amount"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Balance Type *
+              </label>
+              <select
+                value={balanceType}
+                onChange={(e) => setBalanceType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="debit">Debit (Customer owes you)</option>
+                <option value="credit">Credit (You owe customer)</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Opening Balance Date *
+              </label>
+              <input
+                type="date"
+                value={balanceDate}
+                onChange={(e) => setBalanceDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowBalanceModal(false);
+                  setOpeningBalance('');
+                }}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: '#6c757d',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetOpeningBalance}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                💾 Save Balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* E-Way Bill Generator Modal */}
       {showEWayBillGenerator && selectedBillForEWay && (

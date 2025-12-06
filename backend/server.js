@@ -24,6 +24,9 @@ const Godown = require("./models/Godowns");
 const GodownInventory = require("./models/GodownInventory");
 const excelRoutes = require("./routes/excelRoutes");
 const billingRoutes = require("./routes/billingRoutes");
+const settingsRoutes = require("./routes/settingsRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
+const gstr2Routes = require("./routes/gstr2Routes");
 
 // Middleware
 // NOTE: Security middleware added below. After pulling these changes run in `backend`:
@@ -2057,6 +2060,9 @@ app.get("/api/transits/summary", async (req, res) => {
 
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/ledger", ledgerRoutes);
+app.use("/api/gstr2", gstr2Routes);
 
 // ============================================
 // LEDGER API ENDPOINTS

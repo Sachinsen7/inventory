@@ -57,6 +57,9 @@ function Billing() {
   // Payment status state
   const [paymentStatus, setPaymentStatus] = useState('Pending');
 
+  // Credit limit state
+  const [creditLimitInfo, setCreditLimitInfo] = useState(null);
+
   const navigate = useNavigate();
   const billRef = useRef();
 
@@ -222,12 +225,17 @@ function Billing() {
     setShowQRCode(false);
     setSelectedGodown('');
     setSelectedGodownData(null);
+    setCreditLimitInfo(null);
 
     // Fetch godowns sorted by location matching
     if (customerId) {
       try {
         const response = await axios.get(`${backendUrl}/api/bills/godowns/sorted/${customerId}`);
         setGodowns(response.data);
+
+        // Fetch credit limit info
+        const creditResponse = await axios.get(`${backendUrl}/api/analytics/customers/${customerId}/credit-check`);
+        setCreditLimitInfo(creditResponse.data);
       } catch (error) {
         console.error('Error fetching godowns:', error);
         setGodowns({ matchingGodowns: [], nonMatchingGodowns: [] });
@@ -872,7 +880,23 @@ function Billing() {
       navigate(`/customer/${selectedCustomer}`);
     } catch (error) {
       console.log(error);
-      showToast.error('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
+
+      // Check if it's a credit limit error
+      if (error.response?.data?.creditLimitExceeded) {
+        const creditData = error.response.data;
+        showToast.error(
+          `🚫 CREDIT LIMIT EXCEEDED!\n\n` +
+          `Credit Limit: ₹${creditData.creditLimit?.toFixed(2) || 0}\n` +
+          `Current Outstanding: ₹${creditData.currentOutstanding?.toFixed(2) || 0}\n` +
+          `New Bill Amount: ₹${creditData.newBillAmount?.toFixed(2) || 0}\n` +
+          `Total Would Be: ₹${creditData.totalOutstanding?.toFixed(2) || 0}\n` +
+          `Exceeded By: ₹${creditData.exceededBy?.toFixed(2) || 0}\n\n` +
+          `Please collect payment before creating this bill.`,
+          { duration: 8000 }
+        );
+      } else {
+        showToast.error('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
+      }
     }
   };
 
@@ -1148,6 +1172,99 @@ function Billing() {
               </div>
             </div>
           </div>
+
+          {/* Credit Limit Display */}
+          {selectedCustomer && creditLimitInfo && creditLimitInfo.creditLimitEnabled && (
+            <div className="card mb-4" style={{
+              ...cardStyle,
+              background: creditLimitInfo.exceeded
+                ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)'
+                : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                  ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.3) 100%)'
+                  : 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)',
+              border: creditLimitInfo.exceeded
+                ? '2px solid rgba(239, 68, 68, 0.5)'
+                : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                  ? '2px solid rgba(251, 191, 36, 0.5)'
+                  : '2px solid rgba(34, 197, 94, 0.5)'
+            }}>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h5 style={{ margin: 0 }}>
+                  {creditLimitInfo.exceeded ? '🚫' : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) ? '⚠️' : '✅'}
+                  {' '}Credit Limit Status
+                </h5>
+                <span style={{
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: creditLimitInfo.exceeded
+                    ? '#ef4444'
+                    : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                      ? '#f59e0b'
+                      : '#22c55e',
+                  color: 'white'
+                }}>
+                  {creditLimitInfo.exceeded ? 'EXCEEDED' : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) ? 'LOW' : 'GOOD'}
+                </span>
+              </div>
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Credit Limit</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{creditLimitInfo.creditLimit?.toFixed(2) || 0}</div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Current Outstanding</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: creditLimitInfo.currentOutstanding > 0 ? '#f59e0b' : '#22c55e' }}>
+                        ₹{creditLimitInfo.currentOutstanding?.toFixed(2) || 0}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Available Credit</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: creditLimitInfo.available > 0 ? '#22c55e' : '#ef4444' }}>
+                        ₹{creditLimitInfo.available?.toFixed(2) || 0}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>New Bill Amount</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{subtotal?.toFixed(2) || 0}</div>
+                    </div>
+                  </div>
+                </div>
+                {creditLimitInfo.exceeded && (
+                  <div style={{
+                    marginTop: '15px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(239, 68, 68, 0.4)'
+                  }}>
+                    <strong>⚠️ Warning:</strong> This customer has exceeded their credit limit by ₹{creditLimitInfo.exceededBy?.toFixed(2) || 0}.
+                    Please collect payment before creating new bills.
+                  </div>
+                )}
+                {!creditLimitInfo.exceeded && creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) && (
+                  <div style={{
+                    marginTop: '15px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(251, 191, 36, 0.4)'
+                  }}>
+                    <strong>⚠️ Notice:</strong> Available credit is running low. Consider collecting payment soon.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Godown Selection */}
           {selectedCustomer && (

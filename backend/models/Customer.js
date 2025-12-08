@@ -28,6 +28,20 @@ const customerSchema = new mongoose.Schema({
         default: 0
     },
 
+    // Credit Limit
+    creditLimit: {
+        type: Number,
+        default: 0
+    },
+    creditLimitEnabled: {
+        type: Boolean,
+        default: false
+    },
+    paymentTerms: {
+        type: Number,
+        default: 30 // days
+    },
+
     // Metadata
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
@@ -71,6 +85,44 @@ customerSchema.methods.calculateClosingBalance = async function () {
     await this.save();
 
     return closing;
+};
+
+// Check if customer has exceeded credit limit
+customerSchema.methods.checkCreditLimit = async function (newBillAmount = 0) {
+    if (!this.creditLimitEnabled || this.creditLimit === 0) {
+        return {
+            allowed: true,
+            message: 'Credit limit not enabled'
+        };
+    }
+
+    await this.calculateClosingBalance();
+    const currentOutstanding = this.closingBalance;
+    const totalOutstanding = currentOutstanding + newBillAmount;
+
+    if (totalOutstanding > this.creditLimit) {
+        return {
+            allowed: false,
+            exceeded: true,
+            currentOutstanding,
+            creditLimit: this.creditLimit,
+            newBillAmount,
+            totalOutstanding,
+            exceededBy: totalOutstanding - this.creditLimit,
+            message: `Credit limit exceeded! Current: ₹${currentOutstanding}, New Bill: ₹${newBillAmount}, Total: ₹${totalOutstanding}, Limit: ₹${this.creditLimit}`
+        };
+    }
+
+    return {
+        allowed: true,
+        exceeded: false,
+        currentOutstanding,
+        creditLimit: this.creditLimit,
+        newBillAmount,
+        totalOutstanding,
+        available: this.creditLimit - totalOutstanding,
+        message: 'Within credit limit'
+    };
 };
 
 module.exports = mongoose.model('Customer', customerSchema);

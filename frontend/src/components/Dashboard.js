@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { showToast } from "../utils/toastNotifications";
+import TopCustomersWidget from "./TopCustomersWidget";
+import SalesComparisonWidget from "./SalesComparisonWidget";
+import StockValueWidget from "./StockValueWidget";
+import OutstandingWidget from "./OutstandingWidget";
 
 const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -208,6 +212,9 @@ const Dashboard = () => {
     <div style={styles.container}>
       <style>{globalStyles}</style>
       <h2 style={styles.header}>Admin Dashboard</h2>
+
+
+
       <div style={styles.buttonContainer}>
         <Link to="/itemCountSummary" style={styles.link}>
           <button style={styles.button}>Inventory</button>
@@ -341,6 +348,14 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+      {/* Analytics Widgets */}
+      <OutstandingWidget />
+      <SalesComparisonWidget />
+      <TopCustomersWidget />
+      <StockValueWidget />
+
+
+
     </div>
   );
 };

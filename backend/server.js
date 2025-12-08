@@ -27,6 +27,8 @@ const billingRoutes = require("./routes/billingRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
 const gstr2Routes = require("./routes/gstr2Routes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
+const orderRoutes = require("./routes/orderRoutes");
 
 // Middleware
 // NOTE: Security middleware added below. After pulling these changes run in `backend`:
@@ -1561,6 +1563,112 @@ app.get("/api/products3", async (req, res) => {
   }
 });
 
+// API: Get product details by barcode (search in Barcode, Despatch, and Delevery1 collections)
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+
+    if (!barcode || barcode.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Barcode is required"
+      });
+    }
+
+    logger.debug("Searching for barcode:", { barcode });
+
+    // Search in Barcode collection first (most detailed info)
+    let productData = await Barcode.findOne({
+      $or: [
+        { batchNumbers: parseInt(barcode) },
+        { batch: barcode }
+      ]
+    });
+
+    if (productData) {
+      logger.debug("Product found in Barcode collection");
+      return res.json({
+        success: true,
+        source: 'barcode',
+        data: {
+          product: productData.product,
+          skuName: productData.skun || productData.skuc,
+          batch: productData.batch,
+          location: productData.location,
+          netWeight: productData.netWeight,
+          grossWeight: productData.grossWeight,
+          packed: productData.packed,
+          shift: productData.shift,
+          rewinder: productData.rewinder,
+          edge: productData.edge,
+          winder: productData.winder,
+          mixer: productData.mixer,
+          currentTime: productData.currentTime,
+          isScanned: productData.is_scanned,
+          scannedAt: productData.scanned_at
+        }
+      });
+    }
+
+    // Search in Despatch collection (items in godown)
+    productData = await Despatch.findOne({ inputValue: barcode });
+
+    if (productData) {
+      logger.debug("Product found in Despatch collection");
+      return res.json({
+        success: true,
+        source: 'despatch',
+        data: {
+          barcode: productData.inputValue,
+          itemCode: productData.selectedOption,
+          location: productData.godownName,
+          addedAt: productData.addedAt,
+          status: 'In Godown'
+        }
+      });
+    }
+
+    // Search in Delevery1 collection (items ready for delivery)
+    productData = await Delevery1.findOne({ inputValue: barcode });
+
+    if (productData) {
+      logger.debug("Product found in Delevery1 collection");
+      return res.json({
+        success: true,
+        source: 'delivery',
+        data: {
+          barcode: productData.inputValue,
+          itemCode: productData.selectedOption,
+          itemName: productData.itemName,
+          location: productData.godownName,
+          quantity: productData.quantity,
+          price: productData.price,
+          masterPrice: productData.masterPrice,
+          description: productData.description,
+          category: productData.category,
+          addedAt: productData.addedAt,
+          status: 'Ready for Delivery'
+        }
+      });
+    }
+
+    // Not found in any collection
+    logger.debug("Product not found in any collection");
+    return res.status(404).json({
+      success: false,
+      message: "Product not found"
+    });
+
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details",
+      error: error.message
+    });
+  }
+});
+
 // API: Add Data to `delevery1`
 app.post(
   "/api/add/delevery1",
@@ -2063,6 +2171,8 @@ app.use("/api", billingRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/ledger", ledgerRoutes);
 app.use("/api/gstr2", gstr2Routes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/orders", orderRoutes);
 
 // ============================================
 // LEDGER API ENDPOINTS

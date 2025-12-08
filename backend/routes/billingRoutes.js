@@ -273,7 +273,7 @@ router.post('/customers/add',
 
 // Update customer
 router.put('/customers/:id',
-  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate']),
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate', 'creditLimit', 'creditLimitEnabled', 'paymentTerms']),
   [
     body('name').optional().isString().trim().isLength({ max: 200 }),
     body('address').optional().isString().trim().isLength({ max: 500 }),
@@ -282,7 +282,10 @@ router.put('/customers/:id',
     validators.gstNo('gstNo'),
     body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/),
     body('specialPriceStartDate').optional().isISO8601().toDate(),
-    body('specialPriceEndDate').optional().isISO8601().toDate()
+    body('specialPriceEndDate').optional().isISO8601().toDate(),
+    body('creditLimit').optional().isFloat({ min: 0 }),
+    body('creditLimitEnabled').optional().isBoolean(),
+    body('paymentTerms').optional().isInt({ min: 0 })
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -799,6 +802,34 @@ router.post('/bills/add',
 
       // Calculate GST
       const subtotal = req.body.totalAmount || 0;
+
+      // Check credit limit before creating bill
+      const creditCheck = await customer.checkCreditLimit(subtotal);
+      if (!creditCheck.allowed) {
+        logger.warn('Credit limit exceeded', {
+          customerId: customer._id,
+          customerName: customer.name,
+          creditLimit: creditCheck.creditLimit,
+          currentOutstanding: creditCheck.currentOutstanding,
+          newBillAmount: creditCheck.newBillAmount,
+          exceededBy: creditCheck.exceededBy
+        });
+        return res.status(400).json({
+          message: creditCheck.message,
+          creditLimitExceeded: true,
+          creditLimit: creditCheck.creditLimit,
+          currentOutstanding: creditCheck.currentOutstanding,
+          newBillAmount: creditCheck.newBillAmount,
+          totalOutstanding: creditCheck.totalOutstanding,
+          exceededBy: creditCheck.exceededBy
+        });
+      }
+
+      logger.info('Credit limit check passed', {
+        customerId: customer._id,
+        available: creditCheck.available,
+        newBillAmount: creditCheck.newBillAmount
+      });
       const isIntraState = customer.state?.toLowerCase() === (req.body.companyState || 'maharashtra').toLowerCase();
 
       let cgst = 0, sgst = 0, igst = 0;

@@ -1064,6 +1064,58 @@ function CustomerDetails() {
             </div>
           </div>
 
+          {/* Credit Limit Display */}
+          {customer.creditLimitEnabled && (
+            <div style={{
+              marginTop: "15px",
+              padding: "15px",
+              backgroundColor: customer.closingBalance > customer.creditLimit
+                ? "rgba(239, 68, 68, 0.1)"
+                : "rgba(34, 197, 94, 0.1)",
+              borderRadius: "8px",
+              border: customer.closingBalance > customer.creditLimit
+                ? "2px solid rgba(239, 68, 68, 0.3)"
+                : "2px solid rgba(34, 197, 94, 0.3)"
+            }}>
+              <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>
+                {customer.closingBalance > customer.creditLimit ? '🚫' : '✅'} Credit Limit Status:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Credit Limit:</span>{' '}
+                  <strong>₹{(customer.creditLimit || 0).toLocaleString()}</strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Current Outstanding:</span>{' '}
+                  <strong style={{ color: customer.closingBalance > 0 ? '#f59e0b' : '#22c55e' }}>
+                    ₹{Math.abs(customer.closingBalance || 0).toLocaleString()}
+                  </strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Available Credit:</span>{' '}
+                  <strong style={{ color: (customer.creditLimit - customer.closingBalance) > 0 ? '#22c55e' : '#ef4444' }}>
+                    ₹{Math.max(0, (customer.creditLimit || 0) - (customer.closingBalance || 0)).toLocaleString()}
+                  </strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Payment Terms:</span>{' '}
+                  <strong>{customer.paymentTerms || 30} days</strong>
+                </p>
+              </div>
+              {customer.closingBalance > customer.creditLimit && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "10px",
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  borderRadius: "6px",
+                  fontSize: "13px"
+                }}>
+                  <strong>⚠️ Warning:</strong> Credit limit exceeded by ₹{((customer.closingBalance || 0) - (customer.creditLimit || 0)).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Always show special pricing dates */}
           <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "8px" }}>
             <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>🏷️ Special Pricing Period:</p>
@@ -1108,6 +1160,49 @@ function CustomerDetails() {
                     style={searchInputStyle}
                   />
                 </div>
+              </div>
+
+              <h4 style={{ margin: "20px 0 15px 0", fontSize: "1.1rem" }}>💳 Credit Limit Settings</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "15px", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <input
+                    type="checkbox"
+                    id="creditLimitEnabled"
+                    checked={editedCustomer.creditLimitEnabled || false}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, creditLimitEnabled: e.target.checked })}
+                    style={{ width: "20px", height: "20px", cursor: "pointer" }}
+                  />
+                  <label htmlFor="creditLimitEnabled" style={{ fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                    Enable Credit Limit
+                  </label>
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>CREDIT LIMIT (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editedCustomer.creditLimit || 0}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, creditLimit: parseFloat(e.target.value) || 0 })}
+                    disabled={!editedCustomer.creditLimitEnabled}
+                    style={{
+                      ...searchInputStyle,
+                      opacity: editedCustomer.creditLimitEnabled ? 1 : 0.5
+                    }}
+                    placeholder="Enter credit limit amount"
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>PAYMENT TERMS (DAYS)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editedCustomer.paymentTerms || 30}
+                  onChange={(e) => setEditedCustomer({ ...editedCustomer, paymentTerms: parseInt(e.target.value) || 30 })}
+                  style={searchInputStyle}
+                  placeholder="Payment terms in days"
+                />
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>

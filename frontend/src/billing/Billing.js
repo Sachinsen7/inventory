@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
 import { showToast } from '../utils/toastNotifications';
+import { useAuth } from '../context/AuthContext';
 import './Billing.css'; // Import the new stylesheet
 import CustomerHistory from '../components/CustomerHistory';
 import LedgerManagement from '../components/LedgerManagement';
@@ -12,6 +13,11 @@ import PaymentTracker from '../components/PaymentTracker';
 
 
 function Billing() {
+  const { hasPermission } = useAuth();
+  const canGiveDiscount = hasPermission('canGiveDiscount');
+  const canViewProfit = hasPermission('canViewProfit');
+  const canViewPricing = hasPermission('canViewPricing');
+
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [customerItems, setCustomerItems] = useState([]);
@@ -260,72 +266,14 @@ function Billing() {
     setSelectedItems(updatedItems);
   };
 
-  // Function to fetch and match items based on 3-digit prefix
+  // REMOVED: Function to fetch and match items based on 3-digit prefix
+  // This validation was too restrictive - users should be able to add any item
+  // without needing to match exact prefixes in godown inventory
+  /*
   const fetchAndMatchItems = async (customerId, godownId) => {
-    try {
-      console.log('Fetching and matching items for customer:', customerId, 'godown:', godownId);
-
-      // Get billing items for customer
-      const billingResponse = await axios.get(`${backendUrl}/api/bills/customer/${customerId}/items`);
-      const billingItems = billingResponse.data;
-      console.log('Billing items:', billingItems);
-
-      // Get delevery1 items for godown
-      const delevery1Response = await axios.get(`${backendUrl}/api/delevery1`);
-      const delevery1Items = delevery1Response.data;
-      console.log('Delevery1 items:', delevery1Items);
-
-      // Get godown details
-      const godownResponse = await axios.get(`${backendUrl}/api/godowns/${godownId}`);
-      const godownName = godownResponse.data.name;
-      console.log('Godown name:', godownName);
-
-      // Filter delevery1 items for this godown
-      const godownDelevery1Items = delevery1Items.filter(item => item.godownName === godownName);
-      console.log('Godown delevery1 items:', godownDelevery1Items);
-
-      // Match billing items with delevery1 items based on 3-digit prefix
-      const matchedItems = billingItems.map(billingItem => {
-        const billingItemName = billingItem.name || '';
-        const prefix = billingItemName.substring(0, 3); // Get first 3 digits
-
-        console.log(`Matching billing item: ${billingItemName}, prefix: ${prefix}`);
-
-        // Find all delevery1 items that start with this prefix
-        const matchingDelevery1Items = godownDelevery1Items.filter(deleveryItem => {
-          const inputValue = deleveryItem.inputValue || '';
-          return inputValue.startsWith(prefix);
-        });
-
-        console.log(`Found ${matchingDelevery1Items.length} matching items for prefix ${prefix}`);
-
-        return {
-          ...billingItem,
-          itemName: billingItem.name,
-          availableQuantity: matchingDelevery1Items.length,
-          matchingItems: matchingDelevery1Items,
-          prefix: prefix
-        };
-      });
-
-      console.log('Matched items:', matchedItems);
-      setAvailableItems(matchedItems);
-
-    } catch (error) {
-      console.error('Error fetching and matching items:', error);
-      setAvailableItems([]);
-      const errorMsg = error.response?.data?.message || error.message || 'Error fetching and matching items';
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        showToast.error('Connection timeout. Please check your internet connection.');
-      } else if (error.response) {
-        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
-      } else if (error.request) {
-        showToast.error('Unable to connect to the server. Please check if the backend is running.');
-      } else {
-        showToast.error(errorMsg);
-      }
-    }
+    // Function removed - validation not needed
   };
+  */
 
   const handleGodownChange = async (e) => {
     const godownId = e.target.value;
@@ -344,10 +292,8 @@ function Billing() {
         setStockDialogItems(items);
         setShowStockDialog(true);
 
-        // If customer is also selected, fetch and match items
-        if (selectedCustomer) {
-          await fetchAndMatchItems(selectedCustomer, godownId);
-        }
+        // No need to match items - users can add any item they want
+        // Removed fetchAndMatchItems call - validation is too restrictive
       } catch (error) {
         console.log('Error fetching godown items:', error);
         setGodownItems([]);
@@ -1290,10 +1236,8 @@ function Billing() {
                         console.error('Error fetching godown details:', error);
                       }
 
-                      // Fetch and match items if customer is selected
-                      if (selectedCustomer) {
-                        await fetchAndMatchItems(selectedCustomer, godownId);
-                      }
+                      // No need to match items - users can add any item they want
+                      // Removed fetchAndMatchItems call - validation is too restrictive
                     } else {
                       setSelectedGodownData(null);
                     }

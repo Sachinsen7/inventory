@@ -20,7 +20,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         const fileContent = fs.readFileSync(req.file.path, 'utf8');
         const gstrData = JSON.parse(fileContent);
 
-        const { period, uploadedBy } = req.body;
+        const { period, startDate, endDate, uploadedBy } = req.body;
 
         const results = {
             total: 0,
@@ -66,6 +66,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                             uploadedBy: uploadedBy || 'system',
                             fileName: req.file.originalname,
                             period: period || '',
+                            startDate: startDate ? new Date(startDate) : null,
+                            endDate: endDate ? new Date(endDate) : null,
                             supplierGSTIN,
                             supplierName,
                             invoiceNumber,

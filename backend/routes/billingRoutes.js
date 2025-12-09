@@ -97,6 +97,10 @@ const billSchema = new mongoose.Schema({
   // Payment
   priceType: { type: String, enum: ['price', 'masterPrice'], default: 'price' },
   paymentStatus: { type: String, enum: ['Pending', 'Processing', 'Completed', 'Failed'], default: 'Pending' },
+  paymentTerms: { type: Number, default: 30 }, // Payment terms in days
+  dueDate: { type: Date }, // Calculated: invoiceDate + paymentTerms
+  isOverdue: { type: Boolean, default: false },
+  overdueBy: { type: Number, default: 0 }, // Days overdue
 
   // E-Way Bill
   eWayBill: {
@@ -118,6 +122,22 @@ const billSchema = new mongoose.Schema({
     pdfUploadedAt: { type: Date },
     status: { type: String, enum: ['Not Generated', 'JSON Generated', 'Active', 'Expired', 'Cancelled'], default: 'Not Generated' }
   },
+
+  // Sync Status
+  syncStatus: {
+    type: String,
+    enum: ['pending', 'synced', 'failed', 'partial'],
+    default: 'pending'
+  },
+  lastSyncedAt: { type: Date },
+  syncAttempts: { type: Number, default: 0 },
+  syncError: { type: String },
+  syncedTo: [{
+    system: { type: String }, // e.g., 'tally', 'quickbooks', 'cloud'
+    syncedAt: { type: Date },
+    status: { type: String, enum: ['success', 'failed'] },
+    error: { type: String }
+  }],
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -238,6 +258,10 @@ router.get('/customers/:id', async (req, res) => {
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
+
+    // Calculate closing balance before returning
+    await customer.calculateClosingBalance();
+
     res.json(customer);
   } catch (error) {
     logger.error('Error fetching customer', error);
@@ -1691,6 +1715,66 @@ router.get('/eway-trend', async (req, res) => {
     logger.error('Error fetching E-Way Bill trend', error);
     // Return empty array instead of error
     res.json([]);
+  }
+});
+
+// ==================== PRINT HISTORY TRACKING ====================
+
+// Track bill print
+router.post('/bills/:billId/print', async (req, res) => {
+  try {
+    const { billId } = req.params;
+    const { printType, userId } = req.body;
+
+    const bill = await Bill.findById(billId);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    // Add print record
+    if (!bill.printHistory) bill.printHistory = [];
+    bill.printHistory.push({
+      printedAt: new Date(),
+      printedBy: userId || 'Unknown',
+      printType: printType || 'duplicate'
+    });
+
+    bill.totalPrintCount = (bill.totalPrintCount || 0) + 1;
+    await bill.save();
+
+    logger.info('Print tracked', { billId, printCount: bill.totalPrintCount });
+
+    res.json({
+      success: true,
+      message: 'Print recorded',
+      printCount: bill.totalPrintCount
+    });
+  } catch (error) {
+    logger.error('Error recording print', error);
+    res.status(500).json({ message: 'Error recording print', error: error.message });
+  }
+});
+
+// Get print history for a bill
+router.get('/bills/:billId/print-history', async (req, res) => {
+  try {
+    const { billId } = req.params;
+
+    const bill = await Bill.findById(billId);
+
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    res.json({
+      billNumber: bill.billNumber,
+      invoiceNumber: bill.invoiceNumber,
+      totalPrintCount: bill.totalPrintCount || 0,
+      printHistory: bill.printHistory || []
+    });
+  } catch (error) {
+    logger.error('Error fetching print history', error);
+    res.status(500).json({ message: 'Error fetching print history', error: error.message });
   }
 });
 

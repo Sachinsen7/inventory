@@ -6,6 +6,8 @@ function GSTR2Page() {
     const [activeTab, setActiveTab] = useState('upload');
     const [uploadFile, setUploadFile] = useState(null);
     const [period, setPeriod] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [summary, setSummary] = useState(null);
@@ -28,9 +30,16 @@ function GSTR2Page() {
             return;
         }
 
+        if (!startDate || !endDate) {
+            setMessage('❌ Please select start and end dates');
+            return;
+        }
+
         const formData = new FormData();
         formData.append('file', uploadFile);
         formData.append('period', period);
+        formData.append('startDate', startDate);
+        formData.append('endDate', endDate);
         formData.append('uploadedBy', 'user');
 
         try {
@@ -49,6 +58,8 @@ function GSTR2Page() {
             setTimeout(() => setMessage(''), 5000);
             setUploadFile(null);
             setPeriod('');
+            setStartDate('');
+            setEndDate('');
             setActiveTab('summary');
         } catch (error) {
             console.error('Error uploading GSTR-2:', error);
@@ -151,7 +162,7 @@ function GSTR2Page() {
                         <h2>Upload GSTR-2A/2B JSON File</h2>
 
                         <div className="form-group">
-                            <label>Period (MMYYYY)</label>
+                            <label>Period (MMYYYY) - Optional</label>
                             <input
                                 type="text"
                                 value={period}
@@ -160,6 +171,28 @@ function GSTR2Page() {
                                 maxLength="6"
                             />
                             <small>Example: 122024 for December 2024</small>
+                        </div>
+
+                        <div className="date-range-group">
+                            <div className="form-group">
+                                <label>Start Date *</label>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>End Date *</label>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    required
+                                />
+                            </div>
                         </div>
 
                         <div className="form-group">
@@ -180,7 +213,7 @@ function GSTR2Page() {
                         <button
                             className="btn-primary btn-large"
                             onClick={handleUpload}
-                            disabled={!uploadFile || loading}
+                            disabled={!uploadFile || !startDate || !endDate || loading}
                         >
                             {loading ? '⏳ Uploading...' : '📤 Upload & Parse'}
                         </button>
@@ -337,8 +370,8 @@ function GSTR2Page() {
                                                 <td className="amount">₹{entry.itcAvailable.toLocaleString()}</td>
                                                 <td>
                                                     <span className={`badge ${entry.matchStatus === 'matched' ? 'success' :
-                                                            entry.matchStatus === 'mismatched' ? 'warning' :
-                                                                entry.matchStatus === 'missing_in_books' ? 'danger' : 'pending'
+                                                        entry.matchStatus === 'mismatched' ? 'warning' :
+                                                            entry.matchStatus === 'missing_in_books' ? 'danger' : 'pending'
                                                         }`}>
                                                         {entry.matchStatus}
                                                     </span>

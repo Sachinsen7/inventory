@@ -9,6 +9,8 @@ const gstr2EntrySchema = new mongoose.Schema({
     uploadedBy: String,
     fileName: String,
     period: String, // Format: MMYYYY (e.g., 122024 for Dec 2024)
+    startDate: Date, // Period start date
+    endDate: Date, // Period end date
 
     // Supplier Details
     supplierGSTIN: {

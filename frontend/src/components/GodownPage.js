@@ -6,7 +6,7 @@ import { showToast } from "../utils/toastNotifications";
 const GodownPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const godown = location.state.godown;
+  const godown = location.state?.godown || null;
 
   const [despatchData, setDespatchData] = useState([]);
   const [deliveryData, setDeliveryData] = useState([]);
@@ -47,6 +47,11 @@ const GodownPage = () => {
   }, [barcodeInput, isScanning]);
 
   const fetchInventoryData = async () => {
+    if (!godown) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       // Fetch despatch data (items in godown)
@@ -346,6 +351,30 @@ const GodownPage = () => {
     showToast.success(`✓ Marked as found: ${barcode}`);
   };
 
+  if (!godown) {
+    return (
+      <div style={styles.container}>
+        <style>{globalStyles}</style>
+        <div style={styles.content}>
+          <h2 style={styles.header}>⚠️ No Godown Selected</h2>
+          <p style={{ textAlign: 'center', fontSize: '1.2rem', marginTop: '20px' }}>
+            Please select a godown from the dashboard to view inventory.
+          </p>
+          <button
+            onClick={() => navigate('/godown')}
+            style={{
+              ...styles.button,
+              margin: '20px auto',
+              display: 'block'
+            }}
+          >
+            ← Back to Godown Selection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div style={styles.container}>
@@ -361,246 +390,9 @@ const GodownPage = () => {
     <div style={styles.container}>
       <style>{globalStyles}</style>
       <div style={styles.content}>
-        <h2 style={styles.header}>Godown Dashboard</h2>
+        <h2 style={styles.header}>Godown Dashboard - {godown.name}</h2>
 
-        {/* IoT Barcode Scanner for Quick Stock Check */}
-        <div style={{
-          backgroundColor: isScanning ? 'rgba(76, 175, 80, 0.1)' : 'rgba(102, 126, 234, 0.1)',
-          border: `2px solid ${isScanning ? '#4CAF50' : '#667eea'}`,
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h3 style={{ margin: 0, color: isScanning ? '#4CAF50' : '#667eea', fontSize: '1.1rem' }}>
-              📷 IoT Barcode Scanner - Stock Check
-            </h3>
-            {isScanning && (
-              <div style={{
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                padding: '5px 15px',
-                borderRadius: '20px',
-                fontSize: '0.9rem',
-                fontWeight: 'bold',
-                animation: 'pulse 2s infinite'
-              }}>
-                ● SCANNING ACTIVE
-              </div>
-            )}
-          </div>
 
-          <p style={{ margin: '0 0 15px 0', color: '#666', fontSize: '0.9rem' }}>
-            {isScanning
-              ? '✓ Scanner ready - Use your IoT barcode scanner device or click items below'
-              : 'Click "Start Scanning" to activate IoT scanner mode'}
-          </p>
-
-          {/* Hidden input for IoT scanner device */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={barcodeInput}
-            onChange={(e) => setBarcodeInput(e.target.value)}
-            onKeyDown={handleBarcodeKeyDown}
-            style={{
-              position: 'absolute',
-              left: '-9999px',
-              width: '1px',
-              height: '1px',
-            }}
-            autoFocus={isScanning}
-          />
-
-          {/* Control Buttons */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '15px' }}>
-            {!isScanning ? (
-              <>
-                <button
-                  onClick={handleStartScanning}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
-                >
-                  ▶️ Start Scanning
-                </button>
-                <button
-                  onClick={handleStartVerification}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#FF9800',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#F57C00'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#FF9800'}
-                >
-                  📋 Start Stock Verification
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={handleStopScanning}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#da190b'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
-                >
-                  ⏹️ Stop & Clear
-                </button>
-                <button
-                  onClick={() => handleBarcodeSearch(barcodeInput)}
-                  disabled={!barcodeInput.trim()}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: barcodeInput.trim() ? '#667eea' : '#ccc',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: barcodeInput.trim() ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.3s'
-                  }}
-                >
-                  🔍 Manual Search
-                </button>
-                <button
-                  onClick={handleClearResult}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🔄 Clear
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Scan Statistics */}
-          {isScanning && (
-            <div style={{
-              display: 'flex',
-              gap: '15px',
-              padding: '15px',
-              backgroundColor: 'rgba(255, 255, 255, 0.7)',
-              borderRadius: '8px',
-              marginBottom: '15px'
-            }}>
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '5px' }}>SCANNED</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#4CAF50' }}>
-                  {scanHistory.length}
-                </div>
-              </div>
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '5px' }}>STATUS</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4CAF50' }}>
-                  ✓ ACTIVE
-                </div>
-              </div>
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '5px' }}>GODOWN</div>
-                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333' }}>
-                  {godown.name}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Current Scanned Item Result */}
-          {showScannedResult && scannedItem && (
-            <div style={{
-              marginTop: '15px',
-              padding: '15px',
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              border: '2px solid #28a745',
-              boxShadow: '0 4px 12px rgba(76, 175, 80, 0.2)'
-            }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#28a745' }}>✅ Item Found!</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.9rem' }}>
-                <p><strong>Product:</strong> {scannedItem.product || scannedItem.itemName || '-'}</p>
-                <p><strong>SKU:</strong> {scannedItem.skuName || scannedItem.itemCode || '-'}</p>
-                <p><strong>Batch:</strong> {scannedItem.batch || '-'}</p>
-                <p><strong>Location:</strong> {scannedItem.location || godown.name}</p>
-                <p><strong>Weight:</strong> {scannedItem.netWeight || scannedItem.grossWeight || '-'}</p>
-                <p><strong>Packed By:</strong> {scannedItem.packed || '-'}</p>
-                {scannedItem.status && <p><strong>Status:</strong> {scannedItem.status}</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Scan History */}
-          {isScanning && scanHistory.length > 0 && (
-            <div style={{ marginTop: '15px' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>
-                📋 Scan History ({scanHistory.length} items)
-              </h4>
-              <div style={{
-                maxHeight: '300px',
-                overflowY: 'auto',
-                backgroundColor: '#f9f9f9',
-                borderRadius: '8px',
-                padding: '10px'
-              }}>
-                {scanHistory.map((item, index) => (
-                  <div key={index} style={{
-                    padding: '12px',
-                    marginBottom: '8px',
-                    backgroundColor: 'white',
-                    borderRadius: '6px',
-                    borderLeft: '4px solid #4CAF50',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <strong style={{ color: '#4CAF50' }}>#{scanHistory.length - index}</strong>
-                        {' '}
-                        <strong>{item.barcode}</strong>
-                        {' - '}
-                        {item.data.product || item.data.itemName || 'Unknown'}
-                      </div>
-                      <small style={{ color: '#666' }}>{item.time}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
 
         <style>{`
           @keyframes pulse {
@@ -877,6 +669,40 @@ const GodownPage = () => {
             }}
           >
             Process Delivery
+          </button>
+          <button
+            onClick={() => navigate('/stock-checking')}
+            style={{
+              ...styles.button,
+              background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "translateY(-3px)";
+              e.target.style.boxShadow = "0 6px 15px rgba(255, 152, 0, 0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+            }}
+          >
+            📦 Stock Checking
+          </button>
+          <button
+            onClick={() => navigate('/stock-check-reports')}
+            style={{
+              ...styles.button,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "translateY(-3px)";
+              e.target.style.boxShadow = "0 6px 15px rgba(102, 126, 234, 0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+            }}
+          >
+            📊 Stock Reports
           </button>
           <button
             onClick={handleInventoryClick}

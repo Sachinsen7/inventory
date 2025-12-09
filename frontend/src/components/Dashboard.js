@@ -5,8 +5,16 @@ import TopCustomersWidget from "./TopCustomersWidget";
 import SalesComparisonWidget from "./SalesComparisonWidget";
 import StockValueWidget from "./StockValueWidget";
 import OutstandingWidget from "./OutstandingWidget";
+import PaymentOverdueWidget from "./PaymentOverdueWidget";
+import BillSyncStatusWidget from "./BillSyncStatusWidget";
+import LowStockAlertWidget from "./LowStockAlertWidget";
+import PendingOrdersWidget from "./PendingOrdersWidget";
+import { useAuth } from "../context/AuthContext";
 
 const Dashboard = () => {
+  const { hasPermission } = useAuth();
+  const canAccessInventory = hasPermission('canAccessInventory');
+
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -216,21 +224,34 @@ const Dashboard = () => {
 
 
       <div style={styles.buttonContainer}>
-        <Link to="/itemCountSummary" style={styles.link}>
-          <button style={styles.button}>Inventory</button>
-        </Link>
+        {canAccessInventory && (
+          <Link to="/itemCountSummary" style={styles.link}>
+            <button style={styles.button}>Inventory</button>
+          </Link>
+        )}
         <Link to="/signupstaff" style={styles.link}>
           <button style={styles.button}>Staff</button>
         </Link>
-        <Link to="/godown" style={styles.link}>
-          <button style={styles.button}>Godown</button>
-        </Link>
+        {canAccessInventory && (
+          <Link to="/godown" style={styles.link}>
+            <button style={styles.button}>Godown</button>
+          </Link>
+        )}
         <Link to="/sales" style={styles.link}>
           <button style={styles.button}>Sale</button>
         </Link>
-        <Link to="/transit" style={styles.link}>
-          <button style={styles.button}>Transit</button>
+        <Link to="/purchases" style={styles.link}>
+          <button style={styles.button}>Purchases</button>
         </Link>
+
+        <Link to="/data-management" style={styles.link}>
+          <button style={styles.button}>Data Management</button>
+        </Link>
+        {canAccessInventory && (
+          <Link to="/transit" style={styles.link}>
+            <button style={styles.button}>Transit</button>
+          </Link>
+        )}
 
         <button style={styles.button} onClick={() => setShowUploadModal(true)}>
           Upload Excel
@@ -349,10 +370,14 @@ const Dashboard = () => {
         </div>
       )}
       {/* Analytics Widgets */}
+      <PaymentOverdueWidget />
+      <PendingOrdersWidget />
+      <BillSyncStatusWidget />
+      {canAccessInventory && <LowStockAlertWidget />}
       <OutstandingWidget />
       <SalesComparisonWidget />
       <TopCustomersWidget />
-      <StockValueWidget />
+      {canAccessInventory && <StockValueWidget />}
 
 
 

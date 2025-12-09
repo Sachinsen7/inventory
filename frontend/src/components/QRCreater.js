@@ -359,12 +359,10 @@ const QRCreater = () => {
 
       await axios.post(`${backendUrl}/api/saved`, singleBarcodeData);
 
-      // IMMEDIATELY save to inventory (selects collection)
-      await axios.post(`${backendUrl}/api/save`, {
-        inputValue: barcodeNumber
-      });
+      // DO NOT save to inventory yet - only save when scanned in SelectForm
+      // The barcode is now in the database and will appear in SelectForm as "unscanned"
 
-      showToast.success(`✅ Barcode ${barcodeNumber} saved to database & inventory!`);
+      showToast.success(`✅ Barcode ${barcodeNumber} saved to database!`);
 
       // Print using browser's native print (works better in production)
       // Create custom print content showing ONLY Gross Weight
@@ -569,22 +567,9 @@ const QRCreater = () => {
       const response = await axios.post(`${backendUrl}/api/saved`, formData);
       showToast.success(response.data.message);
 
-      // IMMEDIATELY save each barcode to inventory (selects collection)
-      showToast.info("Adding barcodes to inventory...");
-      let successCount = 0;
-
-      for (const barcodeNumber of barcodeNumbers) {
-        try {
-          await axios.post(`${backendUrl}/api/save`, {
-            inputValue: barcodeNumber
-          });
-          successCount++;
-        } catch (saveError) {
-          console.error(`Error saving barcode ${barcodeNumber} to inventory:`, saveError);
-        }
-      }
-
-      showToast.success(`✓ ${successCount} barcodes added to inventory immediately!`);
+      // DO NOT save to inventory yet - barcodes will appear in SelectForm as "unscanned"
+      // They will only be added to inventory when actually scanned in SelectForm
+      showToast.success(`✓ ${barcodeNumbers.length} barcodes saved! They will appear in SelectForm.`);
 
       // Update last used number for this SKU
       if (skuc && barcodeNumbers.length > 0) {

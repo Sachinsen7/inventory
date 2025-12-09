@@ -315,8 +315,16 @@ const BillHistory = ({ bills, customer }) => {
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={() => downloadBillPDF(bill)}
+                    title="Download and print invoice PDF"
                   >
-                    📄 Invoice PDF
+                    🖨️ Reprint Bill
+                  </button>
+                  <button
+                    className="btn btn-info btn-sm"
+                    onClick={() => downloadBillPDF(bill)}
+                    title="Download invoice as PDF"
+                  >
+                    📄 Download PDF
                   </button>
                   {!bill.eWayBill?.generated && (
                     <button
@@ -327,6 +335,7 @@ const BillHistory = ({ bills, customer }) => {
                           window.setShowEWayBillGenerator(true);
                         }
                       }}
+                      title="Generate E-Way Bill"
                     >
                       🚛 E-Way Bill
                     </button>

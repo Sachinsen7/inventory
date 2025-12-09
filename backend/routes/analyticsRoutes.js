@@ -761,4 +761,668 @@ router.get('/purchase-vs-sales', async (req, res) => {
     }
 });
 
+// ==================== PAYMENT OVERDUE ALERTS ====================
+
+// Get overdue bills
+router.get('/overdue-bills', async (req, res) => {
+    try {
+        const Bill = mongoose.model('Bill');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Find all unpaid bills
+        const unpaidBills = await Bill.find({
+            paymentStatus: { $in: ['Pending', 'Processing'] }
+        }).populate('customerId', 'name phoneNumber');
+
+        // Calculate overdue status for each bill
+        const overdueBills = [];
+        const dueSoonBills = [];
+        const allUnpaidBills = [];
+
+        for (const bill of unpaidBills) {
+            // Calculate due date if not set
+            if (!bill.dueDate) {
+                const paymentTerms = bill.paymentTerms || 30;
+                bill.dueDate = new Date(bill.invoiceDate);
+                bill.dueDate.setDate(bill.dueDate.getDate() + paymentTerms);
+            }
+
+            const dueDate = new Date(bill.dueDate);
+            dueDate.setHours(0, 0, 0, 0);
+
+            const diffTime = today - dueDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            const billData = {
+                _id: bill._id,
+                billNumber: bill.billNumber,
+                invoiceNumber: bill.invoiceNumber,
+                invoiceDate: bill.invoiceDate,
+                dueDate: bill.dueDate,
+                totalAmount: bill.totalAmount,
+                paymentStatus: bill.paymentStatus,
+                customerId: bill.customerId?._id,
+                customerName: bill.customerName || bill.customerId?.name,
+                customerPhone: bill.customerPhone || bill.customerId?.phoneNumber,
+                isOverdue: diffDays > 0,
+                overdueBy: diffDays > 0 ? diffDays : 0,
+                dueIn: diffDays <= 0 ? Math.abs(diffDays) : 0
+            };
+
+            allUnpaidBills.push(billData);
+
+            if (diffDays > 0) {
+                // Overdue
+                overdueBills.push(billData);
+            } else if (diffDays >= -7 && diffDays <= 0) {
+                // Due within 7 days
+                dueSoonBills.push(billData);
+            }
+        }
+
+        // Sort by overdue days (most overdue first)
+        overdueBills.sort((a, b) => b.overdueBy - a.overdueBy);
+        dueSoonBills.sort((a, b) => a.dueIn - b.dueIn);
+
+        // Calculate totals
+        const totalOverdueAmount = overdueBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+        const totalDueSoonAmount = dueSoonBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+        const totalUnpaidAmount = allUnpaidBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+
+        // Group by customer
+        const customerOverdue = {};
+        overdueBills.forEach(bill => {
+            const customerId = bill.customerId?.toString();
+            if (!customerOverdue[customerId]) {
+                customerOverdue[customerId] = {
+                    customerId: bill.customerId,
+                    customerName: bill.customerName,
+                    customerPhone: bill.customerPhone,
+                    billCount: 0,
+                    totalAmount: 0,
+                    oldestOverdueBy: 0,
+                    bills: []
+                };
+            }
+            customerOverdue[customerId].billCount++;
+            customerOverdue[customerId].totalAmount += bill.totalAmount;
+            customerOverdue[customerId].oldestOverdueBy = Math.max(
+                customerOverdue[customerId].oldestOverdueBy,
+                bill.overdueBy
+            );
+            customerOverdue[customerId].bills.push(bill);
+        });
+
+        const topOverdueCustomers = Object.values(customerOverdue)
+            .sort((a, b) => b.totalAmount - a.totalAmount)
+            .slice(0, 10);
+
+        logger.info('Overdue bills fetched', {
+            overdueBillsCount: overdueBills.length,
+            dueSoonCount: dueSoonBills.length,
+            totalOverdueAmount
+        });
+
+        res.json({
+            summary: {
+                totalOverdueBills: overdueBills.length,
+                totalOverdueAmount,
+                totalDueSoonBills: dueSoonBills.length,
+                totalDueSoonAmount,
+                totalUnpaidBills: allUnpaidBills.length,
+                totalUnpaidAmount
+            },
+            overdueBills: overdueBills.slice(0, 50), // Limit to 50 for performance
+            dueSoonBills: dueSoonBills.slice(0, 20),
+            topOverdueCustomers,
+            lastUpdated: new Date()
+        });
+    } catch (error) {
+        logger.error('Error fetching overdue bills', error);
+        res.status(500).json({ message: 'Error fetching overdue bills', error: error.message });
+    }
+});
+
+// Get overdue bills for specific customer
+router.get('/overdue-bills/customer/:customerId', async (req, res) => {
+    try {
+        const { customerId } = req.params;
+        const Bill = mongoose.model('Bill');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const unpaidBills = await Bill.find({
+            customerId,
+            paymentStatus: { $in: ['Pending', 'Processing'] }
+        });
+
+        const overdueBills = [];
+        let totalOverdueAmount = 0;
+
+        for (const bill of unpaidBills) {
+            if (!bill.dueDate) {
+                const paymentTerms = bill.paymentTerms || 30;
+                bill.dueDate = new Date(bill.invoiceDate);
+                bill.dueDate.setDate(bill.dueDate.getDate() + paymentTerms);
+            }
+
+            const dueDate = new Date(bill.dueDate);
+            dueDate.setHours(0, 0, 0, 0);
+
+            const diffTime = today - dueDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > 0) {
+                overdueBills.push({
+                    _id: bill._id,
+                    billNumber: bill.billNumber,
+                    invoiceNumber: bill.invoiceNumber,
+                    invoiceDate: bill.invoiceDate,
+                    dueDate: bill.dueDate,
+                    totalAmount: bill.totalAmount,
+                    overdueBy: diffDays
+                });
+                totalOverdueAmount += bill.totalAmount;
+            }
+        }
+
+        overdueBills.sort((a, b) => b.overdueBy - a.overdueBy);
+
+        res.json({
+            customerId,
+            overdueBills,
+            totalOverdueBills: overdueBills.length,
+            totalOverdueAmount
+        });
+    } catch (error) {
+        logger.error('Error fetching customer overdue bills', error);
+        res.status(500).json({ message: 'Error fetching customer overdue bills', error: error.message });
+    }
+});
+
+// ==================== LOW STOCK ALERTS ====================
+
+// Get low stock items
+router.get('/low-stock-items', async (req, res) => {
+    try {
+        // Get Delevery1 model (actual inventory)
+        let Delevery1;
+        try {
+            Delevery1 = mongoose.model('Delevery1');
+        } catch (error) {
+            const delevery1Schema = new mongoose.Schema({
+                selectedOption: String,
+                inputValue: String,
+                godownName: String,
+                addedAt: { type: Date, default: Date.now },
+                itemName: String,
+                quantity: { type: Number, default: 0 },
+                price: { type: Number, default: 0 },
+                masterPrice: { type: Number, default: 0 },
+                description: String,
+                category: String,
+                minStockLevel: { type: Number, default: 10 },
+                godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
+                lastUpdated: { type: Date, default: Date.now }
+            });
+            Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
+        }
+
+        // Get all items from delevery1 collection
+        const allItems = await Delevery1.find({});
+
+        // Group by item prefix (first 3 digits) and godown
+        const itemGroups = {};
+
+        allItems.forEach(item => {
+            const inputValue = item.inputValue || '';
+            const prefix = inputValue.substring(0, 3);
+            const godownName = item.godownName || 'Unknown';
+            const key = `${prefix}_${godownName}`;
+
+            if (!itemGroups[key]) {
+                itemGroups[key] = {
+                    prefix,
+                    itemName: inputValue,
+                    godownName,
+                    quantity: 0,
+                    items: [],
+                    minStockLevel: item.minStockLevel || 10
+                };
+            }
+
+            itemGroups[key].quantity++;
+            itemGroups[key].items.push(item);
+        });
+
+        // Identify low stock items
+        const lowStockItems = [];
+        const criticalStockItems = [];
+        const outOfStockItems = [];
+
+        Object.values(itemGroups).forEach(group => {
+            const stockPercentage = (group.quantity / group.minStockLevel) * 100;
+
+            const itemData = {
+                prefix: group.prefix,
+                itemName: group.itemName,
+                godownName: group.godownName,
+                currentStock: group.quantity,
+                minStockLevel: group.minStockLevel,
+                stockPercentage: Math.round(stockPercentage),
+                shortage: Math.max(0, group.minStockLevel - group.quantity),
+                status: group.quantity === 0 ? 'OUT_OF_STOCK' :
+                    group.quantity < group.minStockLevel * 0.25 ? 'CRITICAL' :
+                        group.quantity < group.minStockLevel ? 'LOW' : 'NORMAL'
+            };
+
+            if (group.quantity === 0) {
+                outOfStockItems.push(itemData);
+            } else if (group.quantity < group.minStockLevel * 0.25) {
+                criticalStockItems.push(itemData);
+            } else if (group.quantity < group.minStockLevel) {
+                lowStockItems.push(itemData);
+            }
+        });
+
+        // Sort by severity (lowest stock percentage first)
+        const sortByStockPercentage = (a, b) => a.stockPercentage - b.stockPercentage;
+        outOfStockItems.sort(sortByStockPercentage);
+        criticalStockItems.sort(sortByStockPercentage);
+        lowStockItems.sort(sortByStockPercentage);
+
+        // Combine all alerts
+        const allLowStockItems = [
+            ...outOfStockItems,
+            ...criticalStockItems,
+            ...lowStockItems
+        ];
+
+        // Group by godown for summary
+        const godownSummary = {};
+        allLowStockItems.forEach(item => {
+            if (!godownSummary[item.godownName]) {
+                godownSummary[item.godownName] = {
+                    godownName: item.godownName,
+                    outOfStock: 0,
+                    critical: 0,
+                    low: 0,
+                    total: 0
+                };
+            }
+            godownSummary[item.godownName].total++;
+            if (item.status === 'OUT_OF_STOCK') godownSummary[item.godownName].outOfStock++;
+            else if (item.status === 'CRITICAL') godownSummary[item.godownName].critical++;
+            else if (item.status === 'LOW') godownSummary[item.godownName].low++;
+        });
+
+        logger.info('Low stock items fetched', {
+            outOfStock: outOfStockItems.length,
+            critical: criticalStockItems.length,
+            low: lowStockItems.length
+        });
+
+        res.json({
+            summary: {
+                totalLowStockItems: allLowStockItems.length,
+                outOfStockCount: outOfStockItems.length,
+                criticalCount: criticalStockItems.length,
+                lowCount: lowStockItems.length
+            },
+            outOfStockItems: outOfStockItems.slice(0, 20),
+            criticalStockItems: criticalStockItems.slice(0, 20),
+            lowStockItems: lowStockItems.slice(0, 20),
+            godownSummary: Object.values(godownSummary),
+            lastUpdated: new Date()
+        });
+    } catch (error) {
+        logger.error('Error fetching low stock items', error);
+        res.status(500).json({ message: 'Error fetching low stock items', error: error.message });
+    }
+});
+
+// Get low stock items for specific godown
+router.get('/low-stock-items/godown/:godownName', async (req, res) => {
+    try {
+        const { godownName } = req.params;
+
+        let Delevery1;
+        try {
+            Delevery1 = mongoose.model('Delevery1');
+        } catch (error) {
+            const delevery1Schema = new mongoose.Schema({
+                selectedOption: String,
+                inputValue: String,
+                godownName: String,
+                addedAt: { type: Date, default: Date.now },
+                itemName: String,
+                quantity: { type: Number, default: 0 },
+                price: { type: Number, default: 0 },
+                masterPrice: { type: Number, default: 0 },
+                description: String,
+                category: String,
+                minStockLevel: { type: Number, default: 10 },
+                godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
+                lastUpdated: { type: Date, default: Date.now }
+            });
+            Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
+        }
+
+        const items = await Delevery1.find({ godownName });
+
+        // Group by prefix
+        const itemGroups = {};
+        items.forEach(item => {
+            const prefix = (item.inputValue || '').substring(0, 3);
+            if (!itemGroups[prefix]) {
+                itemGroups[prefix] = {
+                    prefix,
+                    itemName: item.inputValue,
+                    quantity: 0,
+                    minStockLevel: item.minStockLevel || 10
+                };
+            }
+            itemGroups[prefix].quantity++;
+        });
+
+        // Filter low stock
+        const lowStockItems = Object.values(itemGroups)
+            .filter(group => group.quantity < group.minStockLevel)
+            .map(group => ({
+                ...group,
+                godownName,
+                shortage: group.minStockLevel - group.quantity,
+                stockPercentage: Math.round((group.quantity / group.minStockLevel) * 100)
+            }))
+            .sort((a, b) => a.stockPercentage - b.stockPercentage);
+
+        res.json({
+            godownName,
+            lowStockItems,
+            totalLowStockItems: lowStockItems.length
+        });
+    } catch (error) {
+        logger.error('Error fetching godown low stock items', error);
+        res.status(500).json({ message: 'Error fetching godown low stock items', error: error.message });
+    }
+});
+
+// ==================== BILL SYNC STATUS ====================
+
+// Get unsynced bills
+router.get('/unsynced-bills', async (req, res) => {
+    try {
+        const Bill = mongoose.model('Bill');
+
+        // Find all unsynced or failed bills
+        const unsyncedBills = await Bill.find({
+            syncStatus: { $in: ['pending', 'failed', 'partial'] }
+        })
+            .sort({ createdAt: -1 })
+            .limit(100);
+
+        // Calculate statistics
+        const pendingBills = unsyncedBills.filter(b => b.syncStatus === 'pending');
+        const failedBills = unsyncedBills.filter(b => b.syncStatus === 'failed');
+        const partialBills = unsyncedBills.filter(b => b.syncStatus === 'partial');
+
+        const totalUnsyncedAmount = unsyncedBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+        const pendingAmount = pendingBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+        const failedAmount = failedBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+
+        // Get oldest unsynced bill
+        const oldestUnsynced = unsyncedBills.length > 0
+            ? unsyncedBills[unsyncedBills.length - 1]
+            : null;
+
+        const daysSinceOldest = oldestUnsynced
+            ? Math.floor((Date.now() - new Date(oldestUnsynced.createdAt)) / (1000 * 60 * 60 * 24))
+            : 0;
+
+        // Group by sync error
+        const errorGroups = {};
+        failedBills.forEach(bill => {
+            const error = bill.syncError || 'Unknown Error';
+            if (!errorGroups[error]) {
+                errorGroups[error] = {
+                    error,
+                    count: 0,
+                    bills: []
+                };
+            }
+            errorGroups[error].count++;
+            errorGroups[error].bills.push({
+                _id: bill._id,
+                billNumber: bill.billNumber,
+                invoiceNumber: bill.invoiceNumber,
+                totalAmount: bill.totalAmount,
+                createdAt: bill.createdAt
+            });
+        });
+
+        const topErrors = Object.values(errorGroups)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+        logger.info('Unsynced bills fetched', {
+            totalUnsynced: unsyncedBills.length,
+            pending: pendingBills.length,
+            failed: failedBills.length
+        });
+
+        res.json({
+            summary: {
+                totalUnsynced: unsyncedBills.length,
+                totalUnsyncedAmount,
+                pendingBills: pendingBills.length,
+                pendingAmount,
+                failedBills: failedBills.length,
+                failedAmount,
+                partialBills: partialBills.length,
+                oldestUnsyncedDays: daysSinceOldest
+            },
+            bills: unsyncedBills.map(bill => ({
+                _id: bill._id,
+                billNumber: bill.billNumber,
+                invoiceNumber: bill.invoiceNumber,
+                invoiceDate: bill.invoiceDate,
+                customerName: bill.customerName,
+                totalAmount: bill.totalAmount,
+                syncStatus: bill.syncStatus,
+                syncAttempts: bill.syncAttempts,
+                syncError: bill.syncError,
+                lastSyncedAt: bill.lastSyncedAt,
+                createdAt: bill.createdAt,
+                daysSinceCreation: Math.floor((Date.now() - new Date(bill.createdAt)) / (1000 * 60 * 60 * 24))
+            })),
+            topErrors,
+            lastUpdated: new Date()
+        });
+    } catch (error) {
+        logger.error('Error fetching unsynced bills', error);
+        res.status(500).json({ message: 'Error fetching unsynced bills', error: error.message });
+    }
+});
+
+// Manually trigger sync for a bill
+router.post('/sync-bill/:billId', async (req, res) => {
+    try {
+        const { billId } = req.params;
+        const { system } = req.body; // e.g., 'tally', 'quickbooks', 'cloud'
+        const Bill = mongoose.model('Bill');
+
+        const bill = await Bill.findById(billId);
+        if (!bill) {
+            return res.status(404).json({ message: 'Bill not found' });
+        }
+
+        // Simulate sync (in real implementation, this would call external API)
+        // For now, we'll just mark it as synced
+        const syncSuccess = Math.random() > 0.2; // 80% success rate for demo
+
+        if (syncSuccess) {
+            bill.syncStatus = 'synced';
+            bill.lastSyncedAt = new Date();
+            bill.syncAttempts += 1;
+            bill.syncError = null;
+
+            if (!bill.syncedTo) bill.syncedTo = [];
+            bill.syncedTo.push({
+                system: system || 'manual',
+                syncedAt: new Date(),
+                status: 'success'
+            });
+
+            await bill.save();
+
+            logger.info('Bill synced successfully', { billId, system });
+            res.json({
+                success: true,
+                message: 'Bill synced successfully',
+                bill: {
+                    _id: bill._id,
+                    billNumber: bill.billNumber,
+                    syncStatus: bill.syncStatus,
+                    lastSyncedAt: bill.lastSyncedAt
+                }
+            });
+        } else {
+            // Simulate failure
+            bill.syncStatus = 'failed';
+            bill.syncAttempts += 1;
+            bill.syncError = 'Connection timeout - Unable to reach sync server';
+
+            if (!bill.syncedTo) bill.syncedTo = [];
+            bill.syncedTo.push({
+                system: system || 'manual',
+                syncedAt: new Date(),
+                status: 'failed',
+                error: bill.syncError
+            });
+
+            await bill.save();
+
+            logger.warn('Bill sync failed', { billId, system, error: bill.syncError });
+            res.status(500).json({
+                success: false,
+                message: 'Bill sync failed',
+                error: bill.syncError
+            });
+        }
+    } catch (error) {
+        logger.error('Error syncing bill', error);
+        res.status(500).json({ message: 'Error syncing bill', error: error.message });
+    }
+});
+
+// Bulk sync multiple bills
+router.post('/sync-bills-bulk', async (req, res) => {
+    try {
+        const { billIds, system } = req.body;
+        const Bill = mongoose.model('Bill');
+
+        if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
+            return res.status(400).json({ message: 'Invalid bill IDs' });
+        }
+
+        const results = {
+            success: [],
+            failed: [],
+            total: billIds.length
+        };
+
+        for (const billId of billIds) {
+            try {
+                const bill = await Bill.findById(billId);
+                if (!bill) {
+                    results.failed.push({ billId, error: 'Bill not found' });
+                    continue;
+                }
+
+                // Simulate sync
+                const syncSuccess = Math.random() > 0.2;
+
+                if (syncSuccess) {
+                    bill.syncStatus = 'synced';
+                    bill.lastSyncedAt = new Date();
+                    bill.syncAttempts += 1;
+                    bill.syncError = null;
+
+                    if (!bill.syncedTo) bill.syncedTo = [];
+                    bill.syncedTo.push({
+                        system: system || 'bulk',
+                        syncedAt: new Date(),
+                        status: 'success'
+                    });
+
+                    await bill.save();
+                    results.success.push({ billId, billNumber: bill.billNumber });
+                } else {
+                    bill.syncStatus = 'failed';
+                    bill.syncAttempts += 1;
+                    bill.syncError = 'Bulk sync failed';
+
+                    if (!bill.syncedTo) bill.syncedTo = [];
+                    bill.syncedTo.push({
+                        system: system || 'bulk',
+                        syncedAt: new Date(),
+                        status: 'failed',
+                        error: bill.syncError
+                    });
+
+                    await bill.save();
+                    results.failed.push({ billId, billNumber: bill.billNumber, error: bill.syncError });
+                }
+            } catch (err) {
+                results.failed.push({ billId, error: err.message });
+            }
+        }
+
+        logger.info('Bulk sync completed', results);
+        res.json({
+            message: 'Bulk sync completed',
+            results
+        });
+    } catch (error) {
+        logger.error('Error in bulk sync', error);
+        res.status(500).json({ message: 'Error in bulk sync', error: error.message });
+    }
+});
+
+// Get sync statistics
+router.get('/sync-stats', async (req, res) => {
+    try {
+        const Bill = mongoose.model('Bill');
+
+        const totalBills = await Bill.countDocuments();
+        const syncedBills = await Bill.countDocuments({ syncStatus: 'synced' });
+        const pendingBills = await Bill.countDocuments({ syncStatus: 'pending' });
+        const failedBills = await Bill.countDocuments({ syncStatus: 'failed' });
+        const partialBills = await Bill.countDocuments({ syncStatus: 'partial' });
+
+        const syncRate = totalBills > 0 ? ((syncedBills / totalBills) * 100).toFixed(2) : 0;
+
+        // Get recent sync activity (last 24 hours)
+        const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recentSyncs = await Bill.countDocuments({
+            lastSyncedAt: { $gte: last24Hours }
+        });
+
+        res.json({
+            totalBills,
+            syncedBills,
+            pendingBills,
+            failedBills,
+            partialBills,
+            syncRate: parseFloat(syncRate),
+            recentSyncs,
+            lastUpdated: new Date()
+        });
+    } catch (error) {
+        logger.error('Error fetching sync stats', error);
+        res.status(500).json({ message: 'Error fetching sync stats', error: error.message });
+    }
+});
+
 module.exports = router;

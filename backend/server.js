@@ -29,6 +29,7 @@ const ledgerRoutes = require("./routes/ledgerRoutes");
 const gstr2Routes = require("./routes/gstr2Routes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const stockCheckRoutes = require("./routes/stockCheckRoutes");
 
 // Middleware
 // NOTE: Security middleware added below. After pulling these changes run in `backend`:
@@ -128,7 +129,7 @@ if (process.env.NODE_ENV === "production") {
 // Rate limiting - general (lightweight)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // limit each IP to 200 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 200 : 1000, // Higher limit for development
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
@@ -235,8 +236,9 @@ const barcodeSchema = new mongoose.Schema({
   netWeight: String, // Calculated: grossWeight - coreWeight
   batchNumbers: [Number],
   barcodeWeights: { type: Map, of: String }, // Store individual barcode weights as key-value pairs
-  is_scanned: { type: Boolean, default: false }, // Track if barcode has been scanned
-  scanned_at: { type: Date }, // Track when barcode was scanned
+  scannedBarcodes: [String], // Array of individual scanned barcode numbers (e.g., ["SKU0011", "SKU0012"])
+  is_scanned: { type: Boolean, default: false }, // Track if ALL barcodes have been scanned
+  scanned_at: { type: Date }, // Track when last barcode was scanned
 });
 
 // Create Model
@@ -260,7 +262,6 @@ const transitSchema = new mongoose.Schema({
 
 const Transit = mongoose.model("Transit", transitSchema, "transits");
 
-// Ledger Schema - Append-only audit trail for billing workflow
 const ledgerSchema = new mongoose.Schema({
   action: {
     type: String,
@@ -403,27 +404,97 @@ app.get("/api/barcodes", async (req, res) => {
     // Check if filtering by is_scanned status
     const { is_scanned } = req.query;
 
-    let query = {};
     if (is_scanned !== undefined) {
       const isScannedBool = is_scanned === 'true' || is_scanned === true;
 
       if (isScannedBool) {
-        // Only return barcodes that are explicitly marked as scanned
-        query.is_scanned = true;
+        // Return only fully scanned barcode documents
+        const barcodes = await Barcode.find({ is_scanned: true });
+        res.json(barcodes);
       } else {
-        // Return barcodes that are either false OR don't have the field (legacy data)
-        query.$or = [
-          { is_scanned: false },
-          { is_scanned: { $exists: false } }
-        ];
-      }
-    }
+        // Return documents that have unscanned barcodes
+        // This includes documents where not all barcodes have been scanned
+        const allBarcodes = await Barcode.find({
+          $or: [
+            { is_scanned: false },
+            { is_scanned: { $exists: false } }
+          ]
+        });
 
-    const barcodes = await Barcode.find(query);
-    res.json(barcodes);
+        // Filter out individual barcodes that have already been scanned
+        const filteredBarcodes = allBarcodes.map(doc => {
+          const scannedSet = new Set(doc.scannedBarcodes || []);
+
+          // Filter batchNumbers to only include unscanned ones
+          const unscannedBatchNumbers = (doc.batchNumbers || []).filter(bn => {
+            const fullBarcode = String(doc.skuc) + String(bn);
+            return !scannedSet.has(fullBarcode);
+          });
+
+          // Only return document if it has unscanned barcodes
+          if (unscannedBatchNumbers.length > 0) {
+            return {
+              ...doc.toObject(),
+              batchNumbers: unscannedBatchNumbers
+            };
+          }
+          return null;
+        }).filter(doc => doc !== null);
+
+        res.json(filteredBarcodes);
+      }
+    } else {
+      // No filter - return all
+      const barcodes = await Barcode.find();
+      res.json(barcodes);
+    }
   } catch (error) {
     logger.error("Error fetching barcodes:", error);
     res.status(500).json({ message: "Error fetching data" });
+  }
+});
+
+// API: Reset all barcodes to unscanned state (for testing)
+app.post("/api/barcodes/reset-all", async (req, res) => {
+  try {
+    const result = await Barcode.updateMany(
+      {},
+      {
+        $set: {
+          is_scanned: false,
+          scannedBarcodes: [],
+          scanned_at: null
+        }
+      }
+    );
+
+    logger.info(`Reset ${result.modifiedCount} barcodes to unscanned state`);
+    res.json({
+      message: `Successfully reset ${result.modifiedCount} barcodes to unscanned state`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    logger.error("Error resetting barcodes:", error);
+    res.status(500).json({ message: "Error resetting barcodes" });
+  }
+});
+
+// API: Delete individual barcode
+app.delete("/api/barcodes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const barcode = await Barcode.findByIdAndDelete(id);
+
+    if (!barcode) {
+      return res.status(404).json({ message: "Barcode not found" });
+    }
+
+    logger.info("Barcode deleted", { id, product: barcode.product, skuc: barcode.skuc });
+    res.json({ message: "Barcode deleted successfully", barcode });
+  } catch (error) {
+    logger.error("Error deleting barcode:", error);
+    res.status(500).json({ message: "Error deleting barcode" });
   }
 });
 
@@ -942,7 +1013,7 @@ app.delete(
   }
 );
 
-// User Password Change API (protected - admin only)
+
 app.put(
   "/api/users/:id/password",
   authenticateJWT,
@@ -1096,8 +1167,8 @@ app.post(
       const newEntry = new Select({ inputValue });
       await newEntry.save();
 
-      // Mark the barcode as scanned in the Barcode collection
-      // Find the barcode that contains this scanned value in its batchNumbers
+      // Mark the INDIVIDUAL barcode as scanned in the Barcode collection
+      // Find the barcode document that contains this scanned value in its batchNumbers
       const allBarcodes = await Barcode.find();
       for (const barcodeDoc of allBarcodes) {
         if (barcodeDoc.batchNumbers && barcodeDoc.skuc) {
@@ -1107,17 +1178,29 @@ app.post(
           });
 
           if (matchingBatchNumber) {
-            // Mark this barcode document as scanned
+            // Add this barcode to the scannedBarcodes array
+            const scannedBarcodes = barcodeDoc.scannedBarcodes || [];
+            if (!scannedBarcodes.includes(inputValue)) {
+              scannedBarcodes.push(inputValue);
+            }
+
+            // Check if ALL barcodes in this document have been scanned
+            const allScanned = barcodeDoc.batchNumbers.every(bn => {
+              const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+              return scannedBarcodes.includes(fullBarcode);
+            });
+
             await Barcode.updateOne(
               { _id: barcodeDoc._id },
               {
                 $set: {
-                  is_scanned: true,
+                  scannedBarcodes: scannedBarcodes,
+                  is_scanned: allScanned,
                   scanned_at: new Date()
                 }
               }
             );
-            logger.info(`Marked barcode ${inputValue} as scanned`);
+            logger.info(`Marked barcode ${inputValue} as scanned (${scannedBarcodes.length}/${barcodeDoc.batchNumbers.length} scanned)`);
             break;
           }
         }
@@ -1352,6 +1435,52 @@ app.put(
   }
 );
 
+// API to check barcode uniqueness before saving
+app.post(
+  "/api/barcodes/check-uniqueness",
+  validators.rejectUnknownFields(["barcodeNumbers"]),
+  [body("barcodeNumbers").isArray().withMessage("barcodeNumbers must be an array")],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { barcodeNumbers } = req.body;
+
+      if (!barcodeNumbers || barcodeNumbers.length === 0) {
+        return res.json({ isUnique: true, duplicates: [] });
+      }
+
+      // Check if any of these barcodes already exist
+      const allBarcodes = await Barcode.find();
+      const existingBarcodes = new Set();
+
+      // Build a set of all existing barcode numbers
+      for (const doc of allBarcodes) {
+        if (doc.batchNumbers && doc.skuc) {
+          doc.batchNumbers.forEach(bn => {
+            const fullBarcode = String(doc.skuc) + String(bn);
+            existingBarcodes.add(fullBarcode);
+          });
+        }
+      }
+
+      // Check for duplicates
+      const duplicates = barcodeNumbers.filter(barcode => existingBarcodes.has(barcode));
+
+      if (duplicates.length > 0) {
+        return res.json({
+          isUnique: false,
+          duplicates: duplicates
+        });
+      }
+
+      res.json({ isUnique: true, duplicates: [] });
+    } catch (error) {
+      logger.error("Error checking barcode uniqueness:", error);
+      res.status(500).json({ message: "Error checking uniqueness" });
+    }
+  }
+);
+
 // API to save data
 app.post(
   "/api/saved",
@@ -1398,8 +1527,16 @@ app.post(
   validators.handleValidationErrors,
   async (req, res) => {
     try {
-      const newBarcode = new Barcode(req.body);
+      // Ensure is_scanned is explicitly set to false for new barcodes
+      const barcodeData = {
+        ...req.body,
+        is_scanned: false,
+        scanned_at: null,
+        scannedBarcodes: [] // Initialize empty array for tracking individual scanned barcodes
+      };
+      const newBarcode = new Barcode(barcodeData);
       await newBarcode.save();
+      logger.info(`Created new barcode with ${newBarcode.batchNumbers?.length || 0} batch numbers`);
       res.json({ message: "Data saved successfully!" });
     } catch (error) {
       logger.error("Error saving barcode data:", error);
@@ -1562,6 +1699,140 @@ app.get("/api/products3", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch data" });
   }
 });
+
+app.delete("/api/despatch/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Despatch.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting despatch item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/products2/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Despatch.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting products2 item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/products3/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Delevery1.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting products3 item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/transits/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Transit.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting transit item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+// DELETE: Single item from sales
+app.delete("/api/sales/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Sale.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting sale item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL factory inventory (Select collection)
+app.delete("/api/factory-inventory/clear-all", async (req, res) => {
+  try {
+    const result = await Select.deleteMany({});
+    logger.info(`Cleared all factory inventory: ${result.deletedCount} items`);
+    res.json({
+      message: `Successfully cleared all factory inventory`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    logger.error("Error clearing factory inventory:", error);
+    res.status(500).json({ message: "Error clearing factory inventory", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL in-transit items (Delevery1 collection)
+app.delete("/api/in-transit/clear-all", async (req, res) => {
+  try {
+    const result = await Delevery1.deleteMany({});
+    logger.info(`Cleared all in-transit items: ${result.deletedCount} items`);
+    res.json({
+      message: `Successfully cleared all in-transit items`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    logger.error("Error clearing in-transit items:", error);
+    res.status(500).json({ message: "Error clearing in-transit items", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL collections (DANGER!)
+app.delete("/api/inventory/clear-all-collections", async (req, res) => {
+  try {
+    const results = {
+      factory: await Select.deleteMany({}),
+      inTransit: await Delevery1.deleteMany({}),
+      despatch: await Despatch.deleteMany({}),
+      transits: await Transit.deleteMany({}),
+      sales: await Sale.deleteMany({}),
+    };
+
+    const totalDeleted = Object.values(results).reduce((sum, r) => sum + r.deletedCount, 0);
+
+    logger.warn(`CLEARED ALL COLLECTIONS: ${totalDeleted} total items deleted`);
+    res.json({
+      message: `Successfully cleared all collections`,
+      totalDeleted,
+      details: {
+        factory: results.factory.deletedCount,
+        inTransit: results.inTransit.deletedCount,
+        despatch: results.despatch.deletedCount,
+        transits: results.transits.deletedCount,
+        sales: results.sales.deletedCount,
+      }
+    });
+  } catch (error) {
+    logger.error("Error clearing all collections:", error);
+    res.status(500).json({ message: "Error clearing collections", error: error.message });
+  }
+});
+
+// ============================================
 
 // API: Get product details by barcode (search in Barcode, Despatch, and Delevery1 collections)
 app.get("/api/product-details/:barcode", async (req, res) => {
@@ -2166,6 +2437,9 @@ app.get("/api/transits/summary", async (req, res) => {
   }
 });
 
+const purchaseRoutes = require('./routes/purchaseRoutes');
+const dataManagementRoutes = require('./routes/dataManagementRoutes');
+
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
 app.use("/api/settings", settingsRoutes);
@@ -2173,6 +2447,8 @@ app.use("/api/ledger", ledgerRoutes);
 app.use("/api/gstr2", gstr2Routes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api", dataManagementRoutes);
 
 // ============================================
 // LEDGER API ENDPOINTS
@@ -2366,9 +2642,163 @@ app.post('/api/ledger/payment', async (req, res) => {
 
 
 // ============================================
+// CLEAR TEST DATA API (For Development/Testing)
+// ============================================
+app.delete('/api/clear-all-data', async (req, res) => {
+  try {
+    const { confirmPassword } = req.body;
+
+    // Safety check - require password confirmation
+    if (confirmPassword !== 'DELETE_ALL_DATA') {
+      return res.status(403).json({
+        message: 'Invalid confirmation password. Please provide confirmPassword: "DELETE_ALL_DATA"'
+      });
+    }
+
+    logger.warn('⚠️ CLEARING ALL TEST DATA - This action cannot be undone!');
+
+    const results = {
+      deleted: {},
+      errors: []
+    };
+
+    // Get all collection models
+    try {
+      // Define models if not already defined
+      let Despatch, Delevery1;
+
+      try {
+        Despatch = mongoose.model('Despatch');
+      } catch (e) {
+        const despatchSchema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now }
+        });
+        Despatch = mongoose.model('Despatch', despatchSchema, 'despatch');
+      }
+
+      try {
+        Delevery1 = mongoose.model('Delevery1');
+      } catch (e) {
+        const delevery1Schema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now }
+        });
+        Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
+      }
+
+      // Clear all collections
+      const collections = [
+        { name: 'Barcodes', model: Barcode },
+        { name: 'Despatch', model: Despatch },
+        { name: 'Delevery1', model: Delevery1 },
+        { name: 'Select', model: Select },
+        { name: 'Transit', model: Transit },
+        { name: 'Sales', model: Sale }
+      ];
+
+      for (const collection of collections) {
+        try {
+          const deleteResult = await collection.model.deleteMany({});
+          results.deleted[collection.name] = deleteResult.deletedCount;
+          logger.info(`Deleted ${deleteResult.deletedCount} documents from ${collection.name}`);
+        } catch (error) {
+          results.errors.push(`Error deleting ${collection.name}: ${error.message}`);
+          logger.error(`Error deleting ${collection.name}:`, error);
+        }
+      }
+
+      logger.info('✅ All test data cleared successfully', results.deleted);
+
+      res.json({
+        success: true,
+        message: 'All test data cleared successfully',
+        deleted: results.deleted,
+        errors: results.errors.length > 0 ? results.errors : undefined
+      });
+
+    } catch (error) {
+      logger.error('Error clearing data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error clearing data',
+        error: error.message
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error in clear-all-data endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Clear specific collection
+app.delete('/api/clear-collection/:collectionName', async (req, res) => {
+  try {
+    const { collectionName } = req.params;
+    const { confirmPassword } = req.body;
+
+    if (confirmPassword !== 'DELETE_COLLECTION') {
+      return res.status(403).json({
+        message: 'Invalid confirmation password. Please provide confirmPassword: "DELETE_COLLECTION"'
+      });
+    }
+
+    const collectionMap = {
+      'barcodes': Barcode,
+      'despatch': mongoose.model('Despatch'),
+      'delevery1': mongoose.model('Delevery1'),
+      'select': Select,
+      'transit': Transit,
+      'sales': Sale
+    };
+
+    const model = collectionMap[collectionName.toLowerCase()];
+
+    if (!model) {
+      return res.status(400).json({
+        message: `Invalid collection name. Available: ${Object.keys(collectionMap).join(', ')}`
+      });
+    }
+
+    const deleteResult = await model.deleteMany({});
+
+    logger.info(`Deleted ${deleteResult.deletedCount} documents from ${collectionName}`);
+
+    res.json({
+      success: true,
+      message: `Cleared ${collectionName} collection`,
+      deletedCount: deleteResult.deletedCount
+    });
+
+  } catch (error) {
+    logger.error('Error clearing collection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error clearing collection',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
 // MOUNT BILLING ROUTES
 // ============================================
 app.use('/api/bills', billingRoutes);
+app.use('/api/stock-check', stockCheckRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/ledger', ledgerRoutes);
+app.use('/api/gstr2', gstr2Routes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/orders', orderRoutes);
 
 // ============================================
 // SERVE STATIC FILES (Must be AFTER all API routes)

@@ -291,14 +291,14 @@ const Dashboard = () => {
             {/* Template Download Section */}
             <div style={styles.templateSection}>
               <p style={styles.templateText}>
-                📥 Don't have a template? Download one:
+                Don't have a template? Download one:
               </p>
               <div style={styles.templateButtons}>
                 <button
                   onClick={() => handleDownloadTemplate("products")}
                   style={styles.templateButton}
                 >
-                  � Produtcts Template
+                  Products Template
                 </button>
 
               </div>
@@ -385,14 +385,16 @@ const Dashboard = () => {
         </div>
       )}
       {/* Analytics Widgets */}
-      <PaymentOverdueWidget />
-      <PendingOrdersWidget />
-      <BillSyncStatusWidget />
-      {canAccessInventory && <LowStockAlertWidget />}
-      <OutstandingWidget />
-      <SalesComparisonWidget />
-      <TopCustomersWidget />
-      {canAccessInventory && <StockValueWidget />}
+      <div style={styles.widgetsContainer}>
+        <PaymentOverdueWidget />
+        <PendingOrdersWidget />
+        <BillSyncStatusWidget />
+        {canAccessInventory && <LowStockAlertWidget />}
+        <OutstandingWidget />
+        <SalesComparisonWidget />
+        <TopCustomersWidget />
+        {canAccessInventory && <StockValueWidget />}
+      </div>
 
 
 
@@ -405,12 +407,13 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     minHeight: "100vh",
     background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
     padding: "20px",
     backgroundSize: "400% 400%",
     animation: "gradientAnimation 12s ease infinite",
+    width: "100%",
   },
   header: {
     fontSize: "44px",
@@ -425,6 +428,17 @@ const styles = {
     flexWrap: "wrap",
     gap: "20px",
     justifyContent: "center",
+    width: "100%",
+    maxWidth: "1400px",
+    marginBottom: "30px",
+  },
+  widgetsContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: "1400px",
+    gap: "20px",
   },
   button: {
     padding: "15px 30px",

@@ -29,17 +29,19 @@ const BarcodeTable = () => {
   );
 
   return (
-    <div style={{ display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        textAlign: "center",
-        padding: "20px",
-        boxSizing: "border-box",
-        background: 'linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)',
-        backgroundSize: '400% 400%',
-        animation: 'gradientAnimation 12s ease infinite', }}>
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      height: "100vh",
+      textAlign: "center",
+      padding: "20px",
+      boxSizing: "border-box",
+      background: 'linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)',
+      backgroundSize: '400% 400%',
+      animation: 'gradientAnimation 12s ease infinite',
+    }}>
       <h2 style={{ fontSize: "34px", marginBottom: "20px", color: "white" }}>Barcode Data</h2>
 
       {/* 🔍 Search Box */}
@@ -59,7 +61,7 @@ const BarcodeTable = () => {
       />
 
       <div style={{ overflowX: "auto" }}>
-      <style>{globalStyles}</style>
+        <style>{globalStyles}</style>
         <table style={tableStyle}>
           <thead>
             <tr style={headerStyle}>
@@ -76,6 +78,9 @@ const BarcodeTable = () => {
               <th style={thStyle}>Mixer</th>
               <th style={thStyle}>SKUC</th>
               <th style={thStyle}>SKUN</th>
+              <th style={thStyle}>Core Weight</th>
+              <th style={thStyle}>Gross Weight</th>
+              <th style={thStyle}>Net Weight</th>
               <th style={thStyle}>Batch Numbers</th>
             </tr>
           </thead>
@@ -95,6 +100,9 @@ const BarcodeTable = () => {
                 <td style={tdStyle}>{barcode.mixer || "-"}</td>
                 <td style={tdStyle}>{barcode.skuc || "-"}</td>
                 <td style={tdStyle}>{barcode.skun || "-"}</td>
+                <td style={tdStyle}>{barcode.coreWeight || "-"}</td>
+                <td style={tdStyle}>{barcode.grossWeight || "-"}</td>
+                <td style={tdStyle}>{barcode.netWeight || "-"}</td>
                 <td style={tdStyle}>
                   {barcode.batchNumbers?.length > 0 ? (
                     <select style={dropdownStyle}>
@@ -140,7 +148,7 @@ const tableStyle = {
 
 // ✅ Header Row Style
 const headerStyle = {
-    backgroundColor: 'rgba(218, 216, 224, 0.8)',
+  backgroundColor: 'rgba(218, 216, 224, 0.8)',
   color: "white",
   textAlign: "center",
 };

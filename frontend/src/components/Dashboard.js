@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { showToast } from "../utils/toastNotifications";
+import TopCustomersWidget from "./TopCustomersWidget";
+import SalesComparisonWidget from "./SalesComparisonWidget";
+import StockValueWidget from "./StockValueWidget";
+import OutstandingWidget from "./OutstandingWidget";
+import PaymentOverdueWidget from "./PaymentOverdueWidget";
+import BillSyncStatusWidget from "./BillSyncStatusWidget";
+import LowStockAlertWidget from "./LowStockAlertWidget";
+import PendingOrdersWidget from "./PendingOrdersWidget";
+import { useAuth } from "../context/AuthContext";
 
 const Dashboard = () => {
+  const { hasPermission } = useAuth();
+  const canAccessInventory = hasPermission('canAccessInventory');
+
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -15,13 +27,16 @@ const Dashboard = () => {
 
   const fetchExcelFiles = async () => {
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/excel-files`
+        `${backendUrl}/api/excel-files`
       );
       const data = await response.json();
       setExcelFiles(data);
+      console.log("Fetched Excel files:", data);
     } catch (error) {
       console.error("Error fetching Excel files:", error);
+      showToast.error("Error loading files list");
     }
   };
 
@@ -51,8 +66,9 @@ const Dashboard = () => {
     formData.append("excelFile", selectedFile);
 
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/upload-excel`,
+        `${backendUrl}/api/upload-excel`,
         {
           method: "POST",
           body: formData,
@@ -69,7 +85,7 @@ const Dashboard = () => {
         showToast.error("Error uploading file: " + data.message);
       }
     } catch (error) {
-      showToast.error("Error uploading file");
+      showToast.error("Error uploading file: " + error.message);
       console.error("Upload error:", error);
     } finally {
       setUploading(false);
@@ -78,24 +94,34 @@ const Dashboard = () => {
 
   const handleDownload = async (fileId, fileName) => {
     try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/download-excel/${fileId}`
+        `${backendUrl}/api/download-excel/${fileId}`
       );
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = fileName;
+        a.download = fileName || fileId.split("-").slice(1).join("-") || "download.xlsx";
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+
+        showToast.success("File downloaded successfully!");
       } else {
-        showToast.error("Error downloading file");
+        const errorData = await response.json();
+        showToast.error("Error downloading file: " + (errorData.message || "Unknown error"));
+        console.error("Download error response:", errorData);
       }
     } catch (error) {
-      showToast.error("Error downloading file");
+      showToast.error("Error downloading file: " + error.message);
       console.error("Download error:", error);
     }
   };
@@ -103,8 +129,9 @@ const Dashboard = () => {
   const handleDelete = async (fileId) => {
     if (window.confirm("Are you sure you want to delete this file?")) {
       try {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
         const response = await fetch(
-          `${process.env.REACT_APP_BACKEND_URL}/api/delete-excel/${fileId}`,
+          `${backendUrl}/api/delete-excel/${fileId}`,
           {
             method: "DELETE",
           }
@@ -114,10 +141,11 @@ const Dashboard = () => {
           showToast.success("File deleted successfully!");
           fetchExcelFiles();
         } else {
-          showToast.error("Error deleting file");
+          const errorData = await response.json();
+          showToast.error("Error deleting file: " + (errorData.message || "Unknown error"));
         }
       } catch (error) {
-        showToast.error("Error deleting file");
+        showToast.error("Error deleting file: " + error.message);
         console.error("Delete error:", error);
       }
     }
@@ -125,13 +153,29 @@ const Dashboard = () => {
 
   const handleDownloadTemplate = async (templateType) => {
     try {
-      const endpoint =
-        templateType === "inventory"
-          ? "download-inventory-template"
-          : "download-billing-template";
+      let endpoint, filename;
 
+      switch (templateType) {
+        case "inventory":
+          endpoint = "download-inventory-template";
+          filename = "inventory_template.xlsx";
+          break;
+        case "billing":
+          endpoint = "download-billing-template";
+          filename = "billing_items_template.xlsx";
+          break;
+        case "products":
+          endpoint = "download-products-template";
+          filename = "products_template.xlsx";
+          break;
+        default:
+          endpoint = "download-products-template";
+          filename = "products_template.xlsx";
+      }
+
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/${endpoint}`
+        `${backendUrl}/api/${endpoint}`
       );
 
       if (response.ok) {
@@ -139,20 +183,23 @@ const Dashboard = () => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download =
-          templateType === "inventory"
-            ? "inventory_template.xlsx"
-            : "billing_items_template.xlsx";
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+
         showToast.success("Template downloaded successfully!");
       } else {
-        showToast.error("Error downloading template");
+        const errorData = await response.json();
+        showToast.error("Error downloading template: " + (errorData.message || "Unknown error"));
       }
     } catch (error) {
-      showToast.error("Error downloading template");
+      showToast.error("Error downloading template: " + error.message);
       console.error("Template download error:", error);
     }
   };
@@ -173,29 +220,66 @@ const Dashboard = () => {
     <div style={styles.container}>
       <style>{globalStyles}</style>
       <h2 style={styles.header}>Admin Dashboard</h2>
+
+
+
       <div style={styles.buttonContainer}>
-        <Link to="/itemCountSummary" style={styles.link}>
-          <button style={styles.button}>Inventory</button>
-        </Link>
+        {canAccessInventory && (
+          <Link to="/itemCountSummary" style={styles.link}>
+            <button style={styles.button}>Inventory</button>
+          </Link>
+        )}
         <Link to="/signupstaff" style={styles.link}>
           <button style={styles.button}>Staff</button>
         </Link>
-        <Link to="/godown" style={styles.link}>
-          <button style={styles.button}>Godown</button>
-        </Link>
+        {canAccessInventory && (
+          <Link to="/godown" style={styles.link}>
+            <button style={styles.button}>Godown</button>
+          </Link>
+        )}
         <Link to="/sales" style={styles.link}>
           <button style={styles.button}>Sale</button>
         </Link>
-        <Link to="/transit" style={styles.link}>
-          <button style={styles.button}>Transit</button>
+        <Link to="/purchases" style={styles.link}>
+          <button style={styles.button}>Purchases</button>
         </Link>
+
+        <Link to="/data-management" style={styles.link}>
+          <button style={styles.button}>Data Management</button>
+        </Link>
+        <Link to="/bank-reconciliation" style={styles.link}>
+          <button style={styles.button}>Bank Reconciliation</button>
+        </Link>
+        <Link to="/day-book" style={styles.link}>
+          <button style={styles.button}>Day Book</button>
+        </Link>
+        <Link to="/enhanced-vouchers" style={styles.link}>
+          <button style={styles.button}>Enhanced Vouchers</button>
+        </Link>
+        <Link to="/cheque-management" style={styles.link}>
+          <button style={styles.button}>Cheque Management</button>
+        </Link>
+        <Link to="/ratio-analysis" style={styles.link}>
+          <button style={styles.button}>Ratio Analysis</button>
+        </Link>
+        {canAccessInventory && (
+          <Link to="/transit" style={styles.link}>
+            <button style={styles.button}>Transit</button>
+          </Link>
+        )}
+
         <button style={styles.button} onClick={() => setShowUploadModal(true)}>
-          Excel Upload
+          Upload Excel
         </button>
         <button style={styles.button} onClick={() => setShowFilesModal(true)}>
           View Files
         </button>
-        
+        <button
+          style={styles.button}
+          onClick={() => handleDownloadTemplate("products")}
+        >
+          Download Template
+        </button>
       </div>
 
       {/* Upload Modal */}
@@ -211,17 +295,12 @@ const Dashboard = () => {
               </p>
               <div style={styles.templateButtons}>
                 <button
-                  onClick={() => handleDownloadTemplate("inventory")}
+                  onClick={() => handleDownloadTemplate("products")}
                   style={styles.templateButton}
                 >
-                  📊 Inventory Template
+                  � Produtcts Template
                 </button>
-                <button
-                  onClick={() => handleDownloadTemplate("billing")}
-                  style={styles.templateButton}
-                >
-                  📄 Billing Items Template
-                </button>
+
               </div>
             </div>
 
@@ -305,6 +384,18 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+      {/* Analytics Widgets */}
+      <PaymentOverdueWidget />
+      <PendingOrdersWidget />
+      <BillSyncStatusWidget />
+      {canAccessInventory && <LowStockAlertWidget />}
+      <OutstandingWidget />
+      <SalesComparisonWidget />
+      <TopCustomersWidget />
+      {canAccessInventory && <StockValueWidget />}
+
+
+
     </div>
   );
 };

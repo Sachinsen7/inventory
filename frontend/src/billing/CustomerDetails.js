@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { showToast } from "../utils/toastNotifications";
 import * as XLSX from "xlsx";
+import EWayBillGenerator from "../components/EWayBillGenerator";
 
 // A component to display and edit a single item
 const Item = ({ item, onDelete, onUpdate }) => {
@@ -106,31 +107,25 @@ const BillHistory = ({ bills, customer }) => {
                     <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
                         <div>
                             <h3 style="color: #2c3e50; margin-bottom: 10px;">Bill To:</h3>
-                            <p style="margin: 5px 0;"><strong>Name:</strong> ${
-                              customer.name
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>GST No:</strong> ${
-                              customer.gstNo
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>Address:</strong> ${
-                              customer.address
-                            }</p>
-                            <p style="margin: 5px 0;"><strong>Phone:</strong> ${
-                              customer.phoneNumber
-                            }</p>
+                            <p style="margin: 5px 0;"><strong>Name:</strong> ${customer.name
+        }</p>
+                            <p style="margin: 5px 0;"><strong>GST No:</strong> ${customer.gstNo
+        }</p>
+                            <p style="margin: 5px 0;"><strong>Address:</strong> ${customer.address
+        }</p>
+                            <p style="margin: 5px 0;"><strong>Phone:</strong> ${customer.phoneNumber
+        }</p>
                         </div>
                         <div style="text-align: right;">
-                            <p style="margin: 5px 0;"><strong>Bill No:</strong> ${
-                              bill.billNumber
-                            }</p>
+                            <p style="margin: 5px 0;"><strong>Bill No:</strong> ${bill.billNumber
+        }</p>
                             <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(
-                              bill.createdAt
-                            ).toLocaleDateString()}</p>
-                            <p style="margin: 5px 0;"><strong>Price Type:</strong> ${
-                              bill.priceType === "masterPrice"
-                                ? "Special Price"
-                                : "Regular Price"
-                            }</p>
+          bill.createdAt
+        ).toLocaleDateString()}</p>
+                            <p style="margin: 5px 0;"><strong>Price Type:</strong> ${bill.priceType === "masterPrice"
+          ? "Special Price"
+          : "Regular Price"
+        }</p>
                         </div>
                     </div>
                 </div>
@@ -147,8 +142,8 @@ const BillHistory = ({ bills, customer }) => {
                         </thead>
                         <tbody>
                             ${bill.items
-                              .map(
-                                (item) => `
+          .map(
+            (item) => `
                                 <tr>
                                     <td style="border: 1px solid #ddd; padding: 12px;">${item.itemName}</td>
                                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${item.selectedPrice}</td>
@@ -156,17 +151,16 @@ const BillHistory = ({ bills, customer }) => {
                                     <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">${item.total}</td>
                                 </tr>
                             `
-                              )
-                              .join("")}
+          )
+          .join("")}
                         </tbody>
                     </table>
                 </div>
                 
                 <div style="text-align: right; margin-top: 30px;">
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; display: inline-block;">
-                        <h2 style="color: #2c3e50; margin: 0;">Total Amount: ₹${
-                          bill.totalAmount
-                        }</h2>
+                        <h2 style="color: #2c3e50; margin: 0;">Total Amount: ₹${bill.totalAmount
+        }</h2>
                     </div>
                 </div>
                 
@@ -205,8 +199,7 @@ const BillHistory = ({ bills, customer }) => {
       }
 
       pdf.save(
-        `bill_${customer.name}_${bill.billNumber}_${
-          new Date(bill.createdAt).toISOString().split("T")[0]
+        `bill_${customer.name}_${bill.billNumber}_${new Date(bill.createdAt).toISOString().split("T")[0]
         }.pdf`
       );
     } catch (error) {
@@ -223,51 +216,148 @@ const BillHistory = ({ bills, customer }) => {
     );
   }
 
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'Completed':
+        return '#10b981';
+      case 'Processing':
+        return '#f59e0b';
+      case 'Failed':
+        return '#ef4444';
+      case 'Pending':
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const getPaymentStatusIcon = (status) => {
+    switch (status) {
+      case 'Completed':
+        return '';
+      case 'Processing':
+        return '';
+      case 'Failed':
+        return '';
+      case 'Pending':
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className="table-responsive">
       <table className="table">
         <thead>
           <tr>
+            <th>STATUS</th>
+            <th>INVOICE ID</th>
             <th>BILL NUMBER</th>
             <th>DATE</th>
             <th>ITEMS COUNT</th>
             <th>TOTAL AMOUNT</th>
-            <th>PRICE TYPE</th>
+            <th>E-WAY BILL</th>
             <th>ACTIONS</th>
           </tr>
         </thead>
         <tbody>
           {bills.map((bill) => (
             <tr key={bill._id}>
+              <td>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {bill.paymentStatus !== 'Completed' && (
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ef4444',
+                      display: 'inline-block',
+                      animation: 'pulse 2s infinite'
+                    }}></span>
+                  )}
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    backgroundColor: getPaymentStatusColor(bill.paymentStatus || 'Pending'),
+                    color: 'white',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {getPaymentStatusIcon(bill.paymentStatus || 'Pending')} {bill.paymentStatus || 'Pending'}
+                  </span>
+                </div>
+              </td>
+              <td style={{ fontWeight: '600', color: '#a78bfa' }}>{bill.invoiceId || 'N/A'}</td>
               <td>{bill.billNumber}</td>
               <td>{new Date(bill.createdAt).toLocaleDateString()}</td>
               <td>{bill.items.length}</td>
               <td>₹{bill.totalAmount}</td>
               <td>
-                <span
-                  className={`badge ${
-                    bill.priceType === "masterPrice"
-                      ? "bg-warning"
-                      : "bg-info"
-                  }`}
-                >
-                  {bill.priceType === "masterPrice"
-                    ? "Special Price"
-                    : "Regular Price"}
-                </span>
+                {bill.eWayBill?.generated ? (
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <span className="badge bg-success" style={{ display: 'block', marginBottom: '5px' }}>
+                      {bill.eWayBill.eWayBillNo}
+                    </span>
+                    <small style={{ color: 'rgba(255,255,255,0.7)' }}>
+                      Valid: {new Date(bill.eWayBill.validUpto).toLocaleDateString()}
+                    </small>
+                  </div>
+                ) : bill.eWayBill?.jsonGenerated ? (
+                  <span className="badge bg-warning">JSON Generated</span>
+                ) : (
+                  <span className="badge bg-secondary">Not Generated</span>
+                )}
               </td>
               <td>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => downloadBillPDF(bill)}
-                >
-                  Download PDF
-                </button>
+                <div style={{ display: 'flex', gap: '5px', flexDirection: 'column' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => downloadBillPDF(bill)}
+                    title="Download and print invoice PDF"
+                  >
+                    Reprint Bill
+                  </button>
+                  <button
+                    className="btn btn-info btn-sm"
+                    onClick={() => downloadBillPDF(bill)}
+                    title="Download invoice as PDF"
+                  >
+                    Download PDF
+                  </button>
+                  {!bill.eWayBill?.generated && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => {
+                        if (window.setSelectedBillForEWay) {
+                          window.setSelectedBillForEWay(bill);
+                          window.setShowEWayBillGenerator(true);
+                        }
+                      }}
+                      title="Generate E-Way Bill"
+                    >
+                      E-Way Bill
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.5;
+            }
+          }
+        `}
+      </style>
     </div>
   );
 };
@@ -278,9 +368,34 @@ function CustomerDetails() {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // E-Way Bill states
+  const [showEWayBillGenerator, setShowEWayBillGenerator] = useState(false);
+  const [selectedBillForEWay, setSelectedBillForEWay] = useState(null);
+
+  // Opening Balance states
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [balanceType, setBalanceType] = useState('debit');
+  const [balanceDate, setBalanceDate] = useState(new Date().toISOString().split('T')[0]);
+
   // Backend URL from environment variable
   const backendUrl =
     process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
+  // Set up global functions for E-Way Bill button
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.setSelectedBillForEWay = setSelectedBillForEWay;
+      window.setShowEWayBillGenerator = setShowEWayBillGenerator;
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.setSelectedBillForEWay = null;
+        window.setShowEWayBillGenerator = null;
+      }
+    };
+  }, []);
   // Excel upload state
   const [excelData, setExcelData] = useState([]);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
@@ -290,6 +405,8 @@ function CustomerDetails() {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [masterPrice, setMasterPrice] = useState("");
+  const [itemStartDate, setItemStartDate] = useState("");
+  const [itemEndDate, setItemEndDate] = useState("");
 
   // Search states
   const [itemSearchTerm, setItemSearchTerm] = useState("");
@@ -297,8 +414,27 @@ function CustomerDetails() {
   const [filteredItems, setFilteredItems] = useState([]);
   const [filteredBills, setFilteredBills] = useState([]);
 
+  // Pagination state
+  const [showAllItems, setShowAllItems] = useState(false);
+  const ITEMS_LIMIT = 8; // Show 8 items initially
+
   const { id } = useParams();
   console.log("CustomerDetails - Customer ID from params:", id);
+
+  // Customer Edit State
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [editedCustomer, setEditedCustomer] = useState({});
+
+  // Initialize editedCustomer when customer data is loaded
+  useEffect(() => {
+    if (customer) {
+      setEditedCustomer({
+        ...customer,
+        specialPriceStartDate: customer.specialPriceStartDate ? new Date(customer.specialPriceStartDate).toISOString().split('T')[0] : '',
+        specialPriceEndDate: customer.specialPriceEndDate ? new Date(customer.specialPriceEndDate).toISOString().split('T')[0] : ''
+      });
+    }
+  }, [customer]);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -374,47 +510,48 @@ function CustomerDetails() {
     }
   }, [customer]);
 
-  useEffect(() => {
-    const fetchCustomerDetails = async () => {
-      setLoading(true);
-      try {
-        console.log("Fetching customer details for ID:", id);
-        const customerRes = await axios.get(
-          `${backendUrl}/api/customers/${id}`
+  // Fetch customer details function
+  const fetchCustomerDetails = useCallback(async () => {
+    setLoading(true);
+    try {
+      console.log("Fetching customer details for ID:", id);
+      const customerRes = await axios.get(
+        `${backendUrl}/api/customers/${id}`
+      );
+      console.log("Customer details received:", customerRes.data);
+      setCustomer(customerRes.data);
+    } catch (error) {
+      console.log("Error fetching customer details:", error);
+      console.log("Error response:", error.response?.data);
+      const errorMsg =
+        error.response?.data?.message ||
+        error.message ||
+        "Error fetching customer details";
+      if (
+        error.code === "ECONNABORTED" ||
+        error.message.includes("timeout")
+      ) {
+        showToast.error(
+          "Connection timeout. Please check your internet connection."
         );
-        console.log("Customer details received:", customerRes.data);
-        setCustomer(customerRes.data);
-      } catch (error) {
-        console.log("Error fetching customer details:", error);
-        console.log("Error response:", error.response?.data);
-        const errorMsg =
-          error.response?.data?.message ||
-          error.message ||
-          "Error fetching customer details";
-        if (
-          error.code === "ECONNABORTED" ||
-          error.message.includes("timeout")
-        ) {
-          showToast.error(
-            "Connection timeout. Please check your internet connection."
-          );
-        } else if (error.response) {
-          showToast.error(
-            `Backend error: ${error.response.status} - ${errorMsg}`
-          );
-        } else if (error.request) {
-          showToast.error(
-            "Unable to connect to the server. Please check if the backend is running."
-          );
-        } else {
-          showToast.error(errorMsg);
-        }
+      } else if (error.response) {
+        showToast.error(
+          `Backend error: ${error.response.status} - ${errorMsg}`
+        );
+      } else if (error.request) {
+        showToast.error(
+          "Unable to connect to the server. Please check if the backend is running."
+        );
+      } else {
+        showToast.error(errorMsg);
       }
-      setLoading(false);
-    };
+    }
+    setLoading(false);
+  }, [id, backendUrl]);
 
+  useEffect(() => {
     fetchCustomerDetails();
-  }, [id]);
+  }, [fetchCustomerDetails]);
 
   // Fetch items and bills after customer is loaded
   useEffect(() => {
@@ -464,6 +601,8 @@ function CustomerDetails() {
       price: parseFloat(price),
       masterPrice: parseFloat(masterPrice),
       customerId: customer._id,
+      specialPriceStartDate: itemStartDate || undefined,
+      specialPriceEndDate: itemEndDate || undefined,
     };
     console.log("Adding new billing item:", newItem);
     console.log("Customer ID being used:", customer._id);
@@ -476,6 +615,8 @@ function CustomerDetails() {
         setName("");
         setPrice("");
         setMasterPrice("");
+        setItemStartDate("");
+        setItemEndDate("");
         showToast.success("Item added successfully!");
       })
       .catch((err) => {
@@ -500,7 +641,7 @@ function CustomerDetails() {
           console.log(err);
           showToast.error(
             "Error deleting item: " +
-              (err.response?.data?.message || err.message)
+            (err.response?.data?.message || err.message)
           );
         });
     }
@@ -524,6 +665,57 @@ function CustomerDetails() {
           "Error updating item: " + (err.response?.data?.message || err.message)
         );
       });
+  };
+
+  // Handle customer update
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      console.log("Updating customer:", editedCustomer);
+      const response = await axios.put(
+        `${backendUrl}/api/customers/${customer._id}`,
+        editedCustomer
+      );
+      console.log("Customer updated successfully:", response.data);
+      setCustomer(response.data);
+      setIsEditingCustomer(false);
+      showToast.success("Customer details updated successfully!");
+    } catch (err) {
+      console.error("Error updating customer:", err);
+      showToast.error(
+        "Error updating customer: " + (err.response?.data?.message || err.message)
+      );
+    }
+  };
+
+  // Handle Set Opening Balance
+  const handleSetOpeningBalance = async () => {
+    if (!openingBalance || openingBalance <= 0) {
+      showToast.error('Please enter a valid opening balance');
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${backendUrl}/api/ledger/customers/${customer._id}/opening-balance`,
+        {
+          openingBalance: parseFloat(openingBalance),
+          openingBalanceType: balanceType,
+          openingBalanceDate: balanceDate
+        }
+      );
+
+      setCustomer(response.data.customer);
+      setShowBalanceModal(false);
+      setOpeningBalance('');
+      showToast.success('Opening balance set successfully!');
+
+      // Refresh customer data
+      fetchCustomerDetails();
+    } catch (error) {
+      console.error('Error setting opening balance:', error);
+      showToast.error('Error setting opening balance: ' + (error.response?.data?.message || error.message));
+    }
   };
 
   // Excel Download Handler
@@ -672,7 +864,7 @@ function CustomerDetails() {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <div style={{...cardStyle, textAlign: "center"}}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
           <p style={{ fontSize: "20px", margin: 0 }}>Loading...</p>
         </div>
       </div>
@@ -682,7 +874,7 @@ function CustomerDetails() {
   if (!customer) {
     return (
       <div style={containerStyle}>
-        <div style={{...cardStyle, textAlign: "center"}}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
           <p style={{ fontSize: "20px", margin: 0 }}>
             Customer not found.
           </p>
@@ -788,61 +980,254 @@ function CustomerDetails() {
       <div style={{ width: "100%", maxWidth: "1000px" }}>
         {/* Customer Information */}
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "20px" }}>
-            <div style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "30px",
-              boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
-            }}>
-              👤
-            </div>
-            <div>
-              <h2 style={{
-                margin: 0,
-                fontSize: "2rem",
-                fontWeight: "bold",
-                textShadow: "2px 2px 4px rgba(0, 0, 0, 0.2)",
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <div style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "30px",
+                boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
               }}>
-                {customer.name}
-              </h2>
+                {customer.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: "2rem",
+                  fontWeight: "bold",
+                  textShadow: "2px 2px 4px rgba(0, 0, 0, 0.2)",
+                }}>
+                  {customer.name}
+                </h2>
+              </div>
             </div>
+            <button
+              style={buttonStyle}
+              onClick={() => setIsEditingCustomer(!isEditingCustomer)}
+            >
+              {isEditingCustomer ? "Cancel" : "Edit Details"}
+            </button>
           </div>
+
+          {/* Always show customer details */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: "15px",
-            fontSize: "14px"
+            fontSize: "14px",
+            marginBottom: isEditingCustomer ? "20px" : "0"
           }}>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📍 Address:</span> {customer.address}
+              <span style={{ opacity: 0.8 }}>Address:</span> {customer.address}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏙️ City:</span> {customer.city}
+              <span style={{ opacity: 0.8 }}>City:</span> {customer.city}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🗺️ State:</span> {customer.state}
+              <span style={{ opacity: 0.8 }}>State:</span> {customer.state}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏢 GST No:</span> {customer.gstNo || "N/A"}
+              <span style={{ opacity: 0.8 }}>GST No:</span> {customer.gstNo || "N/A"}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
+              <span style={{ opacity: 0.8 }}>Phone:</span> {customer.phoneNumber || "N/A"}
             </p>
           </div>
+
+          {/* Opening & Closing Balance */}
+          <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(76, 175, 80, 0.1)", borderRadius: "8px", border: "2px solid rgba(76, 175, 80, 0.3)" }}>
+            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>Account Balance:</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>Opening Balance:</span>{' '}
+                <strong>₹{(customer.openingBalance || 0).toLocaleString()}</strong>
+                <span style={{ fontSize: "11px", marginLeft: "5px", opacity: 0.7 }}>
+                  ({customer.openingBalanceType || 'debit'})
+                </span>
+              </p>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>Closing Balance:</span>{' '}
+                <strong style={{ color: (customer.closingBalance || 0) >= 0 ? '#4CAF50' : '#f44336' }}>
+                  ₹{Math.abs(customer.closingBalance || 0).toLocaleString()}
+                </strong>
+              </p>
+              <p style={{ margin: "0" }}>
+                <button
+                  onClick={() => setShowBalanceModal(true)}
+                  style={{
+                    ...buttonStyle,
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                  }}
+                  className="custom-btn"
+                >
+                  Set Opening Balance
+                </button>
+              </p>
+            </div>
+          </div>
+
+          {/* Credit Limit Display */}
+          {customer.creditLimitEnabled && (
+            <div style={{
+              marginTop: "15px",
+              padding: "15px",
+              backgroundColor: customer.closingBalance > customer.creditLimit
+                ? "rgba(239, 68, 68, 0.1)"
+                : "rgba(34, 197, 94, 0.1)",
+              borderRadius: "8px",
+              border: customer.closingBalance > customer.creditLimit
+                ? "2px solid rgba(239, 68, 68, 0.3)"
+                : "2px solid rgba(34, 197, 94, 0.3)"
+            }}>
+              <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>
+                Credit Limit Status:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Credit Limit:</span>{' '}
+                  <strong>₹{(customer.creditLimit || 0).toLocaleString()}</strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Current Outstanding:</span>{' '}
+                  <strong style={{ color: customer.closingBalance > 0 ? '#f59e0b' : '#22c55e' }}>
+                    ₹{Math.abs(customer.closingBalance || 0).toLocaleString()}
+                  </strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Available Credit:</span>{' '}
+                  <strong style={{ color: (customer.creditLimit - customer.closingBalance) > 0 ? '#22c55e' : '#ef4444' }}>
+                    ₹{Math.max(0, (customer.creditLimit || 0) - (customer.closingBalance || 0)).toLocaleString()}
+                  </strong>
+                </p>
+                <p style={{ margin: "0" }}>
+                  <span style={{ opacity: 0.8 }}>Payment Terms:</span>{' '}
+                  <strong>{customer.paymentTerms || 30} days</strong>
+                </p>
+              </div>
+              {customer.closingBalance > customer.creditLimit && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "10px",
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  borderRadius: "6px",
+                  fontSize: "13px"
+                }}>
+                  <strong>Warning:</strong> Credit limit exceeded by ₹{((customer.closingBalance || 0) - (customer.creditLimit || 0)).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Always show special pricing dates */}
+          <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "8px" }}>
+            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>Special Pricing Period:</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", fontSize: "14px" }}>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>Start Date:</span>{' '}
+                {customer.specialPriceStartDate ? new Date(customer.specialPriceStartDate).toLocaleDateString() : 'Not Set'}
+              </p>
+              <p style={{ margin: "0" }}>
+                <span style={{ opacity: 0.8 }}>End Date:</span>{' '}
+                {customer.specialPriceEndDate ? new Date(customer.specialPriceEndDate).toLocaleDateString() : 'Not Set'}
+              </p>
+            </div>
+          </div>
+
+          {/* Edit form - only shown when editing */}
+          {isEditingCustomer && (
+            <form onSubmit={handleUpdateCustomer} style={{
+              display: "grid",
+              gap: "15px",
+              marginTop: "20px",
+              paddingTop: "20px",
+              borderTop: "2px solid rgba(255,255,255,0.3)"
+            }}>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem" }}>Edit Special Pricing Dates</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>START DATE</label>
+                  <input
+                    type="date"
+                    value={editedCustomer.specialPriceStartDate ? new Date(editedCustomer.specialPriceStartDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, specialPriceStartDate: e.target.value })}
+                    style={searchInputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>END DATE</label>
+                  <input
+                    type="date"
+                    value={editedCustomer.specialPriceEndDate ? new Date(editedCustomer.specialPriceEndDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, specialPriceEndDate: e.target.value })}
+                    style={searchInputStyle}
+                  />
+                </div>
+              </div>
+
+              <h4 style={{ margin: "20px 0 15px 0", fontSize: "1.1rem" }}>Credit Limit Settings</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "15px", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <input
+                    type="checkbox"
+                    id="creditLimitEnabled"
+                    checked={editedCustomer.creditLimitEnabled || false}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, creditLimitEnabled: e.target.checked })}
+                    style={{ width: "20px", height: "20px", cursor: "pointer" }}
+                  />
+                  <label htmlFor="creditLimitEnabled" style={{ fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                    Enable Credit Limit
+                  </label>
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>CREDIT LIMIT (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editedCustomer.creditLimit || 0}
+                    onChange={(e) => setEditedCustomer({ ...editedCustomer, creditLimit: parseFloat(e.target.value) || 0 })}
+                    disabled={!editedCustomer.creditLimitEnabled}
+                    style={{
+                      ...searchInputStyle,
+                      opacity: editedCustomer.creditLimitEnabled ? 1 : 0.5
+                    }}
+                    placeholder="Enter credit limit amount"
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>PAYMENT TERMS (DAYS)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editedCustomer.paymentTerms || 30}
+                  onChange={(e) => setEditedCustomer({ ...editedCustomer, paymentTerms: parseInt(e.target.value) || 30 })}
+                  style={searchInputStyle}
+                  placeholder="Payment terms in days"
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button type="submit" style={buttonStyle} className="custom-btn">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
-        {/* Excel Download/Upload Buttons */}
+        {/* Data Management Section */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📊</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
-              Data Management
+              Invoice Data Management
             </h3>
           </div>
           <div style={{
@@ -851,23 +1236,8 @@ function CustomerDetails() {
             flexWrap: "wrap",
             gap: "12px",
           }}>
-            <button
-              style={buttonStyle}
-              className="custom-btn"
-              onClick={handleDownloadExcel}
-              disabled={!items.length}
-            >
-              📥 Download Excel
-            </button>
-            <button
-              style={buttonStyle}
-              className="custom-btn"
-              onClick={handleDownloadTemplate}
-            >
-              📋 Download Template
-            </button>
-            <label style={{...buttonStyle, display: "inline-block"}} className="custom-btn">
-              📤 Upload Excel
+            <label style={{ ...buttonStyle, display: "inline-block" }} className="custom-btn">
+              Upload Excel File
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -875,6 +1245,44 @@ function CustomerDetails() {
                 onChange={handleExcelUpload}
               />
             </label>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={() => {
+                // Navigate to billing page to create bill
+                window.location.href = '/billing';
+              }}
+            >
+              Create Bill
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={() => {
+                // Scroll to bill history section
+                const billHistorySection = document.querySelector('[data-section="bill-history"]');
+                if (billHistorySection) {
+                  billHistorySection.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+            >
+              Bill History
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={handleDownloadExcel}
+              disabled={!items.length}
+            >
+              Download Excel
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={handleDownloadTemplate}
+            >
+              Download Template
+            </button>
             {excelFileName && (
               <span style={{
                 color: "rgba(255, 255, 255, 0.9)",
@@ -891,7 +1299,7 @@ function CustomerDetails() {
         {showExcelPreview && (
           <div style={cardStyle}>
             <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-              📋 Excel Preview
+              Excel Preview
             </h3>
             <div className="table-responsive">
               <table className="table table-bordered">
@@ -919,14 +1327,14 @@ function CustomerDetails() {
                 className="custom-btn"
                 onClick={handleSaveExcelData}
               >
-                💾 Save
+                Save
               </button>
               <button
                 style={buttonStyle}
                 className="custom-btn"
                 onClick={() => setShowExcelPreview(false)}
               >
-                ❌ Cancel
+                Cancel
               </button>
             </div>
           </div>
@@ -935,14 +1343,13 @@ function CustomerDetails() {
         {/* Add New Item Section */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>➕</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Add New Item
             </h3>
           </div>
           <form onSubmit={handleAddItem} style={{ padding: "0 20px" }}>
-            <div style={{ display: "flex", gap: "30px", marginBottom: "15px", alignItems: "flex-end" }}>
-              <div style={{ flex: "0 0 280px" }}>
+            <div style={{ display: "flex", gap: "15px", marginBottom: "15px", alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 250px", minWidth: "200px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
                   Item Name
                 </label>
@@ -968,7 +1375,7 @@ function CustomerDetails() {
                   className="search-input"
                 />
               </div>
-              <div style={{ flex: "0 0 150px" }}>
+              <div style={{ flex: "0 0 130px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
                   Price
                 </label>
@@ -995,7 +1402,7 @@ function CustomerDetails() {
                   className="search-input"
                 />
               </div>
-              <div style={{ flex: "0 0 150px" }}>
+              <div style={{ flex: "0 0 130px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
                   Special Price
                 </label>
@@ -1023,16 +1430,66 @@ function CustomerDetails() {
                 />
               </div>
             </div>
-            <button type="submit" style={{...buttonStyle, width: "auto"}} className="custom-btn">
-              ➕ Add Item
-            </button>
+
+            <div style={{ display: "flex", gap: "15px", marginBottom: "15px", alignItems: "flex-end", paddingLeft: "0" }}>
+              <div style={{ flex: "0 0 180px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={itemStartDate}
+                  onChange={(e) => setItemStartDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    color: "#333",
+                    marginBottom: "0",
+                    outline: "none",
+                    transition: "all 0.3s ease",
+                  }}
+                  className="search-input"
+                />
+              </div>
+              <div style={{ flex: "0 0 180px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={itemEndDate}
+                  onChange={(e) => setItemEndDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    color: "#333",
+                    marginBottom: "0",
+                    outline: "none",
+                    transition: "all 0.3s ease",
+                  }}
+                  className="search-input"
+                />
+              </div>
+              <button type="submit" style={{ ...buttonStyle, width: "auto", marginBottom: "0" }} className="custom-btn">
+                Add Item
+              </button>
+            </div>
           </form>
         </div>
 
         {/* Items Table */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📦</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Items
             </h3>
@@ -1041,7 +1498,7 @@ function CustomerDetails() {
           {/* Items Search */}
           <input
             type="text"
-            placeholder="🔍 Search items by name, price, or special price..."
+            placeholder="Search items by name, price, or special price..."
             value={itemSearchTerm}
             onChange={(e) => setItemSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -1060,7 +1517,7 @@ function CustomerDetails() {
               </thead>
               <tbody>
                 {filteredItems && filteredItems.length > 0 ? (
-                  filteredItems.map((item) => (
+                  (showAllItems ? filteredItems : filteredItems.slice(0, ITEMS_LIMIT)).map((item) => (
                     <Item
                       item={item}
                       onDelete={handleDeleteItem}
@@ -1083,12 +1540,24 @@ function CustomerDetails() {
               </tbody>
             </table>
           </div>
+
+          {/* View All / View Less Button */}
+          {filteredItems && filteredItems.length > ITEMS_LIMIT && (
+            <div style={{ textAlign: "center", marginTop: "20px" }}>
+              <button
+                style={buttonStyle}
+                className="custom-btn"
+                onClick={() => setShowAllItems(!showAllItems)}
+              >
+                {showAllItems ? "View Less" : `View All (${filteredItems.length} items)`}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bill History Section */}
-        <div style={cardStyle}>
+        <div style={cardStyle} data-section="bill-history">
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📄</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Bill History
             </h3>
@@ -1097,7 +1566,7 @@ function CustomerDetails() {
           {/* Bills Search */}
           <input
             type="text"
-            placeholder="🔍 Search bills by bill number, amount, price type, or date..."
+            placeholder="Search bills by bill number, amount, price type, or date..."
             value={billSearchTerm}
             onChange={(e) => setBillSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -1107,8 +1576,146 @@ function CustomerDetails() {
           <BillHistory bills={filteredBills} customer={customer} />
         </div>
       </div>
+
+      {/* Opening Balance Modal */}
+      {showBalanceModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '15px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
+          }}>
+            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>Set Opening Balance</h2>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Opening Balance Amount *
+              </label>
+              <input
+                type="number"
+                value={openingBalance}
+                onChange={(e) => setOpeningBalance(e.target.value)}
+                placeholder="Enter amount"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Balance Type *
+              </label>
+              <select
+                value={balanceType}
+                onChange={(e) => setBalanceType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="debit">Debit (Customer owes you)</option>
+                <option value="credit">Credit (You owe customer)</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                Opening Balance Date *
+              </label>
+              <input
+                type="date"
+                value={balanceDate}
+                onChange={(e) => setBalanceDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowBalanceModal(false);
+                  setOpeningBalance('');
+                }}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: '#6c757d',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetOpeningBalance}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Save Balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* E-Way Bill Generator Modal */}
+      {showEWayBillGenerator && selectedBillForEWay && (
+        <EWayBillGenerator
+          bill={selectedBillForEWay}
+          onClose={() => {
+            setShowEWayBillGenerator(false);
+            setSelectedBillForEWay(null);
+          }}
+          onSuccess={() => {
+            fetchBills(); // Refresh bills to show updated E-Way Bill status
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// Set up global functions for E-Way Bill button
+if (typeof window !== 'undefined') {
+  window.setSelectedBillForEWay = null;
+  window.setShowEWayBillGenerator = null;
 }
 
 export default CustomerDetails;

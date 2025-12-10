@@ -4,23 +4,22 @@ const mongoose = require('mongoose');
 const { body } = require('express-validator');
 const Godown = require('../models/Godowns');
 const GodownInventory = require('../models/GodownInventory');
+const Settings = require('../models/Settings');
+const LedgerEntry = require('../models/LedgerEntry');
 const logger = require('../utils/logger');
 const validators = require('../utils/validators');
 
-// Customer Schema
-const customerSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  address: { type: String, required: true },
-  city: { type: String, required: true },
-  state: { type: String, required: true },
-  gstNo: { type: String },
-  phoneNumber: { type: String },
-  createdAt: { type: Date, default: Date.now }
-});
+// Import Customer model (now defined in models/Customer.js)
+let Customer;
+try {
+  Customer = mongoose.model('Customer');
+} catch (error) {
+  // If not already defined, require it
+  Customer = require('../models/Customer');
+}
 
 // Item Schema
 const itemSchema = new mongoose.Schema({
-  srNo: { type: String, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   masterPrice: { type: Number, required: true },
@@ -43,33 +42,195 @@ const inventorySchema = new mongoose.Schema({
 // Bill Schema
 const billSchema = new mongoose.Schema({
   billNumber: { type: String, required: true, unique: true },
+  invoiceId: { type: String, required: true, unique: true },
+  invoiceNumber: { type: String, required: true, unique: true },
+  invoiceDate: { type: Date, default: Date.now },
+
+  // Customer Details
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   customerName: { type: String, required: true },
+  customerAddress: { type: String },
+  customerCity: { type: String },
+  customerState: { type: String },
+  customerGSTIN: { type: String },
+  customerPhone: { type: String },
+
+  // Company Details (Seller)
+  companyName: { type: String, default: 'Your Company Name' },
+  companyAddress: { type: String, default: 'Your Company Address' },
+  companyCity: { type: String, default: 'Your City' },
+  companyState: { type: String, default: 'Maharashtra' },
+  companyGSTIN: { type: String, default: 'YOUR_GSTIN' },
+  companyPhone: { type: String, default: 'Your Phone' },
+
+  // Godown Details
   godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
   godownName: { type: String },
+
+  // Items
   items: [{
     itemId: { type: String },
     itemName: { type: String, required: true },
+    hsnCode: { type: String, default: '0000' },
     price: { type: Number, required: true },
     masterPrice: { type: Number, required: true },
     selectedPrice: { type: Number, required: true },
     quantity: { type: Number, required: true },
-    total: { type: Number, required: true }
+    unit: { type: String, default: 'PCS' },
+    total: { type: Number, required: true },
+    taxableValue: { type: Number },
+    gstRate: { type: Number, default: 18 }
   }],
+
+  // Amounts
+  subtotal: { type: Number, default: 0 },
+  cgst: { type: Number, default: 0 },
+  sgst: { type: Number, default: 0 },
+  igst: { type: Number, default: 0 },
   totalAmount: { type: Number, required: true },
+  roundOff: { type: Number, default: 0 },
+
+  // Tax Details
+  taxType: { type: String, enum: ['INTRA', 'INTER'], default: 'INTRA' },
+  placeOfSupply: { type: String },
+
+  // Payment
   priceType: { type: String, enum: ['price', 'masterPrice'], default: 'price' },
-  createdAt: { type: Date, default: Date.now }
+  paymentStatus: { type: String, enum: ['Pending', 'Processing', 'Completed', 'Failed'], default: 'Pending' },
+  paymentTerms: { type: Number, default: 30 }, // Payment terms in days
+  dueDate: { type: Date }, // Calculated: invoiceDate + paymentTerms
+  isOverdue: { type: Boolean, default: false },
+  overdueBy: { type: Number, default: 0 }, // Days overdue
+
+  // E-Way Bill
+  eWayBill: {
+    generated: { type: Boolean, default: false },
+    eWayBillNo: { type: String },
+    eWayBillDate: { type: Date },
+    validUpto: { type: Date },
+    transporterName: { type: String },
+    transporterId: { type: String },
+    vehicleNumber: { type: String },
+    transportMode: { type: String, enum: ['Road', 'Rail', 'Air', 'Ship'], default: 'Road' },
+    vehicleType: { type: String, enum: ['Regular', 'Over Dimensional Cargo'], default: 'Regular' },
+    distance: { type: Number },
+    transactionType: { type: String, default: 'Regular' },
+    documentType: { type: String, default: 'Tax Invoice' },
+    jsonGenerated: { type: Boolean, default: false },
+    jsonGeneratedAt: { type: Date },
+    pdfUploaded: { type: Boolean, default: false },
+    pdfUploadedAt: { type: Date },
+    status: { type: String, enum: ['Not Generated', 'JSON Generated', 'Active', 'Expired', 'Cancelled'], default: 'Not Generated' }
+  },
+
+  // Sync Status
+  syncStatus: {
+    type: String,
+    enum: ['pending', 'synced', 'failed', 'partial'],
+    default: 'pending'
+  },
+  lastSyncedAt: { type: Date },
+  syncAttempts: { type: Number, default: 0 },
+  syncError: { type: String },
+  syncedTo: [{
+    system: { type: String }, // e.g., 'tally', 'quickbooks', 'cloud'
+    syncedAt: { type: Date },
+    status: { type: String, enum: ['success', 'failed'] },
+    error: { type: String }
+  }],
+
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
-const Customer = mongoose.model('Customer', customerSchema);
+// Customer model is imported at the top
 const BillingItem = mongoose.model('BillingItem', itemSchema);
 const BillingInventory = mongoose.model('BillingInventory', inventorySchema);
 const Bill = mongoose.model('Bill', billSchema);
 
 // Generate unique bill number
 const generateBillNumber = async () => {
-  const count = await Bill.countDocuments();
-  return `BILL-${String(count + 1).padStart(6, '0')}`;
+  try {
+    const count = await Bill.countDocuments();
+    return `BILL-${String(count + 1).padStart(6, '0')}`;
+  } catch (error) {
+    console.error('Error generating bill number:', error);
+    // Fallback with timestamp to ensure uniqueness
+    return `BILL-${Date.now()}`;
+  }
+};
+
+// Generate unique invoice ID
+const generateInvoiceId = async () => {
+  try {
+    const count = await Bill.countDocuments();
+    const timestamp = Date.now().toString().slice(-6);
+    return `INV-${timestamp}-${String(count + 1).padStart(4, '0')}`;
+  } catch (error) {
+    console.error('Error generating invoice ID:', error);
+    // Fallback with timestamp to ensure uniqueness
+    return `INV-${Date.now()}`;
+  }
+};
+
+// Generate unique invoice number (GST compliant format)
+const generateInvoiceNumber = async () => {
+  try {
+    console.log('Attempting to generate invoice number from settings...');
+
+    // Try to use Settings-based generation
+    const settings = await Settings.getSettings();
+    console.log('Settings retrieved:', settings);
+
+    if (!settings || !settings.invoiceFormat || !settings.nextInvoiceNumber) {
+      console.log('Settings not properly configured, using fallback');
+      return `INV/25-12/TEST001`;
+    }
+
+    const { invoiceFormat, nextInvoiceNumber } = settings;
+
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const fullYear = now.getFullYear().toString();
+
+    // Determine financial year
+    const financialYearStart = settings.financialYearStart || '04-01';
+    const [fyMonth] = financialYearStart.split('-').map(Number);
+    let fyStartYear, fyEndYear;
+
+    if (now.getMonth() + 1 >= fyMonth) {
+      fyStartYear = now.getFullYear();
+      fyEndYear = now.getFullYear() + 1;
+    } else {
+      fyStartYear = now.getFullYear() - 1;
+      fyEndYear = now.getFullYear();
+    }
+
+    // Replace placeholders
+    let invoiceNumber = invoiceFormat
+      .replace('{YY}', year)
+      .replace('{YYYY}', fullYear)
+      .replace('{MM}', month)
+      .replace('{FY}', `${fyStartYear.toString().slice(-2)}-${fyEndYear.toString().slice(-2)}`)
+      .replace('{####}', String(nextInvoiceNumber).padStart(4, '0'))
+      .replace('{#####}', String(nextInvoiceNumber).padStart(5, '0'))
+      .replace('{######}', String(nextInvoiceNumber).padStart(6, '0'));
+
+    console.log('Generated invoice number:', invoiceNumber);
+
+    // Increment next invoice number
+    settings.nextInvoiceNumber = nextInvoiceNumber + 1;
+    await settings.save();
+
+    console.log('Settings updated, next number:', settings.nextInvoiceNumber);
+
+    return invoiceNumber;
+  } catch (error) {
+    // Fallback to hardcoded for testing if Settings fails
+    console.error('Error generating invoice from settings, using fallback:', error);
+    return `INV/25-12/TEST001`;
+  }
 };
 
 // ==================== CUSTOMER ROUTES ====================
@@ -97,6 +258,10 @@ router.get('/customers/:id', async (req, res) => {
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
+
+    // Calculate closing balance before returning
+    await customer.calculateClosingBalance();
+
     res.json(customer);
   } catch (error) {
     logger.error('Error fetching customer', error);
@@ -106,14 +271,16 @@ router.get('/customers/:id', async (req, res) => {
 
 // Add new customer
 router.post('/customers/add',
-  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate']),
   [
     validators.string('name', 200),
     validators.string('address', 500),
     validators.string('city', 100),
     validators.string('state', 100),
     validators.gstNo('gstNo'),
-    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/),
+    body('specialPriceStartDate').optional().isISO8601().toDate(),
+    body('specialPriceEndDate').optional().isISO8601().toDate()
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -130,14 +297,19 @@ router.post('/customers/add',
 
 // Update customer
 router.put('/customers/:id',
-  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber']),
+  validators.rejectUnknownFields(['name', 'address', 'city', 'state', 'gstNo', 'phoneNumber', 'specialPriceStartDate', 'specialPriceEndDate', 'creditLimit', 'creditLimitEnabled', 'paymentTerms']),
   [
     body('name').optional().isString().trim().isLength({ max: 200 }),
     body('address').optional().isString().trim().isLength({ max: 500 }),
     body('city').optional().isString().trim().isLength({ max: 100 }),
     body('state').optional().isString().trim().isLength({ max: 100 }),
     validators.gstNo('gstNo'),
-    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/)
+    body('phoneNumber').optional().matches(/^[0-9\s\-\+\(\)]+$/),
+    body('specialPriceStartDate').optional().isISO8601().toDate(),
+    body('specialPriceEndDate').optional().isISO8601().toDate(),
+    body('creditLimit').optional().isFloat({ min: 0 }),
+    body('creditLimitEnabled').optional().isBoolean(),
+    body('paymentTerms').optional().isInt({ min: 0 })
   ],
   validators.handleValidationErrors,
   async (req, res) => {
@@ -175,29 +347,29 @@ router.get('/items/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
     logger.debug('Fetching items for customer', { customerId });
-    
+
     // Check if customerId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(customerId)) {
       logger.warn('Invalid customer ID format', { customerId });
       return res.status(400).json({ message: 'Invalid customer ID format' });
     }
-    
+
     // First, let's check if there are any items in the database at all
     const totalItems = await BillingItem.countDocuments();
     logger.debug('Total items in database', { totalItems });
-    
+
     // Check if there are any items for this customer
     const customerItemsCount = await BillingItem.countDocuments({ customerId });
     logger.debug('Items count for this customer', { customerItemsCount });
-    
+
     // Get all items for this customer
     const items = await BillingItem.find({ customerId: customerId }).sort({ srNo: 1 });
     logger.debug('Found items for customer', { count: items.length });
-    
+
     // Also try a more flexible search
     const allItems = await BillingItem.find({});
     logger.debug('All items in database count', { count: allItems.length });
-    
+
     res.json(items);
   } catch (error) {
     logger.error('Error fetching items for customer', error);
@@ -222,8 +394,8 @@ router.post('/items/add',
 
       const itemData = {
         ...req.body,
-        customerId: mongoose.Types.ObjectId.isValid(req.body.customerId) 
-          ? req.body.customerId 
+        customerId: mongoose.Types.ObjectId.isValid(req.body.customerId)
+          ? req.body.customerId
           : new mongoose.Types.ObjectId(req.body.customerId)
       };
 
@@ -297,14 +469,13 @@ router.post('/items/bulk-update/:customerId',
       const deletedCount = await BillingItem.deleteMany({ customerId });
       logger.debug('Deleted existing items', { deleted: deletedCount.deletedCount });
 
-      // Add new items
+      // Add new items - map new template fields to database fields
       const itemsToAdd = items.map((item, index) => ({
-        ...item,
         customerId,
-        srNo: item.srNo || String(index + 1),
-        name: item.name || item.itemName || '',
-        price: Number(item.price) || 0,
-        masterPrice: Number(item.masterPrice) || 0
+        srNo: item.barcodeNumber || item.srNo || String(index + 1),
+        name: item.itemName || item.name || '',
+        price: 0, // Price not in template, set to 0
+        masterPrice: 0 // MasterPrice not in template, set to 0
       }));
 
       const savedItems = await BillingItem.insertMany(itemsToAdd);
@@ -438,7 +609,7 @@ router.post('/inventory/check-availability', async (req, res) => {
 router.get('/godowns/:godownId/items', async (req, res) => {
   try {
     const godownId = req.params.godownId;
-    
+
     // Get godown details
     const godown = await Godown.findById(godownId);
     if (!godown) {
@@ -468,7 +639,7 @@ router.get('/godowns/:godownId/items', async (req, res) => {
 router.get('/godowns/sorted/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    
+
     // Get customer details
     const customer = await Customer.findById(customerId);
     if (!customer) {
@@ -483,8 +654,8 @@ router.get('/godowns/sorted/:customerId', async (req, res) => {
     const nonMatchingGodowns = [];
 
     allGodowns.forEach(godown => {
-      if (godown.city.toLowerCase() === customer.city.toLowerCase() && 
-          godown.state.toLowerCase() === customer.state.toLowerCase()) {
+      if (godown.city.toLowerCase() === customer.city.toLowerCase() &&
+        godown.state.toLowerCase() === customer.state.toLowerCase()) {
         matchingGodowns.push(godown);
       } else {
         nonMatchingGodowns.push(godown);
@@ -607,7 +778,7 @@ router.get('/bills/customer/:customerId/bills', async (req, res) => {
 
 // Add new bill
 router.post('/bills/add',
-  validators.rejectUnknownFields(['items', 'godownName', 'customerId', 'customerName', 'godownId', 'totalAmount', 'priceType']),
+  validators.rejectUnknownFields(['items', 'godownName', 'customerId', 'customerName', 'godownId', 'totalAmount', 'priceType', 'paymentStatus']),
   [
     body('items').isArray({ min: 1 }).withMessage('Items must be a non-empty array'),
     body('godownName').optional().isString().trim(),
@@ -615,102 +786,184 @@ router.post('/bills/add',
     body('customerName').optional().isString().trim(),
     body('godownId').optional().isMongoId(),
     validators.price('totalAmount'),
-    body('priceType').optional().isIn(['price', 'masterPrice'])
+    body('priceType').optional().isIn(['price', 'masterPrice']),
+    body('paymentStatus').optional().isIn(['Pending', 'Processing', 'Completed', 'Failed'])
   ],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
       const { items, godownName } = req.body;
 
-    logger.debug('Creating bill', { itemsCount: items?.length || 0, godownName });
+      logger.debug('Creating bill', { itemsCount: items?.length || 0, godownName });
 
-    // Get Delevery1 model
-    let Delevery1;
-    try {
-      Delevery1 = mongoose.model('Delevery1');
-    } catch (error) {
-      const delevery1Schema = new mongoose.Schema({
-        selectedOption: String,
-        inputValue: String,
-        godownName: String,
-        addedAt: { type: Date, default: Date.now },
-        itemName: String,
-        quantity: { type: Number, default: 0 },
-        price: { type: Number, default: 0 },
-        masterPrice: { type: Number, default: 0 },
-        description: String,
-        category: String,
-        godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
-        lastUpdated: { type: Date, default: Date.now }
-      });
-      Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
-    }
-
-    // Create the bill first
-    const billNumber = await generateBillNumber();
-    const bill = new Bill({
-      ...req.body,
-      billNumber
-    });
-    const savedBill = await bill.save();
-    logger.info('Bill created successfully', { billNumber: savedBill.billNumber });
-
-    // Now delete items from delevery1 collection
-    const deletionResults = [];
-
-    for (const item of items) {
-      const itemName = item.itemName;
-      const requestedQuantity = item.quantity;
-
-      logger.debug('Processing bill item', { itemName, requestedQuantity });
-
-      // Get first 3 digits as prefix for matching
-      const itemPrefix = itemName.substring(0, 3);
-      logger.debug('Using prefix for bill item', { itemPrefix, itemName });
-
-      // Find matching items in delevery1 collection using 3-digit prefix
-      const matchingItems = await Delevery1.find({
-        inputValue: { $regex: `^${itemPrefix}` }, // Match items that start with the 3-digit prefix
-        godownName: godownName
-      }).limit(requestedQuantity);
-
-      logger.debug('Found matching items in delevery1', { prefix: itemPrefix, count: matchingItems.length });
-
-      // Delete the found items
-      const deletedItems = [];
-      const deletedItemValues = [];
-      for (const matchingItem of matchingItems) {
-        await Delevery1.findByIdAndDelete(matchingItem._id);
-        deletedItems.push(matchingItem._id);
-        deletedItemValues.push(matchingItem.inputValue);
-        logger.debug('Deleted item from delevery1', { id: matchingItem._id, value: matchingItem.inputValue });
+      // Get Delevery1 model
+      let Delevery1;
+      try {
+        Delevery1 = mongoose.model('Delevery1');
+      } catch (error) {
+        const delevery1Schema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now },
+          itemName: String,
+          quantity: { type: Number, default: 0 },
+          price: { type: Number, default: 0 },
+          masterPrice: { type: Number, default: 0 },
+          description: String,
+          category: String,
+          godownId: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' },
+          lastUpdated: { type: Date, default: Date.now }
+        });
+        Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
       }
 
-      deletionResults.push({
-        itemName: itemName,
-        prefix: itemPrefix,
-        requestedQuantity: requestedQuantity,
-        foundItems: matchingItems.length,
-        deletedItems: deletedItems.length,
-        deletedIds: deletedItems,
-        deletedItemValues: deletedItemValues
+      // Get customer details for invoice
+      const customer = await Customer.findById(req.body.customerId);
+      if (!customer) {
+        return res.status(404).json({ message: 'Customer not found' });
+      }
+
+      // Calculate GST
+      const subtotal = req.body.totalAmount || 0;
+
+      // Check credit limit before creating bill
+      const creditCheck = await customer.checkCreditLimit(subtotal);
+      if (!creditCheck.allowed) {
+        logger.warn('Credit limit exceeded', {
+          customerId: customer._id,
+          customerName: customer.name,
+          creditLimit: creditCheck.creditLimit,
+          currentOutstanding: creditCheck.currentOutstanding,
+          newBillAmount: creditCheck.newBillAmount,
+          exceededBy: creditCheck.exceededBy
+        });
+        return res.status(400).json({
+          message: creditCheck.message,
+          creditLimitExceeded: true,
+          creditLimit: creditCheck.creditLimit,
+          currentOutstanding: creditCheck.currentOutstanding,
+          newBillAmount: creditCheck.newBillAmount,
+          totalOutstanding: creditCheck.totalOutstanding,
+          exceededBy: creditCheck.exceededBy
+        });
+      }
+
+      logger.info('Credit limit check passed', {
+        customerId: customer._id,
+        available: creditCheck.available,
+        newBillAmount: creditCheck.newBillAmount
+      });
+      const isIntraState = customer.state?.toLowerCase() === (req.body.companyState || 'maharashtra').toLowerCase();
+
+      let cgst = 0, sgst = 0, igst = 0;
+      if (isIntraState) {
+        cgst = subtotal * 0.09;
+        sgst = subtotal * 0.09;
+      } else {
+        igst = subtotal * 0.18;
+      }
+
+      const totalWithGST = subtotal + cgst + sgst + igst;
+
+      // Create the bill first
+      const billNumber = await generateBillNumber();
+      const invoiceId = await generateInvoiceId();
+      const invoiceNumber = await generateInvoiceNumber();
+
+      const bill = new Bill({
+        ...req.body,
+        billNumber,
+        invoiceId,
+        invoiceNumber,
+        invoiceDate: new Date(),
+
+        // Customer details
+        customerAddress: customer.address,
+        customerCity: customer.city,
+        customerState: customer.state,
+        customerGSTIN: customer.gstNo,
+        customerPhone: customer.phoneNumber,
+
+        // Tax calculations
+        subtotal: subtotal,
+        cgst: cgst,
+        sgst: sgst,
+        igst: igst,
+        totalAmount: totalWithGST,
+        taxType: isIntraState ? 'INTRA' : 'INTER',
+        placeOfSupply: customer.state,
+
+        paymentStatus: req.body.paymentStatus || 'Pending'
+      });
+      const savedBill = await bill.save();
+      logger.info('Bill created successfully', {
+        billNumber: savedBill.billNumber,
+        invoiceId: savedBill.invoiceId,
+        invoiceNumber: savedBill.invoiceNumber
+      });
+
+      // Now delete items from delevery1 collection
+      const deletionResults = [];
+
+      for (const item of items) {
+        const itemName = item.itemName;
+        const requestedQuantity = item.quantity;
+
+        logger.debug('Processing bill item', { itemName, requestedQuantity });
+
+        // Get first 3 digits as prefix for matching
+        const itemPrefix = itemName.substring(0, 3);
+        logger.debug('Using prefix for bill item', { itemPrefix, itemName });
+
+        // Find matching items in delevery1 collection using 3-digit prefix
+        const matchingItems = await Delevery1.find({
+          inputValue: { $regex: `^${itemPrefix}` }, // Match items that start with the 3-digit prefix
+          godownName: godownName
+        }).limit(requestedQuantity);
+
+        logger.debug('Found matching items in delevery1', { prefix: itemPrefix, count: matchingItems.length });
+
+        // Delete the found items
+        const deletedItems = [];
+        const deletedItemValues = [];
+        for (const matchingItem of matchingItems) {
+          await Delevery1.findByIdAndDelete(matchingItem._id);
+          deletedItems.push(matchingItem._id);
+          deletedItemValues.push(matchingItem.inputValue);
+          logger.debug('Deleted item from delevery1', { id: matchingItem._id, value: matchingItem.inputValue });
+        }
+
+        deletionResults.push({
+          itemName: itemName,
+          prefix: itemPrefix,
+          requestedQuantity: requestedQuantity,
+          foundItems: matchingItems.length,
+          deletedItems: deletedItems.length,
+          deletedIds: deletedItems,
+          deletedItemValues: deletedItemValues
+        });
+      }
+
+      logger.debug('Deletion results', { deletionResultsCount: deletionResults.length });
+
+      // Return success response with deletion details
+      res.status(201).json({
+        ...savedBill.toObject(),
+        deletionResults: deletionResults,
+        message: `Bill created successfully! ${deletionResults.reduce((sum, result) => sum + result.deletedItems, 0)} items removed from inventory.`
+      });
+
+    } catch (error) {
+      logger.error('Error creating bill', error);
+      console.error('Full error details:', error);
+      res.status(400).json({
+        message: 'Unable to create bill',
+        error: error.message,
+        details: error.toString()
       });
     }
-
-    logger.debug('Deletion results', { deletionResultsCount: deletionResults.length });
-
-    // Return success response with deletion details
-    res.status(201).json({
-      ...savedBill.toObject(),
-      deletionResults: deletionResults,
-      message: `Bill created successfully! ${deletionResults.reduce((sum, result) => sum + result.deletedItems, 0)} items removed from inventory.`
-    });
-
-  } catch (error) {
-    logger.error('Error creating bill', error);
-    res.status(400).json({ message: 'Unable to create bill' });
-  }
-});
+  });
 
 // Get all bills
 router.get('/bills/', async (req, res) => {
@@ -722,6 +975,375 @@ router.get('/bills/', async (req, res) => {
   } catch (error) {
     logger.error('Error fetching bills', error);
     res.status(500).json({ message: 'Unable to fetch bills' });
+  }
+});
+
+// ==================== E-WAY BILL ROUTES ====================
+
+// Generate E-Way Bill JSON
+router.post('/bills/:billId/generate-eway-json', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.billId).populate('customerId');
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    const { transporterName, transporterId, vehicleNumber, transportMode, distance } = req.body;
+
+    // State code mapping (add more as needed)
+    const stateCodes = {
+      'Maharashtra': 27,
+      'Gujarat': 24,
+      'Karnataka': 29,
+      'Delhi': 7,
+      'Tamil Nadu': 33,
+      'Uttar Pradesh': 9,
+      'West Bengal': 19
+    };
+
+    const fromStateCode = stateCodes[bill.companyState] || 27;
+    const toStateCode = stateCodes[bill.customerState] || 27;
+
+    // Generate E-Way Bill JSON in government format
+    const eWayBillJSON = {
+      version: "1.0.0421",
+      billLists: [{
+        userGstin: bill.companyGSTIN || "27XXXXXXXXXXXXX",
+        supplyType: "O",
+        subSupplyType: "1",
+        subSupplyDesc: "",
+        docType: "INV",
+        docNo: bill.invoiceNumber,
+        docDate: new Date(bill.invoiceDate).toLocaleDateString('en-GB'),
+        fromGstin: bill.companyGSTIN || "27XXXXXXXXXXXXX",
+        fromTrdName: bill.companyName,
+        fromAddr1: bill.companyAddress,
+        fromAddr2: "",
+        fromPlace: bill.companyCity,
+        fromPincode: 400001,
+        fromStateCode: fromStateCode,
+        actFromStateCode: fromStateCode,
+        toGstin: bill.customerGSTIN || "URP",
+        toTrdName: bill.customerName,
+        toAddr1: bill.customerAddress,
+        toAddr2: "",
+        toPlace: bill.customerCity,
+        toPincode: 400001,
+        toStateCode: toStateCode,
+        actToStateCode: toStateCode,
+        transactionType: 1,
+        otherValue: 0,
+        totalValue: bill.subtotal,
+        cgstValue: bill.cgst,
+        sgstValue: bill.sgst,
+        igstValue: bill.igst,
+        cessValue: 0,
+        cessNonAdvolValue: 0,
+        totInvValue: bill.totalAmount,
+        transporterId: transporterId || "",
+        transporterName: transporterName || "",
+        transDocNo: "",
+        transMode: transportMode === 'Road' ? "1" : transportMode === 'Rail' ? "2" : transportMode === 'Air' ? "3" : "4",
+        transDistance: distance?.toString() || "0",
+        transDocDate: "",
+        vehicleNo: vehicleNumber || "",
+        vehicleType: "R",
+        itemList: bill.items.map(item => ({
+          productName: item.itemName,
+          productDesc: item.itemName,
+          hsnCode: parseInt(item.hsnCode) || 0,
+          quantity: item.quantity,
+          qtyUnit: item.unit || "PCS",
+          cgstRate: bill.taxType === 'INTRA' ? 9 : 0,
+          sgstRate: bill.taxType === 'INTRA' ? 9 : 0,
+          igstRate: bill.taxType === 'INTER' ? 18 : 0,
+          cessRate: 0,
+          cessNonadvol: 0,
+          taxableAmount: item.total
+        }))
+      }]
+    };
+
+    bill.eWayBill.jsonGenerated = true;
+    bill.eWayBill.jsonGeneratedAt = new Date();
+    bill.eWayBill.transporterName = transporterName;
+    bill.eWayBill.transporterId = transporterId;
+    bill.eWayBill.vehicleNumber = vehicleNumber;
+    bill.eWayBill.transportMode = transportMode;
+    bill.eWayBill.distance = distance;
+    bill.eWayBill.status = 'JSON Generated';
+    await bill.save();
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=eway-bill-${bill.invoiceNumber.replace(/\//g, '-')}.json`);
+    res.json(eWayBillJSON);
+
+  } catch (error) {
+    logger.error('Error generating E-Way Bill JSON', error);
+    res.status(500).json({ message: 'Unable to generate E-Way Bill JSON' });
+  }
+});
+
+// Update E-Way Bill details after uploading to portal
+router.put('/bills/:billId/eway-bill', async (req, res) => {
+  try {
+    const { eWayBillNo, eWayBillDate, validUpto, status } = req.body;
+
+    const bill = await Bill.findById(req.params.billId);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    bill.eWayBill.generated = true;
+    bill.eWayBill.eWayBillNo = eWayBillNo;
+    bill.eWayBill.eWayBillDate = eWayBillDate;
+    bill.eWayBill.validUpto = validUpto;
+    bill.eWayBill.status = status || 'Active';
+    bill.eWayBill.pdfUploaded = true;
+    bill.eWayBill.pdfUploadedAt = new Date();
+
+    await bill.save();
+
+    res.json({ message: 'E-Way Bill details updated successfully', bill });
+  } catch (error) {
+    logger.error('Error updating E-Way Bill', error);
+    res.status(500).json({ message: 'Unable to update E-Way Bill' });
+  }
+});
+
+// Get E-Way Bill status
+router.get('/bills/:billId/eway-bill', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.billId);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    res.json({
+      invoiceNumber: bill.invoiceNumber,
+      eWayBill: bill.eWayBill
+    });
+  } catch (error) {
+    logger.error('Error fetching E-Way Bill status', error);
+    res.status(500).json({ message: 'Unable to fetch E-Way Bill status' });
+  }
+});
+
+// ==================== E-WAY BILL DASHBOARD ROUTES ====================
+// These routes must come BEFORE /bills/:id to avoid route conflicts
+
+// Get E-Way Bill Dashboard Statistics
+router.get('/bills/eway-dashboard', async (req, res) => {
+  try {
+    logger.info('E-Way Bill Dashboard endpoint called');
+    const { startDate, endDate } = req.query;
+
+    // Check if any bills exist first
+    let billCount = 0;
+    try {
+      billCount = await Bill.countDocuments();
+      logger.info('Bill count retrieved', { billCount });
+    } catch (countError) {
+      logger.error('Error counting bills', countError);
+      return res.json({
+        stats: {
+          totalActive: 0,
+          totalExpired: 0,
+          totalJsonGenerated: 0,
+          totalValue: 0,
+          expiringSoonCount: 0
+        },
+        expiringSoon: [],
+        recentEWayBills: [],
+        transportModes: [],
+        statusBreakdown: []
+      });
+    }
+
+    if (billCount === 0) {
+      logger.info('No bills found, returning empty data');
+      return res.json({
+        stats: {
+          totalActive: 0,
+          totalExpired: 0,
+          totalJsonGenerated: 0,
+          totalValue: 0,
+          expiringSoonCount: 0
+        },
+        expiringSoon: [],
+        recentEWayBills: [],
+        transportModes: [],
+        statusBreakdown: []
+      });
+    }
+
+    // Build date filter using createdAt instead of billDate
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    // Get statistics by status - with error handling
+    let stats = [];
+    try {
+      stats = await Bill.aggregate([
+        {
+          $match: {
+            ...dateFilter,
+            'eWayBill.status': { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: '$eWayBill.status',
+            count: { $sum: 1 },
+            totalValue: { $sum: '$totalAmount' }
+          }
+        }
+      ]);
+    } catch (aggError) {
+      logger.warn('Aggregation error, returning empty stats', aggError);
+      stats = [];
+    }
+
+    // Get expiring soon (within 7 days) - use validUpto instead of validityDate
+    const today = new Date();
+    const expiringDate = new Date();
+    expiringDate.setDate(expiringDate.getDate() + 7);
+
+    const expiringSoon = await Bill.find({
+      'eWayBill.validUpto': {
+        $gte: today,
+        $lte: expiringDate
+      },
+      'eWayBill.status': 'Active'
+    })
+      .populate('customerId', 'name city state')
+      .sort({ 'eWayBill.validUpto': 1 })
+      .limit(10);
+
+    // Get recently generated E-Way Bills - use eWayBillNo instead of number
+    const recentEWayBills = await Bill.find({
+      'eWayBill.eWayBillNo': { $exists: true, $ne: null }
+    })
+      .populate('customerId', 'name city state')
+      .sort({ 'eWayBill.eWayBillDate': -1 })
+      .limit(10);
+
+    // Get transport mode distribution
+    const transportModes = await Bill.aggregate([
+      {
+        $match: {
+          ...dateFilter,
+          'eWayBill.transportMode': { $exists: true, $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$eWayBill.transportMode',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Calculate totals
+    const totalActive = stats.find(s => s._id === 'Active')?.count || 0;
+    const totalExpired = stats.find(s => s._id === 'Expired')?.count || 0;
+    const totalJsonGenerated = stats.find(s => s._id === 'JSON Generated')?.count || 0;
+    const totalValue = stats.reduce((sum, s) => sum + (s.totalValue || 0), 0);
+
+    res.json({
+      stats: {
+        totalActive,
+        totalExpired,
+        totalJsonGenerated,
+        totalValue,
+        expiringSoonCount: expiringSoon.length
+      },
+      expiringSoon,
+      recentEWayBills,
+      transportModes,
+      statusBreakdown: stats
+    });
+  } catch (error) {
+    logger.error('Error fetching E-Way Bill dashboard', error);
+    res.json({
+      stats: {
+        totalActive: 0,
+        totalExpired: 0,
+        totalJsonGenerated: 0,
+        totalValue: 0,
+        expiringSoonCount: 0
+      },
+      expiringSoon: [],
+      recentEWayBills: [],
+      transportModes: [],
+      statusBreakdown: [],
+      error: 'Dashboard data unavailable'
+    });
+  }
+});
+
+// Get E-Way Bill monthly trend
+router.get('/bills/eway-trend', async (req, res) => {
+  try {
+    logger.info('E-Way Bill Trend endpoint called');
+    const { months = 6 } = req.query;
+
+    // Check if any bills exist first
+    let billCount = 0;
+    try {
+      billCount = await Bill.countDocuments();
+      logger.info('Bill count for trend', { billCount });
+    } catch (countError) {
+      logger.error('Error counting bills for trend', countError);
+      return res.json([]);
+    }
+
+    if (billCount === 0) {
+      logger.info('No bills found for trend, returning empty array');
+      return res.json([]);
+    }
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - parseInt(months));
+
+    // Use createdAt instead of billDate, with error handling
+    let trend = [];
+    try {
+      trend = await Bill.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+            'eWayBill.eWayBillNo': { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              month: { $month: '$createdAt' },
+              year: { $year: '$createdAt' }
+            },
+            count: { $sum: 1 },
+            totalValue: { $sum: '$totalAmount' }
+          }
+        },
+        {
+          $sort: { '_id.year': 1, '_id.month': 1 }
+        }
+      ]);
+    } catch (aggError) {
+      logger.warn('Trend aggregation error, returning empty array', aggError);
+      trend = [];
+    }
+
+    res.json(trend);
+  } catch (error) {
+    logger.error('Error fetching E-Way Bill trend', error);
+    res.json([]); // Return empty array instead of error
   }
 });
 
@@ -737,6 +1359,92 @@ router.get('/bills/:id', async (req, res) => {
   } catch (error) {
     logger.error('Error fetching bill', error);
     res.status(500).json({ message: 'Unable to fetch bill' });
+  }
+});
+
+// Get invoice by invoiceId
+router.get('/invoices/:invoiceId', async (req, res) => {
+  try {
+    const bill = await Bill.findOne({ invoiceId: req.params.invoiceId })
+      .populate('customerId', 'name address gstNo phoneNumber city state');
+    if (!bill) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    res.json(bill);
+  } catch (error) {
+    logger.error('Error fetching invoice', error);
+    res.status(500).json({ message: 'Unable to fetch invoice' });
+  }
+});
+
+// Update payment status
+router.put('/invoices/:invoiceId/status', async (req, res) => {
+  try {
+    const { paymentStatus } = req.body;
+
+    if (!['Pending', 'Processing', 'Completed', 'Failed'].includes(paymentStatus)) {
+      return res.status(400).json({ message: 'Invalid payment status' });
+    }
+
+    const bill = await Bill.findOneAndUpdate(
+      { invoiceId: req.params.invoiceId },
+      { paymentStatus, updatedAt: Date.now() },
+      { new: true }
+    );
+
+    if (!bill) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    logger.info('Payment status updated', { invoiceId: req.params.invoiceId, paymentStatus });
+    res.json({ message: 'Payment status updated successfully', bill });
+  } catch (error) {
+    logger.error('Error updating payment status', error);
+    res.status(500).json({ message: 'Unable to update payment status' });
+  }
+});
+
+// Get all invoices with filtering and sorting
+router.get('/invoices', async (req, res) => {
+  try {
+    const { status, customerId, sortBy = 'createdAt', order = 'desc' } = req.query;
+
+    let query = {};
+
+    // Filter by payment status
+    if (status && status !== 'all') {
+      query.paymentStatus = status;
+    }
+
+    // Filter by customer
+    if (customerId) {
+      query.customerId = customerId;
+    }
+
+    // Build sort object
+    const sortOrder = order === 'asc' ? 1 : -1;
+    const sortObj = { [sortBy]: sortOrder };
+
+    const bills = await Bill.find(query)
+      .populate('customerId', 'name city state')
+      .sort(sortObj);
+
+    // Calculate summary statistics
+    const summary = {
+      total: bills.length,
+      pending: bills.filter(b => b.paymentStatus === 'Pending').length,
+      processing: bills.filter(b => b.paymentStatus === 'Processing').length,
+      completed: bills.filter(b => b.paymentStatus === 'Completed').length,
+      failed: bills.filter(b => b.paymentStatus === 'Failed').length,
+      totalAmount: bills.reduce((sum, b) => sum + b.totalAmount, 0),
+      completedAmount: bills.filter(b => b.paymentStatus === 'Completed').reduce((sum, b) => sum + b.totalAmount, 0),
+      pendingAmount: bills.filter(b => b.paymentStatus === 'Pending').reduce((sum, b) => sum + b.totalAmount, 0)
+    };
+
+    res.json({ invoices: bills, summary });
+  } catch (error) {
+    logger.error('Error fetching invoices', error);
+    res.status(500).json({ message: 'Unable to fetch invoices' });
   }
 });
 
@@ -878,6 +1586,73 @@ router.put('/godowns/:godownId/inventory/:itemName', async (req, res) => {
   } catch (error) {
     logger.error('Error updating godown inventory', error);
     res.status(500).json({ message: 'Unable to update godown inventory' });
+  }
+});
+
+// ==================== E-WAY BILL DASHBOARD ====================
+
+// E-Way Bill routes moved above to avoid route conflicts
+
+// ==================== E-WAY BILL DASHBOARD ====================
+// Duplicate endpoints removed - using the corrected ones above
+
+// ==================== PRINT HISTORY TRACKING ====================
+
+// Track bill print
+router.post('/bills/:billId/print', async (req, res) => {
+  try {
+    const { billId } = req.params;
+    const { printType, userId } = req.body;
+
+    const bill = await Bill.findById(billId);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    // Add print record
+    if (!bill.printHistory) bill.printHistory = [];
+    bill.printHistory.push({
+      printedAt: new Date(),
+      printedBy: userId || 'Unknown',
+      printType: printType || 'duplicate'
+    });
+
+    bill.totalPrintCount = (bill.totalPrintCount || 0) + 1;
+    await bill.save();
+
+    logger.info('Print tracked', { billId, printCount: bill.totalPrintCount });
+
+    res.json({
+      success: true,
+      message: 'Print recorded',
+      printCount: bill.totalPrintCount
+    });
+  } catch (error) {
+    logger.error('Error recording print', error);
+    res.status(500).json({ message: 'Error recording print', error: error.message });
+  }
+});
+
+// Get print history for a bill
+router.get('/bills/:billId/print-history', async (req, res) => {
+  try {
+    const { billId } = req.params;
+
+    const bill = await Bill.findById(billId);
+
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    res.json({
+      billNumber: bill.billNumber,
+      invoiceNumber: bill.invoiceNumber,
+      totalPrintCount: bill.totalPrintCount || 0,
+      printHistory: bill.printHistory || []
+    });
+  } catch (error) {
+    logger.error('Error fetching print history', error);
+    res.status(500).json({ message: 'Error fetching print history', error: error.message });
   }
 });
 

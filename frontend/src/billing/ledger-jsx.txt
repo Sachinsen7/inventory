@@ -1,0 +1,51 @@
+      {/* Ledger Buttons */}
+      <div style={{ padding: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        {selectedCustomer && (
+          <button 
+            onClick={() => setShowCustomerHistory(true)}
+            style={{
+              padding: '12px 24px',
+              background: 'linear-gradient(135deg, #9900ef 0%, #7700cc 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600'
+            }}
+          >
+            📜 View Customer History
+          </button>
+        )}
+        
+        <button 
+          onClick={() => setShowLedgerManagement(true)}
+          style={{
+            padding: '12px 24px',
+            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '600'
+          }}
+        >
+          💰 Manage Ledger & Payments
+        </button>
+      </div>
+      
+      {/* Customer History Modal */}
+      {showCustomerHistory && (
+        <CustomerHistory 
+          customerId={selectedCustomer}
+          onClose={() => setShowCustomerHistory(false)}
+        />
+      )}
+      
+      {/* Ledger Management Modal */}
+      {showLedgerManagement && (
+        <LedgerManagement 
+          onClose={() => setShowLedgerManagement(false)}
+        />
+      )}

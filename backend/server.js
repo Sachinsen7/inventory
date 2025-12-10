@@ -24,6 +24,19 @@ const Godown = require("./models/Godowns");
 const GodownInventory = require("./models/GodownInventory");
 const excelRoutes = require("./routes/excelRoutes");
 const billingRoutes = require("./routes/billingRoutes");
+const settingsRoutes = require("./routes/settingsRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
+const gstr2Routes = require("./routes/gstr2Routes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
+const orderRoutes = require("./routes/orderRoutes");
+const stockCheckRoutes = require("./routes/stockCheckRoutes");
+const voucherRoutes = require("./routes/voucherRoutes");
+const advancedVoucherRoutes = require("./routes/advancedVoucherRoutes");
+const bankReconciliationRoutes = require("./routes/bankReconciliationRoutes");
+const chequeRoutes = require("./routes/chequeRoutes");
+const reportsRoutes = require("./routes/reportsRoutes");
+const gstRoutes = require("./routes/gstRoutes");
+const tdsRoutes = require("./routes/tdsRoutes");
 
 // Middleware
 // NOTE: Security middleware added below. After pulling these changes run in `backend`:
@@ -123,7 +136,7 @@ if (process.env.NODE_ENV === "production") {
 // Rate limiting - general (lightweight)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // limit each IP to 200 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 200 : 1000, // Higher limit for development
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
@@ -225,7 +238,14 @@ const barcodeSchema = new mongoose.Schema({
   mixer: String,
   skuc: String,
   skun: String,
+  coreWeight: String, // Weight of core/packaging
+  grossWeight: String, // Total weight (renamed from 'weight')
+  netWeight: String, // Calculated: grossWeight - coreWeight
   batchNumbers: [Number],
+  barcodeWeights: { type: Map, of: String }, // Store individual barcode weights as key-value pairs
+  scannedBarcodes: [String], // Array of individual scanned barcode numbers (e.g., ["SKU0011", "SKU0012"])
+  is_scanned: { type: Boolean, default: false }, // Track if ALL barcodes have been scanned
+  scanned_at: { type: Date }, // Track when last barcode was scanned
 });
 
 // Create Model
@@ -248,6 +268,94 @@ const transitSchema = new mongoose.Schema({
 });
 
 const Transit = mongoose.model("Transit", transitSchema, "transits");
+
+const ledgerSchema = new mongoose.Schema({
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      'INVOICE_CREATED',
+      'INVOICE_UPDATED',
+      'INVOICE_DELETED',
+      'ITEM_WEIGHT_CHANGED',
+      'BARCODE_REMOVED',
+      'ITEM_ADDED',
+      'ITEM_REMOVED',
+      'QUANTITY_CHANGED',
+      'PRICE_CHANGED',
+      'PAYMENT_RECEIVED',
+      'PARTIAL_PAYMENT',
+      'PAYMENT_STATUS_UPDATED'
+    ]
+  },
+  entityType: {
+    type: String,
+    required: true,
+    enum: ['INVOICE', 'ITEM', 'BARCODE', 'PAYMENT']
+  },
+  entityId: {
+    type: String,
+    required: true,
+    index: true
+  },
+  invoiceId: {
+    type: String,
+    index: true
+  },
+  changedValues: {
+    before: mongoose.Schema.Types.Mixed,
+    after: mongoose.Schema.Types.Mixed
+  },
+  user: {
+    userId: String,
+    username: String,
+    email: String
+  },
+  metadata: {
+    ipAddress: String,
+    userAgent: String,
+    customerId: String,
+    customerName: String,
+    paymentAmount: Number,
+    paymentMethod: String,
+    remainingBalance: Number,
+    notes: String
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+    immutable: true,
+    index: true
+  }
+}, {
+  timestamps: false,
+  strict: true
+});
+
+// Prevent updates and deletes - enforce append-only
+ledgerSchema.pre('findOneAndUpdate', function () {
+  throw new Error('Ledger entries cannot be updated - append-only');
+});
+
+ledgerSchema.pre('findOneAndDelete', function () {
+  throw new Error('Ledger entries cannot be deleted - append-only');
+});
+
+ledgerSchema.pre('updateOne', function () {
+  throw new Error('Ledger entries cannot be updated - append-only');
+});
+
+ledgerSchema.pre('deleteOne', function () {
+  throw new Error('Ledger entries cannot be deleted - append-only');
+});
+
+// Indexes for efficient querying
+ledgerSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
+ledgerSchema.index({ invoiceId: 1, timestamp: -1 });
+ledgerSchema.index({ action: 1, timestamp: -1 });
+ledgerSchema.index({ 'metadata.customerId': 1, timestamp: -1 });
+
+const Ledger = mongoose.model("Ledger", ledgerSchema);
 
 // Routes
 
@@ -300,11 +408,162 @@ const Dsale = mongoose.model("Dsale", dsaleSchema, "dsale");
 
 app.get("/api/barcodes", async (req, res) => {
   try {
-    const barcodes = await Barcode.find();
-    res.json(barcodes);
+    // Check if filtering by is_scanned status
+    const { is_scanned } = req.query;
+
+    if (is_scanned !== undefined) {
+      const isScannedBool = is_scanned === 'true' || is_scanned === true;
+
+      if (isScannedBool) {
+        // Return only fully scanned barcode documents
+        const barcodes = await Barcode.find({ is_scanned: true });
+        res.json(barcodes);
+      } else {
+        // Return documents that have unscanned barcodes
+        // This includes documents where not all barcodes have been scanned
+        const allBarcodes = await Barcode.find({
+          $or: [
+            { is_scanned: false },
+            { is_scanned: { $exists: false } }
+          ]
+        });
+
+        // Filter out individual barcodes that have already been scanned
+        const filteredBarcodes = allBarcodes.map(doc => {
+          const scannedSet = new Set(doc.scannedBarcodes || []);
+
+          // Filter batchNumbers to only include unscanned ones
+          const unscannedBatchNumbers = (doc.batchNumbers || []).filter(bn => {
+            const fullBarcode = String(doc.skuc) + String(bn);
+            return !scannedSet.has(fullBarcode);
+          });
+
+          // Only return document if it has unscanned barcodes
+          if (unscannedBatchNumbers.length > 0) {
+            return {
+              ...doc.toObject(),
+              batchNumbers: unscannedBatchNumbers
+            };
+          }
+          return null;
+        }).filter(doc => doc !== null);
+
+        res.json(filteredBarcodes);
+      }
+    } else {
+      // No filter - return all
+      const barcodes = await Barcode.find();
+      res.json(barcodes);
+    }
   } catch (error) {
     logger.error("Error fetching barcodes:", error);
     res.status(500).json({ message: "Error fetching data" });
+  }
+});
+
+// API: Reset all barcodes to unscanned state (for testing)
+app.post("/api/barcodes/reset-all", async (req, res) => {
+  try {
+    const result = await Barcode.updateMany(
+      {},
+      {
+        $set: {
+          is_scanned: false,
+          scannedBarcodes: [],
+          scanned_at: null
+        }
+      }
+    );
+
+    logger.info(`Reset ${result.modifiedCount} barcodes to unscanned state`);
+    res.json({
+      message: `Successfully reset ${result.modifiedCount} barcodes to unscanned state`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    logger.error("Error resetting barcodes:", error);
+    res.status(500).json({ message: "Error resetting barcodes" });
+  }
+});
+
+// API: Delete individual barcode
+app.delete("/api/barcodes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const barcode = await Barcode.findByIdAndDelete(id);
+
+    if (!barcode) {
+      return res.status(404).json({ message: "Barcode not found" });
+    }
+
+    logger.info("Barcode deleted", { id, product: barcode.product, skuc: barcode.skuc });
+    res.json({ message: "Barcode deleted successfully", barcode });
+  } catch (error) {
+    logger.error("Error deleting barcode:", error);
+    res.status(500).json({ message: "Error deleting barcode" });
+  }
+});
+
+// API: Get product details by barcode number
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    logger.info("Fetching product details for barcode:", barcode);
+
+    // Find the barcode in the database
+    // The barcode format is: skuc + batchNumber (e.g., "SKU0011" = "SKU001" + "1")
+    const allBarcodes = await Barcode.find();
+
+    let foundProduct = null;
+
+    for (const barcodeDoc of allBarcodes) {
+      if (barcodeDoc.batchNumbers && Array.isArray(barcodeDoc.batchNumbers)) {
+        for (const bn of barcodeDoc.batchNumbers) {
+          const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+          if (fullBarcode === barcode) {
+            foundProduct = {
+              product: barcodeDoc.product || "Unknown Product",
+              skuName: barcodeDoc.skun || "",
+              packed: barcodeDoc.packed || "",
+              batch: barcodeDoc.batch || "",
+              coreWeight: barcodeDoc.coreWeight || "",
+              grossWeight: barcodeDoc.grossWeight || "",
+              netWeight: barcodeDoc.netWeight || "",
+              shift: barcodeDoc.shift || "",
+              location: barcodeDoc.location || "",
+              currentTime: barcodeDoc.currentTime || "",
+              rewinder: barcodeDoc.rewinder || "",
+              edge: barcodeDoc.edge || "",
+              winder: barcodeDoc.winder || "",
+              mixer: barcodeDoc.mixer || "",
+              skuc: barcodeDoc.skuc || "",
+              barcodeNumber: fullBarcode,
+            };
+            break;
+          }
+        }
+      }
+      if (foundProduct) break;
+    }
+
+    if (foundProduct) {
+      res.json({
+        success: true,
+        data: foundProduct,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details",
+    });
   }
 });
 
@@ -761,7 +1020,7 @@ app.delete(
   }
 );
 
-// User Password Change API (protected - admin only)
+
 app.put(
   "/api/users/:id/password",
   authenticateJWT,
@@ -775,16 +1034,16 @@ app.put(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: "Validation failed", 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: errors.array()
       });
     }
 
     try {
       const { password } = req.body;
       const user = await User.findById(req.params.id);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -914,6 +1173,46 @@ app.post(
       const { inputValue } = req.body;
       const newEntry = new Select({ inputValue });
       await newEntry.save();
+
+      // Mark the INDIVIDUAL barcode as scanned in the Barcode collection
+      // Find the barcode document that contains this scanned value in its batchNumbers
+      const allBarcodes = await Barcode.find();
+      for (const barcodeDoc of allBarcodes) {
+        if (barcodeDoc.batchNumbers && barcodeDoc.skuc) {
+          const matchingBatchNumber = barcodeDoc.batchNumbers.find(bn => {
+            const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+            return fullBarcode === inputValue;
+          });
+
+          if (matchingBatchNumber) {
+            // Add this barcode to the scannedBarcodes array
+            const scannedBarcodes = barcodeDoc.scannedBarcodes || [];
+            if (!scannedBarcodes.includes(inputValue)) {
+              scannedBarcodes.push(inputValue);
+            }
+
+            // Check if ALL barcodes in this document have been scanned
+            const allScanned = barcodeDoc.batchNumbers.every(bn => {
+              const fullBarcode = String(barcodeDoc.skuc) + String(bn);
+              return scannedBarcodes.includes(fullBarcode);
+            });
+
+            await Barcode.updateOne(
+              { _id: barcodeDoc._id },
+              {
+                $set: {
+                  scannedBarcodes: scannedBarcodes,
+                  is_scanned: allScanned,
+                  scanned_at: new Date()
+                }
+              }
+            );
+            logger.info(`Marked barcode ${inputValue} as scanned (${scannedBarcodes.length}/${barcodeDoc.batchNumbers.length} scanned)`);
+            break;
+          }
+        }
+      }
+
       res.json({ message: "Data saved successfully" });
     } catch (error) {
       logger.error("Error saving data:", error);
@@ -940,6 +1239,76 @@ app.post(
     }
   }
 );
+
+// API: Get product details by barcode
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+
+    // Find the barcode in the database
+    const barcodeData = await Barcode.findOne({
+      $expr: {
+        $and: [
+          { $ne: ["$skuc", null] },
+          { $ne: ["$skuc", ""] },
+          {
+            $in: [
+              {
+                $toInt: {
+                  $substr: [
+                    barcode,
+                    { $strLenCP: "$skuc" },
+                    { $subtract: [{ $strLenCP: barcode }, { $strLenCP: "$skuc" }] }
+                  ]
+                }
+              },
+              "$batchNumbers"
+            ]
+          },
+          {
+            $eq: [
+              { $substr: [barcode, 0, { $strLenCP: "$skuc" }] },
+              "$skuc"
+            ]
+          }
+        ]
+      }
+    });
+
+    if (!barcodeData) {
+      return res.json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        product: barcodeData.product || "N/A",
+        skuName: barcodeData.skun || "N/A",
+        coreWeight: barcodeData.coreWeight || "N/A",
+        grossWeight: barcodeData.grossWeight || "N/A",
+        netWeight: barcodeData.netWeight || "N/A",
+        packed: barcodeData.packed || "N/A",
+        batch: barcodeData.batch || "N/A",
+        shift: barcodeData.shift || "N/A",
+        location: barcodeData.location || "N/A",
+        currentTime: barcodeData.currentTime || "N/A",
+        rewinder: barcodeData.rewinder || "N/A",
+        edge: barcodeData.edge || "N/A",
+        winder: barcodeData.winder || "N/A",
+        mixer: barcodeData.mixer || "N/A",
+      }
+    });
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details"
+    });
+  }
+});
 
 // API: Get All Select Options
 app.get("/api/products1", async (req, res) => {
@@ -1073,6 +1442,52 @@ app.put(
   }
 );
 
+// API to check barcode uniqueness before saving
+app.post(
+  "/api/barcodes/check-uniqueness",
+  validators.rejectUnknownFields(["barcodeNumbers"]),
+  [body("barcodeNumbers").isArray().withMessage("barcodeNumbers must be an array")],
+  validators.handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { barcodeNumbers } = req.body;
+
+      if (!barcodeNumbers || barcodeNumbers.length === 0) {
+        return res.json({ isUnique: true, duplicates: [] });
+      }
+
+      // Check if any of these barcodes already exist
+      const allBarcodes = await Barcode.find();
+      const existingBarcodes = new Set();
+
+      // Build a set of all existing barcode numbers
+      for (const doc of allBarcodes) {
+        if (doc.batchNumbers && doc.skuc) {
+          doc.batchNumbers.forEach(bn => {
+            const fullBarcode = String(doc.skuc) + String(bn);
+            existingBarcodes.add(fullBarcode);
+          });
+        }
+      }
+
+      // Check for duplicates
+      const duplicates = barcodeNumbers.filter(barcode => existingBarcodes.has(barcode));
+
+      if (duplicates.length > 0) {
+        return res.json({
+          isUnique: false,
+          duplicates: duplicates
+        });
+      }
+
+      res.json({ isUnique: true, duplicates: [] });
+    } catch (error) {
+      logger.error("Error checking barcode uniqueness:", error);
+      res.status(500).json({ message: "Error checking uniqueness" });
+    }
+  }
+);
+
 // API to save data
 app.post(
   "/api/saved",
@@ -1090,7 +1505,11 @@ app.post(
     "mixer",
     "skuc",
     "skun",
+    "coreWeight",
+    "grossWeight",
+    "netWeight",
     "batchNumbers",
+    "barcodeWeights",
   ]),
   [
     body("product").optional().isString().trim(),
@@ -1106,13 +1525,25 @@ app.post(
     body("mixer").optional().isString().trim(),
     body("skuc").optional().isString().trim(),
     body("skun").optional().isString().trim(),
+    body("coreWeight").optional().isString().trim(),
+    body("grossWeight").optional().isString().trim(),
+    body("netWeight").optional().isString().trim(),
     body("batchNumbers").optional().isArray(),
+    body("barcodeWeights").optional().isObject(),
   ],
   validators.handleValidationErrors,
   async (req, res) => {
     try {
-      const newBarcode = new Barcode(req.body);
+      // Ensure is_scanned is explicitly set to false for new barcodes
+      const barcodeData = {
+        ...req.body,
+        is_scanned: false,
+        scanned_at: null,
+        scannedBarcodes: [] // Initialize empty array for tracking individual scanned barcodes
+      };
+      const newBarcode = new Barcode(barcodeData);
       await newBarcode.save();
+      logger.info(`Created new barcode with ${newBarcode.batchNumbers?.length || 0} batch numbers`);
       res.json({ message: "Data saved successfully!" });
     } catch (error) {
       logger.error("Error saving barcode data:", error);
@@ -1120,6 +1551,68 @@ app.post(
     }
   }
 );
+
+// API: Get product details by barcode
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    logger.info("Fetching product details for barcode:", barcode);
+
+    // Get all barcodes and search through them
+    const allBarcodes = await Barcode.find();
+
+    let foundProduct = null;
+
+    for (const barcodeData of allBarcodes) {
+      if (barcodeData.skuc && barcodeData.batchNumbers && Array.isArray(barcodeData.batchNumbers)) {
+        // Check if the scanned barcode matches any of the generated barcodes
+        for (const batchNum of barcodeData.batchNumbers) {
+          const fullBarcode = String(barcodeData.skuc) + String(batchNum);
+          if (fullBarcode === barcode) {
+            foundProduct = barcodeData;
+            break;
+          }
+        }
+      }
+      if (foundProduct) break;
+    }
+
+    if (!foundProduct) {
+      logger.warn("Product not found for barcode:", barcode);
+      return res.json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    logger.info("Product found:", foundProduct.product);
+    res.json({
+      success: true,
+      data: {
+        product: foundProduct.product || "N/A",
+        skuName: foundProduct.skun || "N/A",
+        coreWeight: foundProduct.coreWeight || "N/A",
+        grossWeight: foundProduct.grossWeight || "N/A",
+        netWeight: foundProduct.netWeight || "N/A",
+        packed: foundProduct.packed || "N/A",
+        batch: foundProduct.batch || "N/A",
+        shift: foundProduct.shift || "N/A",
+        location: foundProduct.location || "N/A",
+        currentTime: foundProduct.currentTime || "N/A",
+        rewinder: foundProduct.rewinder || "N/A",
+        edge: foundProduct.edge || "N/A",
+        winder: foundProduct.winder || "N/A",
+        mixer: foundProduct.mixer || "N/A",
+      }
+    });
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details"
+    });
+  }
+});
 
 // API: Get All Despatch Options
 app.get("/api/products2", async (req, res) => {
@@ -1211,6 +1704,246 @@ app.get("/api/products3", async (req, res) => {
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch data" });
+  }
+});
+
+app.delete("/api/despatch/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Despatch.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting despatch item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/products2/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Despatch.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting products2 item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/products3/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Delevery1.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting products3 item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+app.delete("/api/transits/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Transit.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting transit item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+// DELETE: Single item from sales
+app.delete("/api/sales/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Sale.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    res.json({ message: "Item deleted successfully", deletedCount: 1 });
+  } catch (error) {
+    logger.error("Error deleting sale item:", error);
+    res.status(500).json({ message: "Error deleting item", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL factory inventory (Select collection)
+app.delete("/api/factory-inventory/clear-all", async (req, res) => {
+  try {
+    const result = await Select.deleteMany({});
+    logger.info(`Cleared all factory inventory: ${result.deletedCount} items`);
+    res.json({
+      message: `Successfully cleared all factory inventory`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    logger.error("Error clearing factory inventory:", error);
+    res.status(500).json({ message: "Error clearing factory inventory", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL in-transit items (Delevery1 collection)
+app.delete("/api/in-transit/clear-all", async (req, res) => {
+  try {
+    const result = await Delevery1.deleteMany({});
+    logger.info(`Cleared all in-transit items: ${result.deletedCount} items`);
+    res.json({
+      message: `Successfully cleared all in-transit items`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    logger.error("Error clearing in-transit items:", error);
+    res.status(500).json({ message: "Error clearing in-transit items", error: error.message });
+  }
+});
+
+// DELETE: Clear ALL collections (DANGER!)
+app.delete("/api/inventory/clear-all-collections", async (req, res) => {
+  try {
+    const results = {
+      factory: await Select.deleteMany({}),
+      inTransit: await Delevery1.deleteMany({}),
+      despatch: await Despatch.deleteMany({}),
+      transits: await Transit.deleteMany({}),
+      sales: await Sale.deleteMany({}),
+    };
+
+    const totalDeleted = Object.values(results).reduce((sum, r) => sum + r.deletedCount, 0);
+
+    logger.warn(`CLEARED ALL COLLECTIONS: ${totalDeleted} total items deleted`);
+    res.json({
+      message: `Successfully cleared all collections`,
+      totalDeleted,
+      details: {
+        factory: results.factory.deletedCount,
+        inTransit: results.inTransit.deletedCount,
+        despatch: results.despatch.deletedCount,
+        transits: results.transits.deletedCount,
+        sales: results.sales.deletedCount,
+      }
+    });
+  } catch (error) {
+    logger.error("Error clearing all collections:", error);
+    res.status(500).json({ message: "Error clearing collections", error: error.message });
+  }
+});
+
+// ============================================
+
+// API: Get product details by barcode (search in Barcode, Despatch, and Delevery1 collections)
+app.get("/api/product-details/:barcode", async (req, res) => {
+  try {
+    const { barcode } = req.params;
+
+    if (!barcode || barcode.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Barcode is required"
+      });
+    }
+
+    logger.debug("Searching for barcode:", { barcode });
+
+    // Search in Barcode collection first (most detailed info)
+    let productData = await Barcode.findOne({
+      $or: [
+        { batchNumbers: parseInt(barcode) },
+        { batch: barcode }
+      ]
+    });
+
+    if (productData) {
+      logger.debug("Product found in Barcode collection");
+      return res.json({
+        success: true,
+        source: 'barcode',
+        data: {
+          product: productData.product,
+          skuName: productData.skun || productData.skuc,
+          batch: productData.batch,
+          location: productData.location,
+          netWeight: productData.netWeight,
+          grossWeight: productData.grossWeight,
+          packed: productData.packed,
+          shift: productData.shift,
+          rewinder: productData.rewinder,
+          edge: productData.edge,
+          winder: productData.winder,
+          mixer: productData.mixer,
+          currentTime: productData.currentTime,
+          isScanned: productData.is_scanned,
+          scannedAt: productData.scanned_at
+        }
+      });
+    }
+
+    // Search in Despatch collection (items in godown)
+    productData = await Despatch.findOne({ inputValue: barcode });
+
+    if (productData) {
+      logger.debug("Product found in Despatch collection");
+      return res.json({
+        success: true,
+        source: 'despatch',
+        data: {
+          barcode: productData.inputValue,
+          itemCode: productData.selectedOption,
+          location: productData.godownName,
+          addedAt: productData.addedAt,
+          status: 'In Godown'
+        }
+      });
+    }
+
+    // Search in Delevery1 collection (items ready for delivery)
+    productData = await Delevery1.findOne({ inputValue: barcode });
+
+    if (productData) {
+      logger.debug("Product found in Delevery1 collection");
+      return res.json({
+        success: true,
+        source: 'delivery',
+        data: {
+          barcode: productData.inputValue,
+          itemCode: productData.selectedOption,
+          itemName: productData.itemName,
+          location: productData.godownName,
+          quantity: productData.quantity,
+          price: productData.price,
+          masterPrice: productData.masterPrice,
+          description: productData.description,
+          category: productData.category,
+          addedAt: productData.addedAt,
+          status: 'Ready for Delivery'
+        }
+      });
+    }
+
+    // Not found in any collection
+    logger.debug("Product not found in any collection");
+    return res.status(404).json({
+      success: false,
+      message: "Product not found"
+    });
+
+  } catch (error) {
+    logger.error("Error fetching product details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product details",
+      error: error.message
+    });
   }
 });
 
@@ -1310,7 +2043,7 @@ app.post(
       // Delete from `delevery1` collection after adding to `dsale`
       await Delevery1.deleteOne({ _id: existingData._id });
 
-      res.json({ message: "Data saved in dsale and deleted from delevery1" });
+      res.json({ message: "Data saved in dsale and deleted from deleverxy1" });
     } catch (error) {
       logger.error("Error saving to delevery1/dsale:", error);
       res.status(500).json({ message: "Error saving data" });
@@ -1375,68 +2108,50 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
     logger.info("Fetching comprehensive inventory summary");
 
     const godowns = await Godown.find();
-
     const godownInventories = await GodownInventory.find().populate(
       "godownId",
       "name"
     );
-
-    // Get items in select collection (factory inventory)
     const factoryItems = await Select.find();
-
-    // Get items in delevery1 collection (in transit)
     const inTransitItems = await Delevery1.find();
+    const allBarcodes = await Barcode.find(); // Fetch barcodes for name resolution
 
-    // Aggregate data by item name (using first 3 characters)
+    // Create a lookup map: SKU/Code -> Product Name
+    const productLookup = new Map();
+    allBarcodes.forEach(b => {
+      if (b.skuc) productLookup.set(b.skuc.toLowerCase(), b.product);
+      if (b.skun) productLookup.set(b.skun.toLowerCase(), b.product);
+      // Also map the product name to itself to handle cases where we already have the name
+      if (b.product) productLookup.set(b.product.toLowerCase(), b.product);
+    });
+
+    // Helper function to resolve product name
+    const resolveProductName = (input) => {
+      if (!input) return "Unknown";
+      const lowerInput = input.toLowerCase();
+
+      // 1. Direct match
+      if (productLookup.has(lowerInput)) return productLookup.get(lowerInput);
+
+      // 2. Check if input starts with any known SKU (Barcode logic)
+      for (const [code, name] of productLookup.entries()) {
+        if (lowerInput.startsWith(code)) return name;
+      }
+
+      // 3. Fallback: If input looks like a barcode (SKU + Batch), try to extract SKU
+      // This is heuristic. If we can't find a name, return the input itself (or truncated if too long)
+      return input;
+    };
+
+    // Aggregate data by Product Name
     const inventoryMap = new Map();
 
-    // Process factory items
-    factoryItems.forEach((item) => {
-      if (item.inputValue && item.inputValue.length >= 3) {
-        const itemCode = item.inputValue.substring(0, 3);
-        if (!inventoryMap.has(itemCode)) {
-          inventoryMap.set(itemCode, {
-            itemName: itemCode,
-            factoryInventory: 0,
-            inTransit: 0,
-            totalQuantity: 0,
-            godowns: {},
-          });
-        }
-        inventoryMap.get(itemCode).factoryInventory += 1;
-        inventoryMap.get(itemCode).totalQuantity += 1;
-      }
-    });
+    const updateInventory = (name, type, godownName = null, qty = 1) => {
+      const productName = name || "Unknown";
 
-    // Process in-transit items
-    inTransitItems.forEach((item) => {
-      if (item.inputValue && item.inputValue.length >= 3) {
-        const itemCode = item.inputValue.substring(0, 3);
-        if (!inventoryMap.has(itemCode)) {
-          inventoryMap.set(itemCode, {
-            itemName: itemCode,
-            factoryInventory: 0,
-            inTransit: 0,
-            totalQuantity: 0,
-            godowns: {},
-          });
-        }
-        inventoryMap.get(itemCode).inTransit += 1;
-        inventoryMap.get(itemCode).totalQuantity += 1;
-      }
-    });
-
-    // Process godown inventories
-    godownInventories.forEach((item) => {
-      const itemCode =
-        item.itemName.length >= 3
-          ? item.itemName.substring(0, 3)
-          : item.itemName;
-      const godownName = item.godownId ? item.godownId.name : "Unknown";
-
-      if (!inventoryMap.has(itemCode)) {
-        inventoryMap.set(itemCode, {
-          itemName: itemCode,
+      if (!inventoryMap.has(productName)) {
+        inventoryMap.set(productName, {
+          itemName: productName,
           factoryInventory: 0,
           inTransit: 0,
           totalQuantity: 0,
@@ -1444,20 +2159,43 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
         });
       }
 
-      const inventoryItem = inventoryMap.get(itemCode);
-      if (!inventoryItem.godowns[godownName]) {
-        inventoryItem.godowns[godownName] = 0;
+      const entry = inventoryMap.get(productName);
+      entry.totalQuantity += qty;
+
+      if (type === 'factory') entry.factoryInventory += qty;
+      else if (type === 'transit') entry.inTransit += qty;
+      else if (type === 'godown' && godownName) {
+        if (!entry.godowns[godownName]) entry.godowns[godownName] = 0;
+        entry.godowns[godownName] += qty;
       }
-      inventoryItem.godowns[godownName] += item.quantity;
-      inventoryItem.totalQuantity += item.quantity;
+    };
+
+    // Process factory items (Select collection)
+    factoryItems.forEach((item) => {
+      const resolvedName = resolveProductName(item.inputValue);
+      updateInventory(resolvedName, 'factory');
     });
 
-    // Convert map to array and sort by item name
+    // Process in-transit items (Delevery1 collection)
+    inTransitItems.forEach((item) => {
+      // Prefer itemName if available, else resolve from inputValue
+      const name = item.itemName || resolveProductName(item.inputValue);
+      updateInventory(name, 'transit');
+    });
+
+    // Process godown inventories
+    godownInventories.forEach((item) => {
+      const godownName = item.godownId ? item.godownId.name : "Unknown";
+      // GodownInventory usually has the real itemName
+      updateInventory(item.itemName, 'godown', godownName, item.quantity);
+    });
+
+    // Convert map to array and sort
     const inventorySummary = Array.from(inventoryMap.values()).sort((a, b) =>
       a.itemName.localeCompare(b.itemName)
     );
 
-    // Get list of all godown names for consistent columns
+    // Get list of all godown names
     const godownNames = godowns.map((g) => g.name).sort();
 
     res.json({
@@ -1465,18 +2203,9 @@ app.get("/api/inventory/comprehensive-summary", async (req, res) => {
       godownNames: godownNames,
       summary: {
         totalItems: inventorySummary.length,
-        totalQuantity: inventorySummary.reduce(
-          (sum, item) => sum + item.totalQuantity,
-          0
-        ),
-        totalFactory: inventorySummary.reduce(
-          (sum, item) => sum + item.factoryInventory,
-          0
-        ),
-        totalInTransit: inventorySummary.reduce(
-          (sum, item) => sum + item.inTransit,
-          0
-        ),
+        totalQuantity: inventorySummary.reduce((sum, item) => sum + item.totalQuantity, 0),
+        totalFactory: inventorySummary.reduce((sum, item) => sum + item.factoryInventory, 0),
+        totalInTransit: inventorySummary.reduce((sum, item) => sum + item.inTransit, 0),
       },
     });
   } catch (error) {
@@ -1500,31 +2229,50 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
         .json({ message: "Invalid request: barcodeNumbers array required" });
     }
 
-    // Check in Barcode collection
+    logger.info("Checking barcode uniqueness for:", barcodeNumbers);
+
+    // Extract numeric parts from barcode strings (e.g., "SKU0021" -> 21)
+    const numericBarcodes = barcodeNumbers
+      .map((barcode) => {
+        const match = String(barcode).match(/\d+$/); // Get trailing numbers
+        return match ? parseInt(match[0]) : null;
+      })
+      .filter((num) => num !== null);
+
+    logger.info("Extracted numeric barcodes:", numericBarcodes);
+
+    // Check in Barcode collection (uses numeric batchNumbers)
     const existingBarcodes = await Barcode.find({
-      batchNumbers: { $in: barcodeNumbers.map(Number) },
+      batchNumbers: { $in: numericBarcodes },
     });
 
-    // Check in Select collection (factory inventory)
+    // Check in Select collection (factory inventory) - uses full string
     const existingInSelect = await Select.find({
       inputValue: { $in: barcodeNumbers },
     });
 
-    // Check in Delevery1 collection (in transit)
+    // Check in Delevery1 collection (in transit) - uses full string
     const existingInDelevery = await Delevery1.find({
       inputValue: { $in: barcodeNumbers },
     });
 
-    // Check in Despatch collection
+    // Check in Despatch collection - uses full string
     const existingInDespatch = await Despatch.find({
       inputValue: { $in: barcodeNumbers },
     });
 
     const duplicates = new Set();
 
+    // Add duplicates from Barcode collection (reconstruct full barcode string)
     existingBarcodes.forEach((barcode) => {
-      if (barcode.batchNumbers) {
-        barcode.batchNumbers.forEach((num) => duplicates.add(String(num)));
+      if (barcode.batchNumbers && barcode.skuc) {
+        barcode.batchNumbers.forEach((num) => {
+          const fullBarcode = `${barcode.skuc}${num}`;
+          // Check if this matches any of the requested barcodes
+          if (barcodeNumbers.includes(fullBarcode)) {
+            duplicates.add(fullBarcode);
+          }
+        });
       }
     });
 
@@ -1533,6 +2281,8 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
     existingInDespatch.forEach((item) => duplicates.add(item.inputValue));
 
     const duplicatesList = Array.from(duplicates);
+
+    logger.info("Duplicates found:", duplicatesList);
 
     res.json({
       isUnique: duplicatesList.length === 0,
@@ -1544,7 +2294,12 @@ app.post("/api/barcodes/check-uniqueness", async (req, res) => {
     });
   } catch (error) {
     logger.error("Error checking barcode uniqueness:", error);
-    res.status(500).json({ message: "Error checking barcode uniqueness" });
+    logger.error("Error details:", error.message);
+    logger.error("Stack trace:", error.stack);
+    res.status(500).json({
+      message: "Error checking barcode uniqueness",
+      error: error.message
+    });
   }
 });
 
@@ -1689,10 +2444,379 @@ app.get("/api/transits/summary", async (req, res) => {
   }
 });
 
+const purchaseRoutes = require('./routes/purchaseRoutes');
+const dataManagementRoutes = require('./routes/dataManagementRoutes');
+
 app.use("/api", excelRoutes);
 app.use("/api", billingRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/ledger", ledgerRoutes);
+app.use("/api/gstr2", gstr2Routes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api", dataManagementRoutes);
 
-// Serve static files from React build
+// ============================================
+// LEDGER API ENDPOINTS
+// ============================================
+
+// Helper function to create ledger entry
+async function createLedgerEntry(entryData) {
+  try {
+    const ledgerEntry = new Ledger({
+      ...entryData,
+      timestamp: new Date()
+    });
+    await ledgerEntry.save();
+    logger.info('Ledger entry created:', { action: entryData.action, entityId: entryData.entityId });
+    return ledgerEntry;
+  } catch (error) {
+    logger.error('Error creating ledger entry:', error);
+    throw error;
+  }
+}
+
+// API: Create ledger entry
+app.post('/api/ledger', async (req, res) => {
+  try {
+    const ledgerEntry = await createLedgerEntry(req.body);
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get customer history
+// API: Get invoice history
+app.get('/api/ledger/invoice/:invoiceId', async (req, res) => {
+  try {
+    const entries = await Ledger.find({ invoiceId: req.params.invoiceId }).sort({ timestamp: -1 }).lean();
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Record payment
+app.post('/api/ledger/payment', async (req, res) => {
+  try {
+    const { invoiceId, paymentAmount, paymentMethod, isFullPayment, notes, customerId, customerName } = req.body;
+    const previousPayments = await Ledger.find({ invoiceId, action: { $in: ['PAYMENT_RECEIVED', 'PARTIAL_PAYMENT'] } }).sort({ timestamp: -1 });
+    const previousPaid = previousPayments.reduce((sum, entry) => sum + (entry.metadata.paymentAmount || 0), 0);
+    const ledgerEntry = await createLedgerEntry({
+      action: isFullPayment ? 'PAYMENT_RECEIVED' : 'PARTIAL_PAYMENT',
+      entityType: 'PAYMENT',
+      entityId: `payment_${Date.now()}`,
+      invoiceId,
+      changedValues: { before: { paidAmount: previousPaid }, after: { paidAmount: previousPaid + paymentAmount } },
+      metadata: { customerId, customerName, paymentAmount, paymentMethod, remainingBalance: req.body.remainingBalance || 0, notes }
+    });
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger/payment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// LEDGER API ENDPOINTS
+// ============================================
+
+// Helper function to create ledger entry
+async function createLedgerEntry(entryData) {
+  try {
+    const ledgerEntry = new Ledger({
+      ...entryData,
+      timestamp: new Date()
+    });
+    await ledgerEntry.save();
+    logger.info('Ledger entry created:', { action: entryData.action, entityId: entryData.entityId });
+    return ledgerEntry;
+  } catch (error) {
+    logger.error('Error creating ledger entry:', error);
+    throw error;
+  }
+}
+
+// API: Create ledger entry
+app.post('/api/ledger', async (req, res) => {
+  try {
+    const ledgerEntry = await createLedgerEntry(req.body);
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get customer history (all invoices + actions)
+app.get('/api/ledger/customer/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const entries = await Ledger.find({ 'metadata.customerId': customerId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    const paymentEntries = entries.filter(e =>
+      e.action === 'PAYMENT_RECEIVED' || e.action === 'PARTIAL_PAYMENT'
+    );
+
+    const totalPaid = paymentEntries.reduce((sum, entry) =>
+      sum + (entry.metadata.paymentAmount || 0), 0
+    );
+
+    const invoiceEntries = entries.filter(e => e.action === 'INVOICE_CREATED');
+    const totalInvoices = invoiceEntries.length;
+
+    const customerName = entries[0]?.metadata?.customerName || 'Unknown';
+
+    res.json({
+      success: true,
+      data: {
+        customer: { id: customerId, name: customerName },
+        totalInvoices,
+        totalPaid,
+        history: entries
+      }
+    });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/customer:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Get invoice history
+app.get('/api/ledger/invoice/:invoiceId', async (req, res) => {
+  try {
+    const { invoiceId } = req.params;
+
+    const entries = await Ledger.find({ invoiceId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    logger.error('Error in GET /api/ledger/invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Record payment
+app.post('/api/ledger/payment', async (req, res) => {
+  try {
+    const { invoiceId, paymentAmount, paymentMethod, isFullPayment, notes, customerId, customerName } = req.body;
+
+    const previousPayments = await Ledger.find({
+      invoiceId,
+      action: { $in: ['PAYMENT_RECEIVED', 'PARTIAL_PAYMENT'] }
+    }).sort({ timestamp: -1 });
+
+    const previousPaid = previousPayments.reduce((sum, entry) =>
+      sum + (entry.metadata.paymentAmount || 0), 0
+    );
+
+    const action = isFullPayment ? 'PAYMENT_RECEIVED' : 'PARTIAL_PAYMENT';
+
+    const ledgerEntry = await createLedgerEntry({
+      action,
+      entityType: 'PAYMENT',
+      entityId: `payment_${Date.now()}`,
+      invoiceId,
+      changedValues: {
+        before: { paidAmount: previousPaid },
+        after: { paidAmount: previousPaid + paymentAmount }
+      },
+      metadata: {
+        customerId,
+        customerName,
+        paymentAmount,
+        paymentMethod,
+        remainingBalance: req.body.remainingBalance || 0,
+        notes
+      }
+    });
+
+    res.json({ success: true, data: ledgerEntry });
+  } catch (error) {
+    logger.error('Error in POST /api/ledger/payment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+// ============================================
+// CLEAR TEST DATA API (For Development/Testing)
+// ============================================
+app.delete('/api/clear-all-data', async (req, res) => {
+  try {
+    const { confirmPassword } = req.body;
+
+    // Safety check - require password confirmation
+    if (confirmPassword !== 'DELETE_ALL_DATA') {
+      return res.status(403).json({
+        message: 'Invalid confirmation password. Please provide confirmPassword: "DELETE_ALL_DATA"'
+      });
+    }
+
+    logger.warn('⚠️ CLEARING ALL TEST DATA - This action cannot be undone!');
+
+    const results = {
+      deleted: {},
+      errors: []
+    };
+
+    // Get all collection models
+    try {
+      // Define models if not already defined
+      let Despatch, Delevery1;
+
+      try {
+        Despatch = mongoose.model('Despatch');
+      } catch (e) {
+        const despatchSchema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now }
+        });
+        Despatch = mongoose.model('Despatch', despatchSchema, 'despatch');
+      }
+
+      try {
+        Delevery1 = mongoose.model('Delevery1');
+      } catch (e) {
+        const delevery1Schema = new mongoose.Schema({
+          selectedOption: String,
+          inputValue: String,
+          godownName: String,
+          addedAt: { type: Date, default: Date.now }
+        });
+        Delevery1 = mongoose.model('Delevery1', delevery1Schema, 'delevery1');
+      }
+
+      // Clear all collections
+      const collections = [
+        { name: 'Barcodes', model: Barcode },
+        { name: 'Despatch', model: Despatch },
+        { name: 'Delevery1', model: Delevery1 },
+        { name: 'Select', model: Select },
+        { name: 'Transit', model: Transit },
+        { name: 'Sales', model: Sale }
+      ];
+
+      for (const collection of collections) {
+        try {
+          const deleteResult = await collection.model.deleteMany({});
+          results.deleted[collection.name] = deleteResult.deletedCount;
+          logger.info(`Deleted ${deleteResult.deletedCount} documents from ${collection.name}`);
+        } catch (error) {
+          results.errors.push(`Error deleting ${collection.name}: ${error.message}`);
+          logger.error(`Error deleting ${collection.name}:`, error);
+        }
+      }
+
+      logger.info('✅ All test data cleared successfully', results.deleted);
+
+      res.json({
+        success: true,
+        message: 'All test data cleared successfully',
+        deleted: results.deleted,
+        errors: results.errors.length > 0 ? results.errors : undefined
+      });
+
+    } catch (error) {
+      logger.error('Error clearing data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error clearing data',
+        error: error.message
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error in clear-all-data endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Clear specific collection
+app.delete('/api/clear-collection/:collectionName', async (req, res) => {
+  try {
+    const { collectionName } = req.params;
+    const { confirmPassword } = req.body;
+
+    if (confirmPassword !== 'DELETE_COLLECTION') {
+      return res.status(403).json({
+        message: 'Invalid confirmation password. Please provide confirmPassword: "DELETE_COLLECTION"'
+      });
+    }
+
+    const collectionMap = {
+      'barcodes': Barcode,
+      'despatch': mongoose.model('Despatch'),
+      'delevery1': mongoose.model('Delevery1'),
+      'select': Select,
+      'transit': Transit,
+      'sales': Sale
+    };
+
+    const model = collectionMap[collectionName.toLowerCase()];
+
+    if (!model) {
+      return res.status(400).json({
+        message: `Invalid collection name. Available: ${Object.keys(collectionMap).join(', ')}`
+      });
+    }
+
+    const deleteResult = await model.deleteMany({});
+
+    logger.info(`Deleted ${deleteResult.deletedCount} documents from ${collectionName}`);
+
+    res.json({
+      success: true,
+      message: `Cleared ${collectionName} collection`,
+      deletedCount: deleteResult.deletedCount
+    });
+
+  } catch (error) {
+    logger.error('Error clearing collection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error clearing collection',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// MOUNT BILLING ROUTES
+// ============================================
+app.use('/api/bills', billingRoutes);
+app.use('/api/stock-check', stockCheckRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/advanced-vouchers', advancedVoucherRoutes);
+app.use('/api/bank-reconciliation', bankReconciliationRoutes);
+app.use('/api/cheques', chequeRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/gst', gstRoutes);
+app.use('/api/tds', tdsRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/ledger', ledgerRoutes);
+app.use('/api/gstr2', gstr2Routes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/orders', orderRoutes);
+
+// ============================================
+// SERVE STATIC FILES (Must be AFTER all API routes)
+// ============================================
 const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
@@ -1701,7 +2825,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
 
-// Start Server
+// ============================================
+// START SERVER
+// ============================================
 const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
 const serverUrl =
   process.env.NODE_ENV === "production"

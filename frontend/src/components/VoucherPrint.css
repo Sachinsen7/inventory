@@ -1,0 +1,411 @@
+.voucher-print-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.print-controls {
+    background: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.print-settings {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.setting-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.setting-group select {
+    padding: 5px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.print-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.voucher-print-content {
+    flex: 1;
+    background: white;
+    margin: 20px;
+    padding: 40px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Paper Sizes */
+.voucher-print-content.a4 {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 20px auto;
+}
+
+.voucher-print-content.a5 {
+    width: 148mm;
+    min-height: 210mm;
+    margin: 20px auto;
+}
+
+.voucher-print-content.letter {
+    width: 8.5in;
+    min-height: 11in;
+    margin: 20px auto;
+}
+
+/* Voucher Header */
+.voucher-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #2c3e50;
+}
+
+.company-info h1 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.company-details {
+    margin-bottom: 20px;
+}
+
+.company-details p {
+    margin: 5px 0;
+    color: #495057;
+    font-size: 14px;
+}
+
+.voucher-title h2 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 24px;
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+/* Voucher Info */
+.voucher-info {
+    margin-bottom: 30px;
+}
+
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.info-table td {
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    font-size: 14px;
+}
+
+.info-table td:first-child,
+.info-table td:nth-child(3) {
+    background: #f8f9fa;
+    font-weight: 600;
+    width: 15%;
+}
+
+.info-table td:nth-child(2),
+.info-table td:nth-child(4) {
+    width: 35%;
+}
+
+/* Voucher Entries */
+.voucher-entries {
+    margin-bottom: 30px;
+}
+
+.entries-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 2px solid #2c3e50;
+}
+
+.entries-table th {
+    background: #2c3e50;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.entries-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 14px;
+    vertical-align: top;
+}
+
+.entries-table tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.account-name {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.narration {
+    font-style: italic;
+    color: #6c757d;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.amount {
+    text-align: right;
+    font-weight: 500;
+    font-family: 'Courier New', monospace;
+}
+
+.total-row {
+    background: #e9ecef !important;
+    border-top: 2px solid #2c3e50;
+}
+
+.total-row td {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+/* Voucher Narration */
+.voucher-narration {
+    margin-bottom: 30px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-left: 4px solid #007bff;
+}
+
+.voucher-narration p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Signatures */
+.signatures {
+    margin-top: 50px;
+    margin-bottom: 30px;
+}
+
+.signature-section {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.signature-box {
+    flex: 1;
+    text-align: center;
+}
+
+.signature-line {
+    height: 60px;
+    border-bottom: 1px solid #2c3e50;
+    margin-bottom: 10px;
+}
+
+.signature-box p {
+    margin: 5px 0;
+    font-size: 12px;
+    color: #495057;
+}
+
+.signature-box p:first-of-type {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Voucher Footer */
+.voucher-footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #dee2e6;
+    text-align: center;
+}
+
+.footer-info p {
+    margin: 5px 0;
+    font-size: 11px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Buttons */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #545b62;
+}
+
+/* Print Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    .voucher-print-container {
+        position: static;
+        background: none;
+    }
+
+    .voucher-print-content {
+        margin: 0;
+        padding: 20mm;
+        box-shadow: none;
+        width: 100%;
+        min-height: auto;
+    }
+
+    .voucher-print-content.a4 {
+        width: auto;
+        margin: 0;
+    }
+
+    .voucher-print-content.a5 {
+        width: auto;
+        margin: 0;
+    }
+
+    .voucher-print-content.letter {
+        width: auto;
+        margin: 0;
+    }
+
+    /* Ensure proper page breaks */
+    .voucher-header {
+        page-break-inside: avoid;
+    }
+
+    .entries-table {
+        page-break-inside: avoid;
+    }
+
+    .signatures {
+        page-break-inside: avoid;
+    }
+
+    /* Print-specific font sizes */
+    .company-info h1 {
+        font-size: 24px;
+    }
+
+    .voucher-title h2 {
+        font-size: 20px;
+    }
+
+    .entries-table th,
+    .entries-table td {
+        font-size: 12px;
+    }
+
+    .info-table td {
+        font-size: 12px;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .print-controls {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .print-settings {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .voucher-print-content {
+        margin: 10px;
+        padding: 20px;
+    }
+
+    .signature-section {
+        flex-direction: column;
+        gap: 30px;
+    }
+
+    .info-table {
+        font-size: 12px;
+    }
+
+    .entries-table {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .voucher-print-content {
+        padding: 15px;
+    }
+
+    .company-info h1 {
+        font-size: 20px;
+    }
+
+    .voucher-title h2 {
+        font-size: 18px;
+    }
+
+    .entries-table th,
+    .entries-table td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+}

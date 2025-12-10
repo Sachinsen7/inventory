@@ -5,9 +5,19 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
 import { showToast } from '../utils/toastNotifications';
+import { useAuth } from '../context/AuthContext';
 import './Billing.css'; // Import the new stylesheet
+import CustomerHistory from '../components/CustomerHistory';
+import LedgerManagement from '../components/LedgerManagement';
+import PaymentTracker from '../components/PaymentTracker';
+
 
 function Billing() {
+  const { hasPermission } = useAuth();
+  const canGiveDiscount = hasPermission('canGiveDiscount');
+  const canViewProfit = hasPermission('canViewProfit');
+  const canViewPricing = hasPermission('canViewPricing');
+
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [customerItems, setCustomerItems] = useState([]);
@@ -31,7 +41,7 @@ function Billing() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [dateRangeError, setDateRangeError] = useState({ startDate: '', endDate: '' });
-  
+
   // GST-related states
   const [companyState, setCompanyState] = useState(''); // Your business state
   const [subtotal, setSubtotal] = useState(0);
@@ -39,12 +49,23 @@ function Billing() {
   const [cgst, setCgst] = useState(0);
   const [igst, setIgst] = useState(0);
   const [grandTotal, setGrandTotal] = useState(0);
-  
+
   // Stock dialog state
   const [showStockDialog, setShowStockDialog] = useState(false);
   const [stockDialogItems, setStockDialogItems] = useState([]);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
-  
+
+  // Ledger states
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [showLedgerManagement, setShowLedgerManagement] = useState(false);
+  const [showPaymentTracker, setShowPaymentTracker] = useState(false);
+
+  // Payment status state
+  const [paymentStatus, setPaymentStatus] = useState('Pending');
+
+  // Credit limit state
+  const [creditLimitInfo, setCreditLimitInfo] = useState(null);
+
   const navigate = useNavigate();
   const billRef = useRef();
 
@@ -98,7 +119,7 @@ function Billing() {
     const dateValue = e.target.value;
     setStartDate(dateValue);
     validateStartDate(dateValue);
-    
+
     // Re-validate end date if it exists
     if (endDate) {
       validateEndDate(endDate);
@@ -169,17 +190,17 @@ function Billing() {
   useEffect(() => {
     const itemsTotal = selectedItems.reduce((sum, item) => sum + item.total, 0);
     setSubtotal(itemsTotal);
-    
+
     // Get customer state to determine GST type
     const selectedCustomerData = customers.find(c => c._id === selectedCustomer);
     const customerState = selectedCustomerData?.state || '';
-    
+
     // Calculate GST based on state match
     // Assuming your company state - you can set this from settings or hardcode your state
     const businessState = companyState || 'Maharashtra'; // Default to Maharashtra, change as needed
-    
+
     const isWithinState = customerState.toLowerCase() === businessState.toLowerCase();
-    
+
     if (isWithinState) {
       // Within state: SGST 9% + CGST 9%
       const sgstAmount = itemsTotal * 0.09;
@@ -208,11 +229,25 @@ function Billing() {
     setSelectedItems([]);
     setShowInventoryStatus(false);
     setShowQRCode(false);
+    setSelectedGodown('');
+    setSelectedGodownData(null);
+    setCreditLimitInfo(null);
 
-    // If godown is also selected, fetch and match items
-    if (customerId && selectedGodown) {
-      await fetchAndMatchItems(customerId, selectedGodown);
+    // Fetch godowns sorted by location matching
+    if (customerId) {
+      try {
+        const response = await axios.get(`${backendUrl}/api/bills/godowns/sorted/${customerId}`);
+        setGodowns(response.data);
+
+        // Fetch credit limit info
+        const creditResponse = await axios.get(`${backendUrl}/api/analytics/customers/${customerId}/credit-check`);
+        setCreditLimitInfo(creditResponse.data);
+      } catch (error) {
+        console.error('Error fetching godowns:', error);
+        setGodowns({ matchingGodowns: [], nonMatchingGodowns: [] });
+      }
     } else {
+      setGodowns({ matchingGodowns: [], nonMatchingGodowns: [] });
       setAvailableItems([]);
     }
   };
@@ -231,72 +266,14 @@ function Billing() {
     setSelectedItems(updatedItems);
   };
 
-  // Function to fetch and match items based on 3-digit prefix
+  // REMOVED: Function to fetch and match items based on 3-digit prefix
+  // This validation was too restrictive - users should be able to add any item
+  // without needing to match exact prefixes in godown inventory
+  /*
   const fetchAndMatchItems = async (customerId, godownId) => {
-    try {
-      console.log('Fetching and matching items for customer:', customerId, 'godown:', godownId);
-
-      // Get billing items for customer
-      const billingResponse = await axios.get(`${backendUrl}/api/bills/customer/${customerId}/items`);
-      const billingItems = billingResponse.data;
-      console.log('Billing items:', billingItems);
-
-      // Get delevery1 items for godown
-      const delevery1Response = await axios.get(`${backendUrl}/api/delevery1`);
-      const delevery1Items = delevery1Response.data;
-      console.log('Delevery1 items:', delevery1Items);
-
-      // Get godown details
-      const godownResponse = await axios.get(`${backendUrl}/api/godowns/${godownId}`);
-      const godownName = godownResponse.data.name;
-      console.log('Godown name:', godownName);
-
-      // Filter delevery1 items for this godown
-      const godownDelevery1Items = delevery1Items.filter(item => item.godownName === godownName);
-      console.log('Godown delevery1 items:', godownDelevery1Items);
-
-      // Match billing items with delevery1 items based on 3-digit prefix
-      const matchedItems = billingItems.map(billingItem => {
-        const billingItemName = billingItem.name || '';
-        const prefix = billingItemName.substring(0, 3); // Get first 3 digits
-
-        console.log(`Matching billing item: ${billingItemName}, prefix: ${prefix}`);
-
-        // Find all delevery1 items that start with this prefix
-        const matchingDelevery1Items = godownDelevery1Items.filter(deleveryItem => {
-          const inputValue = deleveryItem.inputValue || '';
-          return inputValue.startsWith(prefix);
-        });
-
-        console.log(`Found ${matchingDelevery1Items.length} matching items for prefix ${prefix}`);
-
-        return {
-          ...billingItem,
-          itemName: billingItem.name,
-          availableQuantity: matchingDelevery1Items.length,
-          matchingItems: matchingDelevery1Items,
-          prefix: prefix
-        };
-      });
-
-      console.log('Matched items:', matchedItems);
-      setAvailableItems(matchedItems);
-
-    } catch (error) {
-      console.error('Error fetching and matching items:', error);
-      setAvailableItems([]);
-      const errorMsg = error.response?.data?.message || error.message || 'Error fetching and matching items';
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        showToast.error('Connection timeout. Please check your internet connection.');
-      } else if (error.response) {
-        showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
-      } else if (error.request) {
-        showToast.error('Unable to connect to the server. Please check if the backend is running.');
-      } else {
-        showToast.error(errorMsg);
-      }
-    }
+    // Function removed - validation not needed
   };
+  */
 
   const handleGodownChange = async (e) => {
     const godownId = e.target.value;
@@ -310,15 +287,13 @@ function Billing() {
         const items = response.data.items || [];
         setGodownItems(items);
         setSelectedGodownData(response.data.godown);
-        
+
         // Show stock dialog with items
         setStockDialogItems(items);
         setShowStockDialog(true);
 
-        // If customer is also selected, fetch and match items
-        if (selectedCustomer) {
-          await fetchAndMatchItems(selectedCustomer, godownId);
-        }
+        // No need to match items - users can add any item they want
+        // Removed fetchAndMatchItems call - validation is too restrictive
       } catch (error) {
         console.log('Error fetching godown items:', error);
         setGodownItems([]);
@@ -345,17 +320,17 @@ function Billing() {
   const addItemToBill = (item) => {
     const existingItem = selectedItems.find(selected => selected.itemId === item._id);
     const selectedPrice = priceType === 'masterPrice' ? item.masterPrice : item.price;
-    
+
     if (existingItem) {
       // If item already exists, increase quantity
-      const updatedItems = selectedItems.map(selected => 
-        selected.itemId === item._id 
-          ? { 
-              ...selected, 
-              quantity: selected.quantity + 1, 
-              selectedPrice: selectedPrice,
-              total: (selected.quantity + 1) * selectedPrice 
-            }
+      const updatedItems = selectedItems.map(selected =>
+        selected.itemId === item._id
+          ? {
+            ...selected,
+            quantity: selected.quantity + 1,
+            selectedPrice: selectedPrice,
+            total: (selected.quantity + 1) * selectedPrice
+          }
           : selected
       );
       setSelectedItems(updatedItems);
@@ -372,15 +347,29 @@ function Billing() {
       };
       setSelectedItems([...selectedItems, newItem]);
     }
+
+    // Automatically check inventory after adding item
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100); // Small delay to ensure state is updated
+    }
   };
 
   const increaseQuantity = (itemId) => {
-    const updatedItems = selectedItems.map(item => 
-      item.itemId === itemId 
+    const updatedItems = selectedItems.map(item =>
+      item.itemId === itemId
         ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.selectedPrice }
         : item
     );
     setSelectedItems(updatedItems);
+
+    // Automatically update inventory status
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100);
+    }
   };
 
   const decreaseQuantity = (itemId) => {
@@ -392,6 +381,13 @@ function Billing() {
       return item;
     }).filter(item => item.quantity > 0); // Remove items with quantity 0
     setSelectedItems(updatedItems);
+
+    // Automatically update inventory status
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100);
+    }
   };
 
   const removeItem = (itemId) => {
@@ -454,10 +450,37 @@ function Billing() {
     console.log('Calculated total:', calculatedTotal);
     console.log('Current totalAmount state:', totalAmount);
 
+    // Generate invoice number
+    const invoiceNumber = `INV/${new Date().getFullYear().toString().slice(-2)}-${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0')}`;
+
+    // Convert amount to words
+    const numberToWords = (num) => {
+      const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+      const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+      const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+      if (num === 0) return 'Zero';
+
+      const convertLessThanThousand = (n) => {
+        if (n === 0) return '';
+        if (n < 10) return ones[n];
+        if (n < 20) return teens[n - 10];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+        return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convertLessThanThousand(n % 100) : '');
+      };
+
+      if (num < 1000) return convertLessThanThousand(num);
+      if (num < 100000) return convertLessThanThousand(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 !== 0 ? ' ' + convertLessThanThousand(num % 1000) : '');
+      if (num < 10000000) return convertLessThanThousand(Math.floor(num / 100000)) + ' Lakh' + (num % 100000 !== 0 ? ' ' + numberToWords(num % 100000) : '');
+      return convertLessThanThousand(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 !== 0 ? ' ' + numberToWords(num % 10000000) : '');
+    };
+
+    const amountInWords = numberToWords(Math.floor(grandTotal)) + ' Rupees Only';
+
     try {
       // Create a temporary div for PDF generation
       const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '20px';
+      pdfContent.style.padding = '30px';
       pdfContent.style.fontFamily = 'Arial, sans-serif';
       pdfContent.style.backgroundColor = 'white';
       pdfContent.style.color = 'black';
@@ -466,112 +489,188 @@ function Billing() {
       pdfContent.style.position = 'absolute';
       pdfContent.style.left = '-9999px';
       pdfContent.style.top = '0';
-      
+
       pdfContent.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #2c3e50; margin-bottom: 10px;">INVOICE</h1>
-          <div style="border-bottom: 2px solid #3498db; width: 100px; margin: 0 auto;"></div>
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 25px; border-bottom: 3px solid #2c3e50; padding-bottom: 15px;">
+          <h1 style="color: #2c3e50; margin: 0 0 5px 0; font-size: 32px; letter-spacing: 2px;">TAX INVOICE</h1>
+          <p style="margin: 0; color: #7f8c8d; font-size: 12px;">GST Compliant Invoice</p>
         </div>
-        
-        <div style="margin-bottom: 30px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-            <div>
-              <h3 style="color: #2c3e50; margin-bottom: 10px;">Bill To:</h3>
-              <p style="margin: 5px 0;"><strong>Name:</strong> ${selectedCustomerData.name}</p>
-              <p style="margin: 5px 0;"><strong>GST No:</strong> ${selectedCustomerData.gstNo || 'N/A'}</p>
-              <p style="margin: 5px 0;"><strong>Address:</strong> ${selectedCustomerData.address}</p>
-              <p style="margin: 5px 0;"><strong>City:</strong> ${selectedCustomerData.city}</p>
-              <p style="margin: 5px 0;"><strong>State:</strong> ${selectedCustomerData.state}</p>
-              <p style="margin: 5px 0;"><strong>Phone:</strong> ${selectedCustomerData.phoneNumber || 'N/A'}</p>
+
+        <!-- Company & Invoice Details -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <div style="flex: 1;">
+            <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Seller Details</h3>
+            <p style="margin: 3px 0; font-weight: bold; font-size: 16px;">Your Company Name</p>
+            <p style="margin: 3px 0; font-size: 13px;">Your Company Address</p>
+            <p style="margin: 3px 0; font-size: 13px;">City, State - 400001</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>GSTIN:</strong> 27XXXXXXXXXXXXX</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Phone:</strong> +91 XXXXXXXXXX</p>
+          </div>
+          <div style="flex: 1; text-align: right;">
+            <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Invoice Details</h3>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Invoice No:</strong> ${invoiceNumber}</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Invoice Date:</strong> ${new Date().toLocaleDateString('en-IN')}</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Place of Supply:</strong> ${selectedCustomerData.state}</p>
+            ${selectedGodownData ? `<p style="margin: 3px 0; font-size: 13px;"><strong>Dispatch From:</strong> ${selectedGodownData.name}</p>` : ''}
+          </div>
+        </div>
+
+        <!-- Buyer Details -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Buyer Details (Bill To)</h3>
+          <div style="display: flex; justify-content: space-between;">
+            <div style="flex: 1;">
+              <p style="margin: 3px 0; font-weight: bold; font-size: 16px;">${selectedCustomerData.name}</p>
+              <p style="margin: 3px 0; font-size: 13px;">${selectedCustomerData.address}</p>
+              <p style="margin: 3px 0; font-size: 13px;">${selectedCustomerData.city}, ${selectedCustomerData.state}</p>
             </div>
-            <div style="text-align: right;">
-              <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-              <p style="margin: 5px 0;"><strong>Price Type:</strong> ${priceType === 'masterPrice' ? 'Special Price' : 'Regular Price'}</p>
-              ${selectedGodownData ? `<p style="margin: 5px 0;"><strong>Godown:</strong> ${selectedGodownData.name}</p>` : ''}
-              ${startDate || endDate ? `<p style="margin: 5px 0;"><strong>Date Range:</strong> ${startDate ? new Date(startDate).toLocaleDateString() : 'N/A'} - ${endDate ? new Date(endDate).toLocaleDateString() : 'N/A'}</p>` : ''}
+            <div style="flex: 1; text-align: right;">
+              <p style="margin: 3px 0; font-size: 13px;"><strong>GSTIN:</strong> ${selectedCustomerData.gstNo || 'Unregistered'}</p>
+              <p style="margin: 3px 0; font-size: 13px;"><strong>Phone:</strong> ${selectedCustomerData.phoneNumber || 'N/A'}</p>
+              <p style="margin: 3px 0; font-size: 13px;"><strong>State Code:</strong> ${selectedCustomerData.state === 'Maharashtra' ? '27' : 'XX'}</p>
             </div>
           </div>
         </div>
         
-        <div style="margin-bottom: 30px;">
-          <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+        <!-- Items Table -->
+        <div style="margin-bottom: 25px;">
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #2c3e50;">
             <thead>
-              <tr style="background-color: #f8f9fa;">
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Item Name</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: center;">Price (₹)</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: center;">Quantity</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">Total (₹)</th>
+              <tr style="background-color: #2c3e50; color: white;">
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Sr.</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: left; font-size: 12px;">Item Description</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">HSN</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Qty</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">Unit</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Rate</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Taxable Value</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: center; font-size: 12px;">GST</th>
+                <th style="border: 1px solid #2c3e50; padding: 10px; text-align: right; font-size: 12px;">Total</th>
               </tr>
             </thead>
             <tbody>
-              ${selectedItems.map(item => `
-                <tr>
-                  <td style="border: 1px solid #ddd; padding: 12px;">${item.itemName}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">₹${item.selectedPrice}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${item.quantity}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">₹${item.total}</td>
+              ${selectedItems.map((item, index) => `
+                <tr style="background-color: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'};">
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">${index + 1}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; font-size: 12px;">${item.itemName}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">0000</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">${item.quantity}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">PCS</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px;">₹${item.selectedPrice.toFixed(2)}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px;">₹${item.total.toFixed(2)}</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 12px;">18%</td>
+                  <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 12px; font-weight: bold;">₹${(item.total * 1.18).toFixed(2)}</td>
                 </tr>
               `).join('')}
+              <!-- Totals Row -->
               <tr style="background-color: #f8f9fa;">
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  <strong>Subtotal:</strong>
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  <strong>₹${subtotal.toFixed(2)}</strong>
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;"><strong>Taxable Amount:</strong></td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px; font-weight: bold;">₹${subtotal.toFixed(2)}</td>
               </tr>
               ${sgst > 0 ? `
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  SGST (9%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${sgst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">CGST @ 9%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${cgst.toFixed(2)}</td>
               </tr>
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  CGST (9%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${cgst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">SGST @ 9%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${sgst.toFixed(2)}</td>
               </tr>
               ` : ''}
               ${igst > 0 ? `
               <tr>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  IGST (18%):
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">
-                  ₹${igst.toFixed(2)}
-                </td>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">IGST @ 18%:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹${igst.toFixed(2)}</td>
               </tr>
               ` : ''}
-              <tr style="background-color: #3498db; color: white; font-weight: bold;">
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right;" colspan="3">
-                  <strong>GRAND TOTAL:</strong>
-                </td>
-                <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-size: 18px;">
-                  <strong>₹${grandTotal.toFixed(2)}</strong>
-                </td>
+              <tr>
+                <td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">Round Off:</td>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 10px; text-align: right; font-size: 13px;">₹0.00</td>
+              </tr>
+              <tr style="background-color: #2c3e50; color: white;">
+                <td colspan="6" style="border: 1px solid #2c3e50; padding: 12px; text-align: right; font-size: 16px; font-weight: bold;">INVOICE TOTAL:</td>
+                <td colspan="3" style="border: 1px solid #2c3e50; padding: 12px; text-align: right; font-size: 18px; font-weight: bold;">₹${grandTotal.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <div style="text-align: right; margin-top: 20px; margin-bottom: 30px;">
-          <h2 style="color: #2c3e50; margin: 0; font-size: 24px;">Grand Total: ₹${grandTotal.toFixed(2)}</h2>
-          <p style="color: #7f8c8d; font-size: 14px; margin-top: 10px;">
-            ${sgst > 0 ? '(Includes SGST 9% + CGST 9%)' : igst > 0 ? '(Includes IGST 18%)' : ''}
-          </p>
+        <!-- Amount in Words -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #f8f9fa;">
+          <p style="margin: 0; font-size: 13px;"><strong>Amount in Words:</strong></p>
+          <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: bold; color: #2c3e50;">${amountInWords}</p>
         </div>
-        
-        <div style="margin-top: 50px; text-align: center; color: #7f8c8d; font-size: 12px;">
-          <p>Thank you for your business!</p>
+
+        <!-- Tax Summary -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px; background-color: #fff3cd;">
+          <h4 style="margin: 0 0 10px 0; color: #856404; font-size: 14px;">Tax Summary</h4>
+          <table style="width: 100%; font-size: 12px;">
+            <tr>
+              <td style="padding: 3px;"><strong>Tax Type:</strong></td>
+              <td style="padding: 3px;">${sgst > 0 ? 'Intra-State (CGST + SGST)' : 'Inter-State (IGST)'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 3px;"><strong>Taxable Amount:</strong></td>
+              <td style="padding: 3px;">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            ${sgst > 0 ? `
+            <tr>
+              <td style="padding: 3px;"><strong>CGST (9%):</strong></td>
+              <td style="padding: 3px;">₹${cgst.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 3px;"><strong>SGST (9%):</strong></td>
+              <td style="padding: 3px;">₹${sgst.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+            ${igst > 0 ? `
+            <tr>
+              <td style="padding: 3px;"><strong>IGST (18%):</strong></td>
+              <td style="padding: 3px;">₹${igst.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+            <tr style="border-top: 2px solid #856404;">
+              <td style="padding: 3px;"><strong>Total Tax:</strong></td>
+              <td style="padding: 3px;"><strong>₹${(cgst + sgst + igst).toFixed(2)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Terms & Conditions -->
+        <div style="margin-bottom: 25px; border: 2px solid #e0e0e0; padding: 15px;">
+          <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Terms & Conditions:</h4>
+          <ol style="margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.6;">
+            <li>Goods once sold will not be taken back or exchanged</li>
+            <li>Interest @ 18% p.a. will be charged on delayed payment</li>
+            <li>Subject to ${selectedCustomerData.city} Jurisdiction</li>
+            <li>Our responsibility ceases as soon as goods leave our premises</li>
+            <li>Delivery subject to availability of stock</li>
+          </ol>
+        </div>
+
+        <!-- Bank Details & Signature -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+          <div style="flex: 1; border: 2px solid #e0e0e0; padding: 15px; margin-right: 10px;">
+            <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Bank Details:</h4>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>Bank Name:</strong> Your Bank Name</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>A/C No:</strong> XXXXXXXXXXXX</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>IFSC Code:</strong> XXXXXX</p>
+            <p style="margin: 3px 0; font-size: 12px;"><strong>Branch:</strong> Your Branch</p>
+          </div>
+          <div style="flex: 1; border: 2px solid #e0e0e0; padding: 15px; text-align: right;">
+            <h4 style="margin: 0 0 40px 0; color: #2c3e50; font-size: 14px;">For Your Company Name</h4>
+            <p style="margin: 40px 0 0 0; font-size: 12px; border-top: 1px solid #000; padding-top: 5px; display: inline-block;">Authorized Signatory</p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; padding: 15px; background-color: #2c3e50; color: white; border-radius: 5px;">
+          <p style="margin: 0; font-size: 11px;">This is a computer-generated invoice and does not require a physical signature</p>
+          <p style="margin: 5px 0 0 0; font-size: 11px;">For any queries, please contact: info@yourcompany.com | +91 XXXXXXXXXX</p>
         </div>
       `;
-      
+
       document.body.appendChild(pdfContent);
 
       // Wait a moment for the content to render
@@ -589,28 +688,28 @@ function Billing() {
       });
 
       document.body.removeChild(pdfContent);
-      
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 295;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
-      
+
       let position = 0;
-      
+
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
-      
+
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       pdf.save(`bill_${selectedCustomerData.name}_${new Date().toISOString().split('T')[0]}.pdf`);
-      
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       showToast.error('Error generating PDF. Please try again.');
@@ -657,11 +756,11 @@ function Billing() {
 
     try {
       setIsGeneratingQR(true);
-    // Generate UPI payment link
-    const paymentLink = `upi://pay?pa=${upiId}&pn=Payment&am=${totalAmount}&cu=INR&tn=Bill Payment`;
-    
-    setQrCodeData(paymentLink);
-      
+      // Generate UPI payment link
+      const paymentLink = `upi://pay?pa=${upiId}&pn=Payment&am=${totalAmount}&cu=INR&tn=Bill Payment`;
+
+      setQrCodeData(paymentLink);
+
       // Generate QR code image
       const qrCodeDataURL = await QRCode.toDataURL(paymentLink, {
         width: 200,
@@ -671,9 +770,9 @@ function Billing() {
           light: '#FFFFFF'
         }
       });
-      
+
       setQrCodeImage(qrCodeDataURL);
-    setShowQRCode(true);
+      setShowQRCode(true);
     } catch (error) {
       console.error('Error generating QR code:', error);
       showToast.error('Error generating QR code. Please try again.');
@@ -717,7 +816,8 @@ function Billing() {
         godownName: selectedGodownData?.name || '',
         items: selectedItems,
         totalAmount: totalAmount,
-        priceType: priceType
+        priceType: priceType,
+        paymentStatus: paymentStatus
       };
 
       // Include date range in bill metadata if dates are selected
@@ -747,7 +847,23 @@ function Billing() {
       navigate(`/customer/${selectedCustomer}`);
     } catch (error) {
       console.log(error);
-      showToast.error('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
+
+      // Check if it's a credit limit error
+      if (error.response?.data?.creditLimitExceeded) {
+        const creditData = error.response.data;
+        showToast.error(
+          `🚫 CREDIT LIMIT EXCEEDED!\n\n` +
+          `Credit Limit: ₹${creditData.creditLimit?.toFixed(2) || 0}\n` +
+          `Current Outstanding: ₹${creditData.currentOutstanding?.toFixed(2) || 0}\n` +
+          `New Bill Amount: ₹${creditData.newBillAmount?.toFixed(2) || 0}\n` +
+          `Total Would Be: ₹${creditData.totalOutstanding?.toFixed(2) || 0}\n` +
+          `Exceeded By: ₹${creditData.exceededBy?.toFixed(2) || 0}\n\n` +
+          `Please collect payment before creating this bill.`,
+          { duration: 8000 }
+        );
+      } else {
+        showToast.error('❌ Error creating bill: ' + (error.response?.data?.message || error.message));
+      }
     }
   };
 
@@ -1012,11 +1128,11 @@ function Billing() {
                 </div>
                 <div className="col-md-4 text-center">
                   {selectedCustomer && (
-                    <button 
+                    <button
                       className="btn btn-outline-info w-100"
                       onClick={() => navigate(`/customer/${selectedCustomer}`)}
                     >
-                      🔄 View Bill History
+                      View Bill History
                     </button>
                   )}
                 </div>
@@ -1024,258 +1140,161 @@ function Billing() {
             </div>
           </div>
 
-          {/* Price Type and Godown Selection - Combined Row */}
-          {selectedCustomer && (
-            <div className="card mb-4" style={cardStyle}>
+          {/* Credit Limit Display */}
+          {selectedCustomer && creditLimitInfo && creditLimitInfo.creditLimitEnabled && (
+            <div className="card mb-4" style={{
+              ...cardStyle,
+              background: creditLimitInfo.exceeded
+                ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)'
+                : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                  ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.3) 100%)'
+                  : 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)',
+              border: creditLimitInfo.exceeded
+                ? '2px solid rgba(239, 68, 68, 0.5)'
+                : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                  ? '2px solid rgba(251, 191, 36, 0.5)'
+                  : '2px solid rgba(34, 197, 94, 0.5)'
+            }}>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h5 style={{ margin: 0 }}>
+                  {creditLimitInfo.exceeded ? '🚫' : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) ? '⚠️' : '✅'}
+                  {' '}Credit Limit Status
+                </h5>
+                <span style={{
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: creditLimitInfo.exceeded
+                    ? '#ef4444'
+                    : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2)
+                      ? '#f59e0b'
+                      : '#22c55e',
+                  color: 'white'
+                }}>
+                  {creditLimitInfo.exceeded ? 'EXCEEDED' : creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) ? 'LOW' : 'GOOD'}
+                </span>
+              </div>
               <div className="card-body">
                 <div className="row">
-                  {/* Price Type Selection */}
-                  <div className="col-md-6">
-                    <label className="form-label">Select Price Type</label>
-                    <div className="d-flex gap-3">
-                      <div 
-                        className={`price-type-btn flex-fill ${priceType === 'price' ? 'active' : ''}`}
-                        onClick={() => handlePriceTypeChange({ target: { value: 'price' } })}
-                      >
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="priceType"
-                          id="regularPrice"
-                          value="price"
-                          checked={priceType === 'price'}
-                          onChange={handlePriceTypeChange}
-                          style={{ display: 'none' }}
-                        />
-                        <div>⭕ Regular Price</div>
-                      </div>
-                      <div 
-                        className={`price-type-btn flex-fill ${priceType === 'masterPrice' ? 'active' : ''}`}
-                        onClick={() => handlePriceTypeChange({ target: { value: 'masterPrice' } })}
-                      >
-                        <input
-                          className="form-check-input"
-                          type="radio"
-                          name="priceType"
-                          id="masterPrice"
-                          value="masterPrice"
-                          checked={priceType === 'masterPrice'}
-                          onChange={handlePriceTypeChange}
-                          style={{ display: 'none' }}
-                        />
-                        <div>⭕ Special Price</div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Credit Limit</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{creditLimitInfo.creditLimit?.toFixed(2) || 0}</div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Current Outstanding</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: creditLimitInfo.currentOutstanding > 0 ? '#f59e0b' : '#22c55e' }}>
+                        ₹{creditLimitInfo.currentOutstanding?.toFixed(2) || 0}
                       </div>
                     </div>
                   </div>
-
-                  {/* Godown Selection */}
-                  {showGodowns && (
-                    <div className="col-md-6">
-                      <label className="form-label">Select Godown</label>
-                      <select
-                        className="form-select"
-                        value={selectedGodown}
-                        onChange={handleGodownChange}
-                      >
-                        <option value="">Choose a godown...</option>
-                        
-                        {/* Matching Godowns (Top Priority) */}
-                        {godowns.matchingGodowns.length > 0 && (
-                          <optgroup label={`📍 Matching Location (${godowns.customerLocation?.city}, ${godowns.customerLocation?.state})`}>
-                            {godowns.matchingGodowns.map(godown => (
-                              <option key={godown._id} value={godown._id}>
-                                🏢 {godown.name} - {godown.city}, {godown.state}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        
-                        {/* Non-Matching Godowns */}
-                        {godowns.nonMatchingGodowns.length > 0 && (
-                          <optgroup label="🏢 Other Godowns">
-                            {godowns.nonMatchingGodowns.map(godown => (
-                              <option key={godown._id} value={godown._id}>
-                                {godown.name} - {godown.city}, {godown.state}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>Available Credit</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: creditLimitInfo.available > 0 ? '#22c55e' : '#ef4444' }}>
+                        ₹{creditLimitInfo.available?.toFixed(2) || 0}
+                      </div>
                     </div>
-                  )}
+                  </div>
+                  <div className="col-md-3">
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>New Bill Amount</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold' }}>₹{subtotal?.toFixed(2) || 0}</div>
+                    </div>
+                  </div>
                 </div>
+                {creditLimitInfo.exceeded && (
+                  <div style={{
+                    marginTop: '15px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(239, 68, 68, 0.4)'
+                  }}>
+                    <strong>⚠️ Warning:</strong> This customer has exceeded their credit limit by ₹{creditLimitInfo.exceededBy?.toFixed(2) || 0}.
+                    Please collect payment before creating new bills.
+                  </div>
+                )}
+                {!creditLimitInfo.exceeded && creditLimitInfo.available < (creditLimitInfo.creditLimit * 0.2) && (
+                  <div style={{
+                    marginTop: '15px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(251, 191, 36, 0.4)'
+                  }}>
+                    <strong>⚠️ Notice:</strong> Available credit is running low. Consider collecting payment soon.
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Date Range Selector */}
+          {/* Godown Selection */}
           {selectedCustomer && (
             <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
-                <h5>Select Date Range (Optional)</h5>
+                <h5>Select Godown</h5>
               </div>
               <div className="card-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <label htmlFor="startDate" className="form-label">Start Date</label>
-                    <input
-                      type="date"
-                      className={`form-control ${dateRangeError.startDate ? 'is-invalid' : ''}`}
-                      id="startDate"
-                      value={startDate}
-                      onChange={handleStartDateChange}
-                    />
-                    {dateRangeError.startDate && (
-                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
-                        ⚠️ {dateRangeError.startDate}
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-md-6">
-                    <label htmlFor="endDate" className="form-label">End Date</label>
-                    <input
-                      type="date"
-                      className={`form-control ${dateRangeError.endDate ? 'is-invalid' : ''}`}
-                      id="endDate"
-                      value={endDate}
-                      onChange={handleEndDateChange}
-                    />
-                    {dateRangeError.endDate && (
-                      <div className="invalid-feedback d-block" style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px', fontWeight: '500' }}>
-                        ⚠️ {dateRangeError.endDate}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+                <select
+                  className="form-select"
+                  value={selectedGodown}
+                  onChange={async (e) => {
+                    const godownId = e.target.value;
+                    setSelectedGodown(godownId);
+                    setShowInventoryStatus(false);
 
-          {/* Initialize Inventory Button */}
-          {selectedGodown && (
-            <div className="text-center mb-4">
-              <button
-                className="initialize-btn"
-                onClick={async () => {
-                  try {
-                    await axios.post(`${backendUrl}/api/godowns/${selectedGodown}/initialize-inventory`);
-                    showToast.success('Godown inventory initialized successfully!');
-                    // Refresh godown items
-                    handleGodownChange({ target: { value: selectedGodown } });
-                  } catch (error) {
-                    console.log(error);
-                    const errorMsg = error.response?.data?.message || error.message || 'Error initializing godown inventory';
-                    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-                      showToast.error('Connection timeout. Please check your internet connection.');
-                    } else if (error.response) {
-                      showToast.error(`Backend error: ${error.response.status} - ${errorMsg}`);
-                    } else if (error.request) {
-                      showToast.error('Unable to connect to the server. Please check if the backend is running.');
+                    if (godownId) {
+                      // Fetch godown details
+                      try {
+                        const godownResponse = await axios.get(`${backendUrl}/api/godowns/${godownId}`);
+                        setSelectedGodownData(godownResponse.data);
+                      } catch (error) {
+                        console.error('Error fetching godown details:', error);
+                      }
+
+                      // No need to match items - users can add any item they want
+                      // Removed fetchAndMatchItems call - validation is too restrictive
                     } else {
-                      showToast.error(errorMsg);
+                      setSelectedGodownData(null);
                     }
-                  }
-                }}
-              >
-                📦 Initialize Inventory
-              </button>
-            </div>
-          )}
-
-          {/* Godown Items */}
-          {selectedGodownData && godownItems.length > 0 && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-header">
-                <h5>🏢 {selectedGodownData.name} - Available Items</h5>
-                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Location: {selectedGodownData.city}, {selectedGodownData.state}
-                </small>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  {godownItems.map(item => (
-                    <div key={item._id} className="col-md-4 mb-3">
-                      <div className="card">
-                        <div className="card-body">
-                          <h6 className="card-title">{item.itemName}</h6>
-                          <p className="card-text">
-                            <strong>Quantity:</strong> {item.quantity}<br/>
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
-                            <strong>Category:</strong> {item.category || 'N/A'}
-                          </p>
-                          <button 
-                            className="btn btn-success btn-sm"
-                            onClick={() => addItemToBill(item)}
-                            disabled={item.quantity <= 0}
-                          >
-                            {item.quantity > 0 ? 'Add to Bill' : 'Out of Stock'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                  }}
+                >
+                  <option value="">Choose a godown...</option>
+                  {godowns.matchingGodowns && godowns.matchingGodowns.length > 0 && (
+                    <optgroup label="📍 Matching Location">
+                      {godowns.matchingGodowns.map(godown => (
+                        <option key={godown._id} value={godown._id}>
+                          🏢 {godown.name} - {godown.city}, {godown.state}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {godowns.nonMatchingGodowns && godowns.nonMatchingGodowns.length > 0 && (
+                    <optgroup label="🌍 Other Locations">
+                      {godowns.nonMatchingGodowns.map(godown => (
+                        <option key={godown._id} value={godown._id}>
+                          🏢 {godown.name} - {godown.city}, {godown.state}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                {selectedGodown && selectedGodownData && (
+                  <small style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: '8px', display: 'block' }}>
+                    Selected Godown: {selectedGodownData.name} - {selectedGodownData.city}, {selectedGodownData.state}
+                  </small>
+                )}
               </div>
             </div>
           )}
 
-          {/* Matched Items Based on 3-Digit Prefix */}
-          {selectedCustomer && selectedGodown && availableItems.length > 0 && (
-            <div className="card mb-4" style={cardStyle}>
-              <div className="card-header">
-                <h5>🔍 Matched Items (3-Digit Prefix Matching)</h5>
-                <small style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Items matched between billing and inventory based on first 3 digits
-                </small>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  {availableItems.map(item => (
-                    <div key={item._id} className="col-md-4 mb-3">
-                      <div className="card">
-                        <div className="card-body">
-                          <h6 className="card-title">
-                            {item.itemName}
-                            <span className="badge bg-info ms-2">Prefix: {item.prefix}</span>
-                          </h6>
-                          <p className="card-text">
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
-                            <strong>Special Price:</strong> ₹{item.masterPrice}<br/>
-                            <strong>Available Quantity:</strong>
-                            <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} ms-1`}>
-                              {item.availableQuantity}
-                            </span>
-                          </p>
-                          {item.availableQuantity > 0 && (
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => addItemToBill(item)}
-                            >
-                              Add to Bill
-                            </button>
-                          )}
-                          {item.availableQuantity === 0 && (
-                            <button className="btn btn-secondary btn-sm" disabled>
-                              Out of Stock
-                            </button>
-                          )}
-                          <div className="mt-2">
-                            <small className="text-muted">
-                              Matching items: {item.matchingItems.map(mi => mi.inputValue).join(', ')}
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Original Customer Items (when no godown selected) */}
-          {selectedCustomer && !selectedGodown && (
+          {/* Available Items Section */}
+          {customerItems.length > 0 && (
             <div className="card mb-4" style={cardStyle}>
               <div className="card-header">
                 <h5>Available Items</h5>
@@ -1289,7 +1308,7 @@ function Billing() {
                         <div className="card-body">
                           <h6 className="card-title">{item.name}</h6>
                           <p className="card-text">
-                            <strong>Regular Price:</strong> ₹{item.price}<br/>
+                            <strong>Regular Price:</strong> ₹{item.price}<br />
                             <strong>Special Price:</strong> ₹{item.masterPrice}
                           </p>
                           <button
@@ -1323,7 +1342,7 @@ function Billing() {
                         <th>Price (₹)</th>
                         <th>Quantity</th>
                         <th>Total (₹)</th>
-                        <th>Actions</th>
+                        <th>Availability</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1332,7 +1351,7 @@ function Billing() {
                         const itemInventoryStatus = inventoryStatus.find(
                           invItem => invItem.itemName === item.itemName
                         );
-                        
+
                         return (
                           <React.Fragment key={item.itemId}>
                             {/* Main item row */}
@@ -1346,17 +1365,26 @@ function Billing() {
                               <td>₹{item.selectedPrice}</td>
                               <td>
                                 <div className="btn-group" role="group">
-                                  <button 
-                                    className="btn btn-outline-secondary btn-sm"
-                                    onClick={() => decreaseQuantity(item.itemId)}
+                                  <button
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => {
+                                      if (item.quantity <= 1) {
+                                        // Remove item if quantity is 1 or less
+                                        removeItem(item.itemId);
+                                      } else {
+                                        // Decrease quantity normally
+                                        decreaseQuantity(item.itemId);
+                                      }
+                                    }}
+                                    title={item.quantity <= 1 ? "Remove item" : "Decrease quantity"}
                                   >
                                     -
                                   </button>
                                   <span className="btn btn-outline-secondary btn-sm disabled">
                                     {item.quantity}
                                   </span>
-                                  <button 
-                                    className="btn btn-outline-secondary btn-sm"
+                                  <button
+                                    className="btn btn-outline-success btn-sm"
                                     onClick={() => increaseQuantity(item.itemId)}
                                   >
                                     +
@@ -1365,15 +1393,30 @@ function Billing() {
                               </td>
                               <td>₹{item.total}</td>
                               <td>
-                                <button 
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => removeItem(item.itemId)}
-                                >
-                                  Remove
-                                </button>
+                                {/* Availability Display */}
+                                {itemInventoryStatus ? (
+                                  <div className="availability-info">
+                                    <span className={`badge ${itemInventoryStatus.isAvailableInSelectedGodown ? 'bg-success' : 'bg-warning'}`}>
+                                      {itemInventoryStatus.isAvailableInSelectedGodown
+                                        ? `✅ Available: ${itemInventoryStatus.availableQuantity}`
+                                        : `⚠️ Limited: ${itemInventoryStatus.availableQuantity}`
+                                      }
+                                    </span>
+                                    {itemInventoryStatus.alternativeGodowns && itemInventoryStatus.alternativeGodowns.length > 0 && (
+                                      <div className="mt-1">
+                                        <small className="text-muted">
+                                          Also in: {itemInventoryStatus.alternativeGodowns.slice(0, 2).map(g => g.godownName).join(', ')}
+                                          {itemInventoryStatus.alternativeGodowns.length > 2 && ` +${itemInventoryStatus.alternativeGodowns.length - 2} more`}
+                                        </small>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="badge bg-secondary">Check Inventory</span>
+                                )}
                               </td>
                             </tr>
-                            
+
                             {/* Inventory status row (shown when inventory is checked) */}
                             {showInventoryStatus && itemInventoryStatus && (
                               <tr>
@@ -1431,7 +1474,7 @@ function Billing() {
                     </tbody>
                   </table>
                 </div>
-                
+
                 {/* Total Amount with GST Breakdown */}
                 <div className="row">
                   <div className="col-md-6 offset-md-6">
@@ -1524,11 +1567,13 @@ function Billing() {
                   </div>
                 )}
 
+
+
                 {/* Action Buttons */}
                 <div className="row mt-4">
                   <div className="col-md-12">
                     <div className="d-flex gap-3 flex-wrap justify-content-center">
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: showInventoryStatus ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -1541,7 +1586,7 @@ function Billing() {
                       >
                         {showInventoryStatus ? '✓ Inventory Checked' : '📦 Check Inventory'}
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -1553,7 +1598,7 @@ function Billing() {
                       >
                         📄 Download PDF
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
@@ -1566,7 +1611,7 @@ function Billing() {
                       >
                         {isGeneratingQR ? '⏳ Generating...' : '📱 Payment QR'}
                       </button>
-                      <button 
+                      <button
                         className="btn"
                         style={{
                           background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -1597,16 +1642,16 @@ function Billing() {
                 <div className="mb-3">
                   <p><strong>Amount:</strong> ₹{totalAmount}</p>
                   <p>Scan this QR code to make payment</p>
-                  
+
                   {/* UPI ID Configuration */}
                   <div className="mb-3">
-                    <button 
+                    <button
                       className="btn btn-outline-secondary btn-sm"
                       onClick={() => setShowUpiInput(!showUpiInput)}
                     >
                       {showUpiInput ? 'Hide' : 'Configure'} UPI ID
                     </button>
-                    
+
                     {showUpiInput && (
                       <div className="mt-2">
                         <div className="row justify-content-center">
@@ -1619,7 +1664,7 @@ function Billing() {
                                 value={upiId}
                                 onChange={(e) => setUpiId(e.target.value)}
                               />
-                              <button 
+                              <button
                                 className="btn btn-primary"
                                 onClick={generatePaymentQR}
                               >
@@ -1633,7 +1678,7 @@ function Billing() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="border p-3 d-inline-block">
                   <div style={{ width: '200px', height: '200px', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {qrCodeImage ? (
@@ -1643,36 +1688,22 @@ function Billing() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="mt-3">
-                  <p className="text-muted">
-                    <strong>Payment Link:</strong> {qrCodeData}
-                  </p>
-                  <div className="d-flex gap-2 justify-content-center">
-                    <button 
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(qrCodeData);
-                        showToast.success('Payment link copied to clipboard!');
-                      }}
-                    >
-                      Copy Payment Link
-                    </button>
-                    <button 
-                      className="btn btn-success btn-sm"
-                      onClick={shareQRCodeOnWhatsApp}
-                    >
-                      📱 Send on WhatsApp
-                    </button>
-                  </div>
+                  <button
+                    className="btn btn-success"
+                    onClick={shareQRCodeOnWhatsApp}
+                  >
+                    📤 Share QR Code
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Stock Dialog Modal */}
+          {/* Stock Dialog */}
           {showStockDialog && (
-            <div 
+            <div
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1688,7 +1719,7 @@ function Billing() {
               }}
               onClick={() => setShowStockDialog(false)}
             >
-              <div 
+              <div
                 style={{
                   backgroundColor: 'white',
                   borderRadius: '15px',
@@ -1764,10 +1795,10 @@ function Billing() {
                 </div>
 
                 {/* Stock Items List */}
-                <div style={{ 
-                  flex: 1, 
-                  overflowY: 'auto', 
-                  padding: '20px 30px' 
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 30px'
                 }}>
                   {stockDialogItems.length === 0 ? (
                     <div style={{
@@ -1781,18 +1812,18 @@ function Billing() {
                     </div>
                   ) : (
                     <>
-                      <div style={{ 
-                        marginBottom: '15px', 
-                        padding: '10px 15px', 
-                        background: '#f8f9fa', 
+                      <div style={{
+                        marginBottom: '15px',
+                        padding: '10px 15px',
+                        background: '#f8f9fa',
                         borderRadius: '8px',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}>
                         <span style={{ fontWeight: 'bold', color: '#333' }}>
-                          Total Items: {stockDialogItems.filter(item => 
-                            !stockSearchTerm || 
+                          Total Items: {stockDialogItems.filter(item =>
+                            !stockSearchTerm ||
                             item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                             item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                           ).length}
@@ -1804,13 +1835,13 @@ function Billing() {
 
                       <div style={{ display: 'grid', gap: '12px' }}>
                         {stockDialogItems
-                          .filter(item => 
-                            !stockSearchTerm || 
+                          .filter(item =>
+                            !stockSearchTerm ||
                             item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                             item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                           )
                           .map((item, index) => (
-                            <div 
+                            <div
                               key={index}
                               style={{
                                 padding: '15px 20px',
@@ -1831,9 +1862,9 @@ function Billing() {
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ 
-                                    fontSize: '1.1rem', 
-                                    fontWeight: 'bold', 
+                                  <div style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
                                     color: '#333',
                                     marginBottom: '5px'
                                   }}>
@@ -1844,8 +1875,8 @@ function Billing() {
                                       {item.itemName}
                                     </div>
                                   )}
-                                  <div style={{ 
-                                    fontSize: '0.85rem', 
+                                  <div style={{
+                                    fontSize: '0.85rem',
                                     color: '#999',
                                     marginTop: '5px'
                                   }}>
@@ -1867,58 +1898,136 @@ function Billing() {
                           ))}
                       </div>
 
-                      {stockDialogItems.filter(item => 
-                        !stockSearchTerm || 
+                      {stockDialogItems.filter(item =>
+                        !stockSearchTerm ||
                         item.inputValue?.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
                         item.itemName?.toLowerCase().includes(stockSearchTerm.toLowerCase())
                       ).length === 0 && stockSearchTerm && (
-                        <div style={{
-                          textAlign: 'center',
-                          padding: '40px 20px',
-                          color: '#999'
-                        }}>
-                          <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🔍</div>
-                          <p>No items found matching "{stockSearchTerm}"</p>
-                        </div>
-                      )}
+                          <div style={{
+                            textAlign: 'center',
+                            padding: '40px 20px',
+                            color: '#999'
+                          }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🔍</div>
+                            <p>No items found matching "{stockSearchTerm}"</p>
+                          </div>
+                        )}
                     </>
                   )}
                 </div>
+              </div>
 
-                {/* Dialog Footer */}
-                <div style={{
-                  padding: '15px 30px',
-                  borderTop: '1px solid #e0e0e0',
-                  background: '#f8f9fa',
-                  display: 'flex',
-                  justifyContent: 'flex-end'
-                }}>
-                  <button
-                    onClick={() => setShowStockDialog(false)}
-                    style={{
-                      padding: '10px 30px',
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '1rem',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                    onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                  >
-                    Close
-                  </button>
-                </div>
+              {/* Dialog Footer */}
+              <div style={{
+                padding: '15px 30px',
+                borderTop: '1px solid #e0e0e0',
+                background: '#f8f9fa',
+                display: 'flex',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={() => setShowStockDialog(false)}
+                  style={{
+                    padding: '10px 30px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                >
+                  Close
+                </button>
               </div>
             </div>
           )}
+
+          {/* Ledger Management Buttons - Always visible on main page */}
+          <div className="card mb-4" style={cardStyle}>
+            <div className="card-header">
+              <h5>💼 Customer Management</h5>
+            </div>
+            <div className="card-body">
+              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {selectedCustomer && (
+                  <button
+                    onClick={() => setShowCustomerHistory(true)}
+                    className="btn"
+                    style={{
+                      background: 'linear-gradient(135deg, #9900ef 0%, #7700cc 100%)',
+                      color: 'white',
+                      padding: '14px 28px',
+                      fontSize: '15px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    📜 View Customer History
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowLedgerManagement(true)}
+                  className="btn"
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    padding: '14px 28px',
+                    fontSize: '15px',
+                    fontWeight: '600'
+                  }}
+                >
+                  💰 Manage Ledger & Payments
+                </button>
+
+                <button
+                  onClick={() => setShowPaymentTracker(true)}
+                  className="btn"
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    padding: '14px 28px',
+                    fontSize: '15px',
+                    fontWeight: '600'
+                  }}
+                >
+                  💳 Payment Tracker
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Customer History Modal - Outside main container */}
+      {showCustomerHistory && (
+        <CustomerHistory
+          customerId={selectedCustomer}
+          onClose={() => setShowCustomerHistory(false)}
+        />
+      )}
+
+      {/* Ledger Management Modal - Outside main container */}
+      {showLedgerManagement && (
+        <LedgerManagement
+          customerId={selectedCustomer}
+          customerName={customers.find(c => c._id === selectedCustomer)?.name || ''}
+          onClose={() => setShowLedgerManagement(false)}
+        />
+      )}
+
+      {/* Payment Tracker Modal - Outside main container */}
+      {showPaymentTracker && (
+        <PaymentTracker
+          onClose={() => setShowPaymentTracker(false)}
+        />
+      )}
     </div>
   );
 }
 
-export default Billing; 
+export default Billing;

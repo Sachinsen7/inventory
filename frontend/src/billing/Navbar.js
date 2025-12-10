@@ -28,6 +28,41 @@ function Navbar() {
               Billing
             </Link>
           </li>
+          <li className="nav-item">
+            <Link to="/gstr2" className="nav-links" onClick={closeMobileMenu}>
+              📊 GSTR-2
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/vouchers" className="nav-links" onClick={closeMobileMenu}>
+              📋 Vouchers
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/reports" className="nav-links" onClick={closeMobileMenu}>
+              📊 Reports
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/gst" className="nav-links" onClick={closeMobileMenu}>
+              🧾 GST
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/tds" className="nav-links" onClick={closeMobileMenu}>
+              💼 TDS
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/settings" className="nav-links" onClick={closeMobileMenu}>
+              ⚙️ Settings
+            </Link>
+          </li>
+          {/* <li className="nav-item">
+            <Link to="/eway-dashboard" className="nav-links" onClick={closeMobileMenu}>
+              🚛 E-Way Dashboard
+            </Link>
+          </li> */}
         </ul>
       </div>
     </nav>

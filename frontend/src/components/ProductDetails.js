@@ -1,0 +1,355 @@
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
+import Barcode from "react-barcode";
+
+const ProductDetails = () => {
+    const { barcode } = useParams();
+    const navigate = useNavigate();
+    const [productData, setProductData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
+    useEffect(() => {
+        fetchProductDetails();
+    }, [barcode]);
+
+    const fetchProductDetails = async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get(`${backendUrl}/api/product-details/${barcode}`);
+
+            if (response.data.success) {
+                setProductData(response.data.data);
+            } else {
+                setError("Product not found");
+            }
+        } catch (error) {
+            console.error("Error fetching product details:", error);
+            setError("Error loading product details");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
+    if (loading) {
+        return (
+            <div style={styles.container}>
+                <div style={styles.loadingCard}>
+                    <div style={styles.spinner}></div>
+                    <p style={styles.loadingText}>Loading product details...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !productData) {
+        return (
+            <div style={styles.container}>
+                <div style={styles.errorCard}>
+                    <div style={styles.errorIcon}>❌</div>
+                    <h2 style={styles.errorTitle}>Product Not Found</h2>
+                    <p style={styles.errorText}>
+                        {error || "The barcode you scanned doesn't exist in our system."}
+                    </p>
+                    <p style={styles.barcodeText}>Barcode: {barcode}</p>
+                    <button onClick={() => navigate("/")} style={styles.homeButton}>
+                        Go to Home
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={styles.container}>
+            <style>{globalStyles}</style>
+
+            <div style={styles.card}>
+                {/* Header */}
+                <div style={styles.header}>
+                    <h1 style={styles.title}>📦 Product Details</h1>
+                    <p style={styles.subtitle}>Scanned at: {new Date().toLocaleString()}</p>
+                </div>
+
+                {/* Barcode Display */}
+                <div style={styles.barcodeSection}>
+                    <Barcode
+                        value={barcode}
+                        width={2}
+                        height={80}
+                        fontSize={18}
+                        margin={10}
+                    />
+                </div>
+
+                {/* Product Information */}
+                <div style={styles.detailsGrid}>
+                    <DetailRow icon="🏷️" label="Product Name" value={productData.product} />
+                    <DetailRow icon="📦" label="SKU Code" value={barcode} />
+                    <DetailRow icon="📝" label="SKU Name" value={productData.skuName} />
+                    <DetailRow icon="⚖️" label="Weight" value={productData.weight} />
+                    <DetailRow icon="👤" label="Packed By" value={productData.packed} />
+                    <DetailRow icon="🔢" label="Batch No" value={productData.batch} />
+                    <DetailRow icon="🌓" label="Shift" value={productData.shift} />
+                    <DetailRow icon="📍" label="Location" value={productData.location} />
+                    <DetailRow icon="📅" label="Packing Date" value={productData.currentTime} />
+                    <DetailRow icon="👷" label="Rewinder Operator" value={productData.rewinder} />
+                    <DetailRow icon="✂️" label="Edge Cut Operator" value={productData.edge} />
+                    <DetailRow icon="🔄" label="Winder Operator" value={productData.winder} />
+                    <DetailRow icon="🥣" label="Mixer Operator" value={productData.mixer} />
+                </div>
+
+                {/* Action Buttons */}
+                <div style={styles.buttonContainer}>
+                    <button onClick={handlePrint} style={styles.printButton} className="no-print">
+                        🖨️ Print Details
+                    </button>
+                    <button onClick={() => navigate("/")} style={styles.homeButton} className="no-print">
+                        🏠 Go to Home
+                    </button>
+                </div>
+
+                {/* Footer */}
+                <div style={styles.footer} className="no-print">
+                    <p>Generated by Inventory Management System</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const DetailRow = ({ icon, label, value }) => {
+    if (!value || value === "N/A" || value === "") return null;
+
+    return (
+        <div style={styles.detailRow}>
+            <div style={styles.detailLabel}>
+                <span style={styles.icon}>{icon}</span>
+                {label}
+            </div>
+            <div style={styles.detailValue}>{value}</div>
+        </div>
+    );
+};
+
+const styles = {
+    container: {
+        minHeight: "100vh",
+        background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
+        backgroundSize: "400% 400%",
+        animation: "gradientAnimation 12s ease infinite",
+        padding: "20px",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "'Roboto', sans-serif",
+    },
+    card: {
+        backgroundColor: "rgba(255, 255, 255, 0.98)",
+        borderRadius: "20px",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+        maxWidth: "800px",
+        width: "100%",
+        padding: "30px",
+        margin: "20px",
+    },
+    header: {
+        textAlign: "center",
+        marginBottom: "30px",
+        borderBottom: "3px solid #4CAF50",
+        paddingBottom: "20px",
+    },
+    title: {
+        color: "#4CAF50",
+        margin: "0 0 10px 0",
+        fontSize: "32px",
+        fontWeight: "bold",
+    },
+    subtitle: {
+        color: "#666",
+        margin: "0",
+        fontSize: "16px",
+    },
+    barcodeSection: {
+        textAlign: "center",
+        margin: "30px 0",
+        padding: "20px",
+        backgroundColor: "#f5f5f5",
+        borderRadius: "12px",
+        border: "2px dashed #4CAF50",
+    },
+    detailsGrid: {
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gap: "12px",
+        marginBottom: "30px",
+    },
+    detailRow: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "15px",
+        backgroundColor: "#f9f9f9",
+        borderRadius: "10px",
+        borderLeft: "4px solid #4CAF50",
+        transition: "all 0.3s ease",
+    },
+    detailLabel: {
+        fontWeight: "bold",
+        color: "#555",
+        fontSize: "16px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+    },
+    icon: {
+        fontSize: "20px",
+    },
+    detailValue: {
+        color: "#333",
+        fontSize: "16px",
+        fontWeight: "600",
+        textAlign: "right",
+        maxWidth: "60%",
+        wordBreak: "break-word",
+    },
+    buttonContainer: {
+        display: "flex",
+        gap: "15px",
+        justifyContent: "center",
+        flexWrap: "wrap",
+        marginTop: "30px",
+    },
+    printButton: {
+        padding: "15px 30px",
+        backgroundColor: "#4CAF50",
+        color: "white",
+        border: "none",
+        borderRadius: "10px",
+        fontSize: "18px",
+        fontWeight: "bold",
+        cursor: "pointer",
+        transition: "all 0.3s ease",
+        boxShadow: "0 4px 12px rgba(76, 175, 80, 0.3)",
+    },
+    homeButton: {
+        padding: "15px 30px",
+        backgroundColor: "#2196F3",
+        color: "white",
+        border: "none",
+        borderRadius: "10px",
+        fontSize: "18px",
+        fontWeight: "bold",
+        cursor: "pointer",
+        transition: "all 0.3s ease",
+        boxShadow: "0 4px 12px rgba(33, 150, 243, 0.3)",
+    },
+    footer: {
+        marginTop: "40px",
+        textAlign: "center",
+        color: "#999",
+        fontSize: "14px",
+        borderTop: "1px solid #ddd",
+        paddingTop: "20px",
+    },
+    loadingCard: {
+        backgroundColor: "white",
+        padding: "60px",
+        borderRadius: "20px",
+        textAlign: "center",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+    },
+    spinner: {
+        width: "60px",
+        height: "60px",
+        border: "6px solid #f3f3f3",
+        borderTop: "6px solid #4CAF50",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+        margin: "0 auto 20px",
+    },
+    loadingText: {
+        fontSize: "18px",
+        color: "#666",
+    },
+    errorCard: {
+        backgroundColor: "white",
+        padding: "60px",
+        borderRadius: "20px",
+        textAlign: "center",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+        maxWidth: "500px",
+    },
+    errorIcon: {
+        fontSize: "64px",
+        marginBottom: "20px",
+    },
+    errorTitle: {
+        color: "#f44336",
+        fontSize: "28px",
+        marginBottom: "15px",
+    },
+    errorText: {
+        color: "#666",
+        fontSize: "16px",
+        marginBottom: "10px",
+        lineHeight: "1.6",
+    },
+    barcodeText: {
+        color: "#999",
+        fontSize: "14px",
+        fontFamily: "monospace",
+        marginTop: "20px",
+    },
+};
+
+const globalStyles = `
+  @keyframes gradientAnimation {
+    0% { background-position: 0% 50%; }
+    25% { background-position: 50% 100%; }
+    50% { background-position: 100% 50%; }
+    75% { background-position: 50% 0%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .no-print {
+    display: block;
+  }
+
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    body {
+      background: white !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .detailRow {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+    
+    .detailValue {
+      max-width: 100% !important;
+      text-align: left !important;
+    }
+  }
+`;
+
+export default ProductDetails;

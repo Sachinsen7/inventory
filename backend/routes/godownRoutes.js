@@ -6,7 +6,7 @@ router.post("/login", async (req, res) => {
   const { name, address } = req.body;
 
   try {
-    const godown = await Godown.findOne({ name, address }); // Querying database
+    const godown = await Godown.findOne({ name, address });
     if (godown) {
       res.status(200).json({
         message: "Login successful",

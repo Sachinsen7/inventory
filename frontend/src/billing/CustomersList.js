@@ -5,6 +5,59 @@ import { showToast } from '../utils/toastNotifications';
 import './CustomersList.css';
 
 const Customer = props => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCustomer, setEditedCustomer] = useState({
+    name: props.customer.name,
+    address: props.customer.address,
+    city: props.customer.city,
+    state: props.customer.state,
+    gstNo: props.customer.gstNo || '',
+    phoneNumber: props.customer.phoneNumber || ''
+  });
+
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+  const handleDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete customer "${props.customer.name}"? This action cannot be undone.`)) {
+      try {
+        await axios.delete(`${backendUrl}/api/customers/${props.customer._id}`);
+        showToast.success(`Customer "${props.customer.name}" deleted successfully!`);
+        props.onDelete(props.customer._id);
+      } catch (error) {
+        console.error('Error deleting customer:', error);
+        showToast.error('Failed to delete customer. Please try again.');
+      }
+    }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedCustomer({
+      name: props.customer.name,
+      address: props.customer.address,
+      city: props.customer.city,
+      state: props.customer.state,
+      gstNo: props.customer.gstNo || '',
+      phoneNumber: props.customer.phoneNumber || ''
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const response = await axios.put(`${backendUrl}/api/customers/${props.customer._id}`, editedCustomer);
+      showToast.success(`Customer "${editedCustomer.name}" updated successfully!`);
+      props.onUpdate(response.data);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      showToast.error('Failed to update customer. Please try again.');
+    }
+  };
+
   const cardStyle = {
     backgroundColor: 'rgba(218, 216, 224, 0.6)',
     boxShadow: "0 10px 25px rgba(0, 0, 0, 0.2)",
@@ -14,7 +67,6 @@ const Customer = props => {
     margin: '10px',
     border: '1px solid rgba(255, 255, 255, 0.2)',
     transition: 'all 0.3s ease',
-    cursor: 'pointer',
   };
 
   const linkStyle = {
@@ -30,6 +82,131 @@ const Customer = props => {
     fontSize: '14px',
     color: 'rgba(255, 255, 255, 0.9)',
   };
+
+  const buttonStyle = {
+    padding: '8px 16px',
+    margin: '5px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    transition: 'all 0.3s ease',
+  };
+
+  const editButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: '#4CAF50',
+    color: 'white',
+  };
+
+  const deleteButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: '#f44336',
+    color: 'white',
+  };
+
+  const saveButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: '#2196F3',
+    color: 'white',
+  };
+
+  const cancelButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: '#9E9E9E',
+    color: 'white',
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '8px',
+    margin: '5px 0',
+    borderRadius: '5px',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    fontSize: '14px',
+  };
+
+  if (isEditing) {
+    return (
+      <div style={cardStyle}>
+        <h3 style={{ margin: '0 0 15px 0', color: 'white' }}>✏️ Edit Customer</h3>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>Name:</label>
+          <input
+            type="text"
+            value={editedCustomer.name}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, name: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>Address:</label>
+          <input
+            type="text"
+            value={editedCustomer.address}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, address: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>City:</label>
+          <input
+            type="text"
+            value={editedCustomer.city}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, city: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>State:</label>
+          <input
+            type="text"
+            value={editedCustomer.state}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, state: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>GST No:</label>
+          <input
+            type="text"
+            value={editedCustomer.gstNo}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, gstNo: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ color: 'white', fontSize: '12px' }}>Phone:</label>
+          <input
+            type="text"
+            value={editedCustomer.phoneNumber}
+            onChange={(e) => setEditedCustomer({ ...editedCustomer, phoneNumber: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ marginTop: '15px', textAlign: 'center' }}>
+          <button
+            onClick={handleSaveEdit}
+            style={saveButtonStyle}
+            onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+          >
+            💾 Save
+          </button>
+          <button
+            onClick={handleCancelEdit}
+            style={cancelButtonStyle}
+            onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+          >
+            ❌ Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -48,7 +225,7 @@ const Customer = props => {
     >
       <h3 style={{ margin: '0 0 15px 0' }}>
         <Link to={`/customer/${props.customer._id}`} style={linkStyle}>
-          👤 {props.customer.name}
+          {props.customer.name}
         </Link>
       </h3>
       <p style={textStyle}>📍 <strong>Address:</strong> {props.customer.address}</p>
@@ -56,6 +233,37 @@ const Customer = props => {
       <p style={textStyle}>🗺️ <strong>State:</strong> {props.customer.state}</p>
       <p style={textStyle}>🏢 <strong>GST No:</strong> {props.customer.gstNo || 'N/A'}</p>
       <p style={textStyle}>📞 <strong>Phone:</strong> {props.customer.phoneNumber || 'N/A'}</p>
+
+      <div style={{ marginTop: '15px', textAlign: 'center' }}>
+        <button
+          onClick={handleEdit}
+          style={editButtonStyle}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'scale(1.05)';
+            e.target.style.backgroundColor = '#45a049';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'scale(1)';
+            e.target.style.backgroundColor = '#4CAF50';
+          }}
+        >
+          ✏️ Edit
+        </button>
+        <button
+          onClick={handleDelete}
+          style={deleteButtonStyle}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'scale(1.05)';
+            e.target.style.backgroundColor = '#da190b';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'scale(1)';
+            e.target.style.backgroundColor = '#f44336';
+          }}
+        >
+          🗑️ Delete
+        </button>
+      </div>
     </div>
   );
 };
@@ -111,9 +319,26 @@ function CustomersList() {
     }
   }, [searchTerm, customers]);
 
+  const handleDeleteCustomer = (customerId) => {
+    setCustomers(customers.filter(c => c._id !== customerId));
+    setFilteredCustomers(filteredCustomers.filter(c => c._id !== customerId));
+  };
+
+  const handleUpdateCustomer = (updatedCustomer) => {
+    setCustomers(customers.map(c => c._id === updatedCustomer._id ? updatedCustomer : c));
+    setFilteredCustomers(filteredCustomers.map(c => c._id === updatedCustomer._id ? updatedCustomer : c));
+  };
+
   function customerList() {
     return filteredCustomers.map(currentcustomer => {
-      return <Customer customer={currentcustomer} key={currentcustomer._id}/>;
+      return (
+        <Customer
+          customer={currentcustomer}
+          key={currentcustomer._id}
+          onDelete={handleDeleteCustomer}
+          onUpdate={handleUpdateCustomer}
+        />
+      );
     })
   }
 

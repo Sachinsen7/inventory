@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react"; // Only this import is neede
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { AuthProvider } from "./context/AuthContext";
 import HomePage from "./components/HomePage";
 import AdminLogin from "./components/AdminLogin";
 import Dashboard from "./components/Dashboard";
@@ -11,7 +12,7 @@ import SignupStaff from "./components/SignupStaff";
 import Ldashboard from "./components/Ldashboard";
 import QRCreater from "./components/QRCreater";
 
-import Godown from "./components/Godown"; // Import Godown component
+import Godown from "./components/Godown";
 import StaffGodown from "./components/StaffGodown";
 
 import Home from "./components/Home";
@@ -38,70 +39,115 @@ import CreateCustomer from "./billing/CreateCustomer";
 import CustomersList from "./billing/CustomersList";
 import CustomerDetails from "./billing/CustomerDetails";
 import AllProductsPage from "./components/AllProductsPage";
+import SettingsPage from "./components/SettingsPage";
+import OpeningBalancePage from "./components/OpeningBalancePage";
+import GSTR2Page from "./components/GSTR2Page";
+import ProductDetails from "./components/ProductDetails";
+import EWayBillDashboard from "./components/EWayBillDashboard";
+import PurchaseManagement from "./components/PurchaseManagement";
+import StockCheckingPage from "./components/StockCheckingPage";
+import StockCheckReportsPage from "./components/StockCheckReportsPage";
+import DataManagementPage from "./components/DataManagementPage";
+import VoucherManagement from "./components/VoucherManagement";
+import FinancialReports from "./components/FinancialReports";
+import GSTManagement from "./components/GSTManagement";
+import TDSManagement from "./components/TDSManagement";
+import BarcodeManagementPage from "./components/BarcodeManagementPage";
+import GenericDataManagement from "./components/GenericDataManagement";
+import AdvancedVoucherManagement from "./components/AdvancedVoucherManagement";
+import BankReconciliation from "./components/BankReconciliation";
+import DayBook from "./components/DayBook";
+import EnhancedVoucherManagement from "./components/EnhancedVoucherManagement";
+import ChequeManagement from "./components/ChequeManagement";
+import RatioAnalysis from "./components/RatioAnalysis";
 
 const App = () => {
   const [isAuthenticated] = useState(false);
 
   return (
-    <Router>
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        limit={3}
-      />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/loginadmin" element={<AdminLogin />} />
-        <Route path="/loginstaff" element={<LoginStaff />} />
-        <Route path="/signupstaff" element={<SignupStaff />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="qr-creator" element={<QRCreater />} />
-        <Route path="/ldashboard" element={<Ldashboard />} />
-
-        <Route path="godown" element={<Godown />} />
-        <Route path="sgodown" element={<StaffGodown />} />
-
-        <Route path="home" element={<Home />} />
-        <Route path="/godown-details" element={<GodownDetail />} />
-        <Route path="/dgodowndetails" element={<Dgodowndetails />} />
-        <Route path="/dstaffgodown" element={<DstaffGodown />} />
-        <Route path="/itemCountSummary" element={<ItemCountSummary />} />
-
-        <Route
-          path="/staff-godown"
-          element={<StaffGodown isAuthenticated={isAuthenticated} />}
+    <AuthProvider>
+      <Router>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          limit={3}
         />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/loginadmin" element={<AdminLogin />} />
+          <Route path="/loginstaff" element={<LoginStaff />} />
+          <Route path="/signupstaff" element={<SignupStaff />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="qr-creator" element={<QRCreater />} />
+          <Route path="/ldashboard" element={<Ldashboard />} />
 
-        <Route path="/loginfrom" element={<LoginForm />} />
-        <Route path="godownpage/" element={<GodownPage />} />
-        <Route path="/delivery" element={<DeliveryPage />} />
-        <Route path="/inventory" element={<InventoryPage />} />
-        <Route path="/sale" element={<Sale />} />
-        <Route path="/sales" element={<Sales />} />
-        <Route path="/dsale" element={<Dsale />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/selectfrom" element={<SelectForm />} />
-        <Route path="/transit" element={<TransitPage />} />
+          <Route path="godown" element={<Godown />} />
+          <Route path="sgodown" element={<StaffGodown />} />
 
-        <Route path="/BarcodeTable" element={<BarcodeTable />} />
-        <Route path="/billing" element={<BillingMain />} />
-        <Route path="/billing/create-customer" element={<CreateCustomer />} />
-        <Route path="/billing/customers-list" element={<CustomersList />} />
-        <Route
-          path="/billing/customer-details/:id"
-          element={<CustomerDetails />}
-        />
-        <Route path="/customer/:id" element={<CustomerDetails />} />
-        <Route path="/all-products" element={<AllProductsPage />} />
-      </Routes>
-    </Router>
+          <Route path="home" element={<Home />} />
+          <Route path="/godown-details" element={<GodownDetail />} />
+          <Route path="/dgodowndetails" element={<Dgodowndetails />} />
+          <Route path="/dstaffgodown" element={<DstaffGodown />} />
+          <Route path="/itemCountSummary" element={<ItemCountSummary />} />
+
+          <Route
+            path="/staff-godown"
+            element={<StaffGodown isAuthenticated={isAuthenticated} />}
+          />
+
+          <Route path="/loginfrom" element={<LoginForm />} />
+          <Route path="godownpage/" element={<GodownPage />} />
+          <Route path="/delivery" element={<DeliveryPage />} />
+          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/sale" element={<Sale />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/dsale" element={<Dsale />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/selectfrom" element={<SelectForm />} />
+          <Route path="/transit" element={<TransitPage />} />
+
+          <Route path="/BarcodeTable" element={<BarcodeTable />} />
+          <Route path="/billing" element={<BillingMain />} />
+          <Route path="/billing/create-customer" element={<CreateCustomer />} />
+          <Route path="/billing/customers-list" element={<CustomersList />} />
+          <Route
+            path="/billing/customer-details/:id"
+            element={<CustomerDetails />}
+          />
+          <Route path="/customer/:id" element={<CustomerDetails />} />
+          <Route path="/all-products" element={<AllProductsPage />} />
+          <Route path="/product/:barcode" element={<ProductDetails />} />
+          <Route path="/product" element={<ProductDetails />} />
+          <Route path="/eway-dashboard" element={<EWayBillDashboard />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/opening-balances" element={<OpeningBalancePage />} />
+          <Route path="/gstr2" element={<GSTR2Page />} />
+          <Route path="/purchases" element={<PurchaseManagement />} />
+          <Route path="/stock-checking" element={<StockCheckingPage />} />
+          <Route path="/stock-check-reports" element={<StockCheckReportsPage />} />
+          <Route path="/data-management" element={<DataManagementPage />} />
+          <Route path="/barcode-management" element={<BarcodeManagementPage />} />
+          <Route path="/data-management/:collectionType" element={<GenericDataManagement />} />
+          <Route path="/vouchers" element={<VoucherManagement />} />
+          <Route path="/advanced-vouchers" element={<AdvancedVoucherManagement />} />
+          <Route path="/enhanced-vouchers" element={<EnhancedVoucherManagement />} />
+          <Route path="/bank-reconciliation" element={<BankReconciliation />} />
+          <Route path="/day-book" element={<DayBook />} />
+          <Route path="/cheque-management" element={<ChequeManagement />} />
+          <Route path="/ratio-analysis" element={<RatioAnalysis />} />
+          <Route path="/reports" element={<FinancialReports />} />
+          <Route path="/gst" element={<GSTManagement />} />
+          <Route path="/tds" element={<TDSManagement />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 

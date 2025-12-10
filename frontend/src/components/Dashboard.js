@@ -247,6 +247,21 @@ const Dashboard = () => {
         <Link to="/data-management" style={styles.link}>
           <button style={styles.button}>Data Management</button>
         </Link>
+        <Link to="/bank-reconciliation" style={styles.link}>
+          <button style={styles.button}>Bank Reconciliation</button>
+        </Link>
+        <Link to="/day-book" style={styles.link}>
+          <button style={styles.button}>Day Book</button>
+        </Link>
+        <Link to="/enhanced-vouchers" style={styles.link}>
+          <button style={styles.button}>Enhanced Vouchers</button>
+        </Link>
+        <Link to="/cheque-management" style={styles.link}>
+          <button style={styles.button}>Cheque Management</button>
+        </Link>
+        <Link to="/ratio-analysis" style={styles.link}>
+          <button style={styles.button}>Ratio Analysis</button>
+        </Link>
         {canAccessInventory && (
           <Link to="/transit" style={styles.link}>
             <button style={styles.button}>Transit</button>

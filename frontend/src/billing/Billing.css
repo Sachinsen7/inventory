@@ -6,7 +6,8 @@
     padding: 20px;
 }
 
-h2, h5 {
+h2,
+h5 {
     color: white;
     text-align: center;
 }
@@ -64,7 +65,8 @@ h2 {
 }
 
 /* Form Elements */
-.form-select, .form-control {
+.form-select,
+.form-control {
     background-color: rgba(255, 255, 255, 0.9);
     color: #333;
     border: none;
@@ -75,7 +77,8 @@ h2 {
     width: 100%;
 }
 
-.form-select:focus, .form-control:focus {
+.form-select:focus,
+.form-control:focus {
     background-color: white;
     color: #333;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -83,7 +86,8 @@ h2 {
     outline: none;
 }
 
-.form-select:hover, .form-control:hover {
+.form-select:hover,
+.form-control:hover {
     background-color: white;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
@@ -313,7 +317,8 @@ input[type="date"].form-control.is-invalid:focus {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
-.table th, .table td {
+.table th,
+.table td {
     border-color: rgba(255, 255, 255, 0.15);
     padding: 12px;
     text-align: left;
@@ -434,9 +439,9 @@ input[type="date"].form-control.is-invalid:focus {
         margin-bottom: 10px;
     }
 
-    .card-body .col-md-4, 
-    .card-body .col-md-6, 
-    .card-body .col-md-8, 
+    .card-body .col-md-4,
+    .card-body .col-md-6,
+    .card-body .col-md-8,
     .card-body .col-md-12 {
         flex: 0 0 100% !important;
         max-width: 100% !important;
@@ -468,7 +473,8 @@ input[type="date"].form-control.is-invalid:focus {
     margin: 0;
 }
 
-.inventory-status-table th, .inventory-status-table td {
+.inventory-status-table th,
+.inventory-status-table td {
     background: rgba(255, 255, 255, 0.05) !important;
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -506,4 +512,84 @@ input[type="date"].form-control.is-invalid:focus {
 
 .bg-info {
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-} 
+}
+
+/* Availab
+ility Display Styles */
+.availability-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.availability-info .badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.availability-info .badge.bg-success {
+    background-color: #28a745 !important;
+    color: white;
+}
+
+.availability-info .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529;
+}
+
+.availability-info .badge.bg-secondary {
+    background-color: #6c757d !important;
+    color: white;
+}
+
+.availability-info small {
+    font-size: 0.7rem;
+    line-height: 1.2;
+    max-width: 120px;
+    word-wrap: break-word;
+}
+
+/* Enhanced Quantity Button Styles */
+.btn-group .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.btn-group .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-group .btn-outline-success {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.btn-group .btn-outline-success:hover {
+    background-color: #28a745;
+    color: white;
+}
+
+/* Tooltip for minus button */
+.btn-group .btn-outline-danger[title] {
+    position: relative;
+}
+
+/* Table responsiveness for availability column */
+@media (max-width: 768px) {
+    .availability-info {
+        font-size: 0.8rem;
+    }
+
+    .availability-info .badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+    }
+
+    .availability-info small {
+        font-size: 0.6rem;
+    }
+}

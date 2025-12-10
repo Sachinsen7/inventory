@@ -30,6 +30,13 @@ const gstr2Routes = require("./routes/gstr2Routes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const stockCheckRoutes = require("./routes/stockCheckRoutes");
+const voucherRoutes = require("./routes/voucherRoutes");
+const advancedVoucherRoutes = require("./routes/advancedVoucherRoutes");
+const bankReconciliationRoutes = require("./routes/bankReconciliationRoutes");
+const chequeRoutes = require("./routes/chequeRoutes");
+const reportsRoutes = require("./routes/reportsRoutes");
+const gstRoutes = require("./routes/gstRoutes");
+const tdsRoutes = require("./routes/tdsRoutes");
 
 // Middleware
 // NOTE: Security middleware added below. After pulling these changes run in `backend`:
@@ -2794,6 +2801,13 @@ app.delete('/api/clear-collection/:collectionName', async (req, res) => {
 // ============================================
 app.use('/api/bills', billingRoutes);
 app.use('/api/stock-check', stockCheckRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/advanced-vouchers', advancedVoucherRoutes);
+app.use('/api/bank-reconciliation', bankReconciliationRoutes);
+app.use('/api/cheques', chequeRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/gst', gstRoutes);
+app.use('/api/tds', tdsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/ledger', ledgerRoutes);
 app.use('/api/gstr2', gstr2Routes);

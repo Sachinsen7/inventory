@@ -18,32 +18,43 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
 
     const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
-    // Fetch invoices when customer is selected
-    React.useEffect(() => {
-        if (customerId) {
-            fetchInvoices();
-        }
-    }, [customerId]);
-
-    const fetchInvoices = async () => {
+    const fetchInvoices = React.useCallback(async () => {
         try {
             setLoadingInvoices(true);
-            const response = await fetch(`${backendUrl}/api/invoices?customerId=${customerId}`);
+            // Fetch bills for the customer (bills are the invoices in this system)
+            const response = await fetch(`${backendUrl}/api/bills/customer/${customerId}/bills`);
             const data = await response.json();
-            setInvoices(data.invoices || []);
+            setInvoices(data || []);
         } catch (error) {
             console.error('Error fetching invoices:', error);
             showToast.error('Failed to load invoices');
         } finally {
             setLoadingInvoices(false);
         }
-    };
+    }, [customerId]);
+
+    // Fetch invoices when customer is selected
+    React.useEffect(() => {
+        if (customerId) {
+            fetchInvoices();
+        }
+    }, [customerId, fetchInvoices]);
 
     const handleInvoiceSelect = (selectedInvoiceId) => {
         setInvoiceId(selectedInvoiceId);
         const invoice = invoices.find(inv => inv.invoiceId === selectedInvoiceId);
         if (invoice) {
-            setPaymentAmount(invoice.totalAmount.toString());
+            // Calculate current outstanding amount
+            const totalPaid = invoice.payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+            const remainingAmount = invoice.totalAmount - totalPaid;
+
+            // Set payment amount to remaining amount (for full payment)
+            setPaymentAmount(remainingAmount.toString());
+            setRemainingBalance('0.00');
+            setIsFullPayment(true);
+
+            // Clear notes
+            setNotes('');
         }
     };
 
@@ -186,9 +197,9 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                                     }}
                                 >
                                     <option value="">-- Select an Invoice --</option>
-                                    {invoices.map((invoice) => (
-                                        <option key={invoice._id} value={invoice.invoiceId}>
-                                            {invoice.invoiceId} - {invoice.billNumber} - ₹{invoice.totalAmount.toLocaleString()} ({invoice.paymentStatus})
+                                    {invoices.map((bill) => (
+                                        <option key={bill._id} value={bill.invoiceId}>
+                                            {bill.invoiceNumber} - {bill.billNumber} - ₹{bill.totalAmount.toLocaleString()} ({bill.paymentStatus})
                                         </option>
                                     ))}
                                 </select>
@@ -214,14 +225,35 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                                     color: '#004085'
                                 }}>
                                     <strong>Selected Invoice:</strong> {invoiceId}
-                                    {invoices.find(inv => inv.invoiceId === invoiceId) && (
-                                        <>
-                                            <br />
-                                            <strong>Status:</strong> {invoices.find(inv => inv.invoiceId === invoiceId).paymentStatus}
-                                            <br />
-                                            <strong>Amount:</strong> ₹{invoices.find(inv => inv.invoiceId === invoiceId).totalAmount.toLocaleString()}
-                                        </>
-                                    )}
+                                    {(() => {
+                                        const selectedInvoice = invoices.find(inv => inv.invoiceId === invoiceId);
+                                        if (selectedInvoice) {
+                                            const totalPaid = selectedInvoice.payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+                                            const remainingAmount = selectedInvoice.totalAmount - totalPaid;
+                                            const currentPayment = parseFloat(paymentAmount) || 0;
+                                            const afterPaymentRemaining = remainingAmount - currentPayment;
+
+                                            return (
+                                                <>
+                                                    <br />
+                                                    <strong>Status:</strong> {selectedInvoice.paymentStatus}
+                                                    <br />
+                                                    <strong>Total Amount:</strong> ₹{selectedInvoice.totalAmount.toLocaleString()}
+                                                    <br />
+                                                    <strong>Total Paid:</strong> ₹{totalPaid.toLocaleString()}
+                                                    <br />
+                                                    <strong>Current Outstanding:</strong> ₹{remainingAmount.toLocaleString()}
+                                                    {currentPayment > 0 && (
+                                                        <>
+                                                            <br />
+                                                            <strong style={{ color: '#28a745' }}>After Payment (₹{currentPayment.toLocaleString()}):</strong> ₹{Math.max(0, afterPaymentRemaining).toLocaleString()}
+                                                        </>
+                                                    )}
+                                                </>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -240,6 +272,26 @@ function LedgerManagement({ customerId: propCustomerId, customerName: propCustom
                                         // Allow only numbers and decimal point
                                         if (value === '' || /^\d*\.?\d*$/.test(value)) {
                                             setPaymentAmount(value);
+
+                                            // Auto-calculate remaining balance
+                                            if (invoiceId && value) {
+                                                const selectedInvoice = invoices.find(inv => inv.invoiceId === invoiceId);
+                                                if (selectedInvoice) {
+                                                    const totalPaid = selectedInvoice.payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+                                                    const currentOutstanding = selectedInvoice.totalAmount - totalPaid;
+                                                    const paymentAmountNum = parseFloat(value) || 0;
+                                                    const newRemaining = Math.max(0, currentOutstanding - paymentAmountNum);
+                                                    setRemainingBalance(newRemaining.toFixed(2));
+
+                                                    // Auto-set full payment if payment covers full amount
+                                                    if (paymentAmountNum >= currentOutstanding) {
+                                                        setIsFullPayment(true);
+                                                        setRemainingBalance('0.00');
+                                                    } else {
+                                                        setIsFullPayment(false);
+                                                    }
+                                                }
+                                            }
                                         }
                                     }}
                                     onBlur={(e) => {

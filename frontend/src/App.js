@@ -48,8 +48,18 @@ import PurchaseManagement from "./components/PurchaseManagement";
 import StockCheckingPage from "./components/StockCheckingPage";
 import StockCheckReportsPage from "./components/StockCheckReportsPage";
 import DataManagementPage from "./components/DataManagementPage";
+import VoucherManagement from "./components/VoucherManagement";
+import FinancialReports from "./components/FinancialReports";
+import GSTManagement from "./components/GSTManagement";
+import TDSManagement from "./components/TDSManagement";
 import BarcodeManagementPage from "./components/BarcodeManagementPage";
 import GenericDataManagement from "./components/GenericDataManagement";
+import AdvancedVoucherManagement from "./components/AdvancedVoucherManagement";
+import BankReconciliation from "./components/BankReconciliation";
+import DayBook from "./components/DayBook";
+import EnhancedVoucherManagement from "./components/EnhancedVoucherManagement";
+import ChequeManagement from "./components/ChequeManagement";
+import RatioAnalysis from "./components/RatioAnalysis";
 
 const App = () => {
   const [isAuthenticated] = useState(false);
@@ -125,6 +135,16 @@ const App = () => {
           <Route path="/data-management" element={<DataManagementPage />} />
           <Route path="/barcode-management" element={<BarcodeManagementPage />} />
           <Route path="/data-management/:collectionType" element={<GenericDataManagement />} />
+          <Route path="/vouchers" element={<VoucherManagement />} />
+          <Route path="/advanced-vouchers" element={<AdvancedVoucherManagement />} />
+          <Route path="/enhanced-vouchers" element={<EnhancedVoucherManagement />} />
+          <Route path="/bank-reconciliation" element={<BankReconciliation />} />
+          <Route path="/day-book" element={<DayBook />} />
+          <Route path="/cheque-management" element={<ChequeManagement />} />
+          <Route path="/ratio-analysis" element={<RatioAnalysis />} />
+          <Route path="/reports" element={<FinancialReports />} />
+          <Route path="/gst" element={<GSTManagement />} />
+          <Route path="/tds" element={<TDSManagement />} />
         </Routes>
       </Router>
     </AuthProvider>

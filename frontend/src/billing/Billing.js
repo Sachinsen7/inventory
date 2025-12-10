@@ -347,6 +347,13 @@ function Billing() {
       };
       setSelectedItems([...selectedItems, newItem]);
     }
+
+    // Automatically check inventory after adding item
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100); // Small delay to ensure state is updated
+    }
   };
 
   const increaseQuantity = (itemId) => {
@@ -356,6 +363,13 @@ function Billing() {
         : item
     );
     setSelectedItems(updatedItems);
+
+    // Automatically update inventory status
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100);
+    }
   };
 
   const decreaseQuantity = (itemId) => {
@@ -367,6 +381,13 @@ function Billing() {
       return item;
     }).filter(item => item.quantity > 0); // Remove items with quantity 0
     setSelectedItems(updatedItems);
+
+    // Automatically update inventory status
+    if (selectedGodown && selectedCustomer) {
+      setTimeout(() => {
+        checkInventory();
+      }, 100);
+    }
   };
 
   const removeItem = (itemId) => {
@@ -1111,7 +1132,7 @@ function Billing() {
                       className="btn btn-outline-info w-100"
                       onClick={() => navigate(`/customer/${selectedCustomer}`)}
                     >
-                      🔄 View Bill History
+                      View Bill History
                     </button>
                   )}
                 </div>
@@ -1321,7 +1342,7 @@ function Billing() {
                         <th>Price (₹)</th>
                         <th>Quantity</th>
                         <th>Total (₹)</th>
-                        <th>Actions</th>
+                        <th>Availability</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1345,8 +1366,17 @@ function Billing() {
                               <td>
                                 <div className="btn-group" role="group">
                                   <button
-                                    className="btn btn-outline-secondary btn-sm"
-                                    onClick={() => decreaseQuantity(item.itemId)}
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => {
+                                      if (item.quantity <= 1) {
+                                        // Remove item if quantity is 1 or less
+                                        removeItem(item.itemId);
+                                      } else {
+                                        // Decrease quantity normally
+                                        decreaseQuantity(item.itemId);
+                                      }
+                                    }}
+                                    title={item.quantity <= 1 ? "Remove item" : "Decrease quantity"}
                                   >
                                     -
                                   </button>
@@ -1354,7 +1384,7 @@ function Billing() {
                                     {item.quantity}
                                   </span>
                                   <button
-                                    className="btn btn-outline-secondary btn-sm"
+                                    className="btn btn-outline-success btn-sm"
                                     onClick={() => increaseQuantity(item.itemId)}
                                   >
                                     +
@@ -1363,12 +1393,27 @@ function Billing() {
                               </td>
                               <td>₹{item.total}</td>
                               <td>
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => removeItem(item.itemId)}
-                                >
-                                  Remove
-                                </button>
+                                {/* Availability Display */}
+                                {itemInventoryStatus ? (
+                                  <div className="availability-info">
+                                    <span className={`badge ${itemInventoryStatus.isAvailableInSelectedGodown ? 'bg-success' : 'bg-warning'}`}>
+                                      {itemInventoryStatus.isAvailableInSelectedGodown
+                                        ? `✅ Available: ${itemInventoryStatus.availableQuantity}`
+                                        : `⚠️ Limited: ${itemInventoryStatus.availableQuantity}`
+                                      }
+                                    </span>
+                                    {itemInventoryStatus.alternativeGodowns && itemInventoryStatus.alternativeGodowns.length > 0 && (
+                                      <div className="mt-1">
+                                        <small className="text-muted">
+                                          Also in: {itemInventoryStatus.alternativeGodowns.slice(0, 2).map(g => g.godownName).join(', ')}
+                                          {itemInventoryStatus.alternativeGodowns.length > 2 && ` +${itemInventoryStatus.alternativeGodowns.length - 2} more`}
+                                        </small>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="badge bg-secondary">Check Inventory</span>
+                                )}
                               </td>
                             </tr>
 

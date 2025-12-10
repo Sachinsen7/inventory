@@ -225,7 +225,7 @@ const Customer = props => {
     >
       <h3 style={{ margin: '0 0 15px 0' }}>
         <Link to={`/customer/${props.customer._id}`} style={linkStyle}>
-          👤 {props.customer.name}
+          {props.customer.name}
         </Link>
       </h3>
       <p style={textStyle}>📍 <strong>Address:</strong> {props.customer.address}</p>

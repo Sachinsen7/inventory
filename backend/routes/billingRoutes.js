@@ -1129,6 +1129,224 @@ router.get('/bills/:billId/eway-bill', async (req, res) => {
   }
 });
 
+// ==================== E-WAY BILL DASHBOARD ROUTES ====================
+// These routes must come BEFORE /bills/:id to avoid route conflicts
+
+// Get E-Way Bill Dashboard Statistics
+router.get('/bills/eway-dashboard', async (req, res) => {
+  try {
+    logger.info('E-Way Bill Dashboard endpoint called');
+    const { startDate, endDate } = req.query;
+
+    // Check if any bills exist first
+    let billCount = 0;
+    try {
+      billCount = await Bill.countDocuments();
+      logger.info('Bill count retrieved', { billCount });
+    } catch (countError) {
+      logger.error('Error counting bills', countError);
+      return res.json({
+        stats: {
+          totalActive: 0,
+          totalExpired: 0,
+          totalJsonGenerated: 0,
+          totalValue: 0,
+          expiringSoonCount: 0
+        },
+        expiringSoon: [],
+        recentEWayBills: [],
+        transportModes: [],
+        statusBreakdown: []
+      });
+    }
+
+    if (billCount === 0) {
+      logger.info('No bills found, returning empty data');
+      return res.json({
+        stats: {
+          totalActive: 0,
+          totalExpired: 0,
+          totalJsonGenerated: 0,
+          totalValue: 0,
+          expiringSoonCount: 0
+        },
+        expiringSoon: [],
+        recentEWayBills: [],
+        transportModes: [],
+        statusBreakdown: []
+      });
+    }
+
+    // Build date filter using createdAt instead of billDate
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    // Get statistics by status - with error handling
+    let stats = [];
+    try {
+      stats = await Bill.aggregate([
+        {
+          $match: {
+            ...dateFilter,
+            'eWayBill.status': { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: '$eWayBill.status',
+            count: { $sum: 1 },
+            totalValue: { $sum: '$totalAmount' }
+          }
+        }
+      ]);
+    } catch (aggError) {
+      logger.warn('Aggregation error, returning empty stats', aggError);
+      stats = [];
+    }
+
+    // Get expiring soon (within 7 days) - use validUpto instead of validityDate
+    const today = new Date();
+    const expiringDate = new Date();
+    expiringDate.setDate(expiringDate.getDate() + 7);
+
+    const expiringSoon = await Bill.find({
+      'eWayBill.validUpto': {
+        $gte: today,
+        $lte: expiringDate
+      },
+      'eWayBill.status': 'Active'
+    })
+      .populate('customerId', 'name city state')
+      .sort({ 'eWayBill.validUpto': 1 })
+      .limit(10);
+
+    // Get recently generated E-Way Bills - use eWayBillNo instead of number
+    const recentEWayBills = await Bill.find({
+      'eWayBill.eWayBillNo': { $exists: true, $ne: null }
+    })
+      .populate('customerId', 'name city state')
+      .sort({ 'eWayBill.eWayBillDate': -1 })
+      .limit(10);
+
+    // Get transport mode distribution
+    const transportModes = await Bill.aggregate([
+      {
+        $match: {
+          ...dateFilter,
+          'eWayBill.transportMode': { $exists: true, $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$eWayBill.transportMode',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Calculate totals
+    const totalActive = stats.find(s => s._id === 'Active')?.count || 0;
+    const totalExpired = stats.find(s => s._id === 'Expired')?.count || 0;
+    const totalJsonGenerated = stats.find(s => s._id === 'JSON Generated')?.count || 0;
+    const totalValue = stats.reduce((sum, s) => sum + (s.totalValue || 0), 0);
+
+    res.json({
+      stats: {
+        totalActive,
+        totalExpired,
+        totalJsonGenerated,
+        totalValue,
+        expiringSoonCount: expiringSoon.length
+      },
+      expiringSoon,
+      recentEWayBills,
+      transportModes,
+      statusBreakdown: stats
+    });
+  } catch (error) {
+    logger.error('Error fetching E-Way Bill dashboard', error);
+    res.json({
+      stats: {
+        totalActive: 0,
+        totalExpired: 0,
+        totalJsonGenerated: 0,
+        totalValue: 0,
+        expiringSoonCount: 0
+      },
+      expiringSoon: [],
+      recentEWayBills: [],
+      transportModes: [],
+      statusBreakdown: [],
+      error: 'Dashboard data unavailable'
+    });
+  }
+});
+
+// Get E-Way Bill monthly trend
+router.get('/bills/eway-trend', async (req, res) => {
+  try {
+    logger.info('E-Way Bill Trend endpoint called');
+    const { months = 6 } = req.query;
+
+    // Check if any bills exist first
+    let billCount = 0;
+    try {
+      billCount = await Bill.countDocuments();
+      logger.info('Bill count for trend', { billCount });
+    } catch (countError) {
+      logger.error('Error counting bills for trend', countError);
+      return res.json([]);
+    }
+
+    if (billCount === 0) {
+      logger.info('No bills found for trend, returning empty array');
+      return res.json([]);
+    }
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - parseInt(months));
+
+    // Use createdAt instead of billDate, with error handling
+    let trend = [];
+    try {
+      trend = await Bill.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+            'eWayBill.eWayBillNo': { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              month: { $month: '$createdAt' },
+              year: { $year: '$createdAt' }
+            },
+            count: { $sum: 1 },
+            totalValue: { $sum: '$totalAmount' }
+          }
+        },
+        {
+          $sort: { '_id.year': 1, '_id.month': 1 }
+        }
+      ]);
+    } catch (aggError) {
+      logger.warn('Trend aggregation error, returning empty array', aggError);
+      trend = [];
+    }
+
+    res.json(trend);
+  } catch (error) {
+    logger.error('Error fetching E-Way Bill trend', error);
+    res.json([]); // Return empty array instead of error
+  }
+});
+
 // Get single bill
 router.get('/bills/:id', async (req, res) => {
   try {
@@ -1373,350 +1591,10 @@ router.put('/godowns/:godownId/inventory/:itemName', async (req, res) => {
 
 // ==================== E-WAY BILL DASHBOARD ====================
 
-// Get E-Way Bill Dashboard Statistics
-router.get('/eway-dashboard', async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    // Build date filter using createdAt instead of billDate
-    let dateFilter = {};
-    if (startDate && endDate) {
-      dateFilter.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
-
-    // Get statistics by status - with error handling
-    let stats = [];
-    try {
-      stats = await Bill.aggregate([
-        {
-          $match: {
-            ...dateFilter,
-            'eWayBill.status': { $exists: true, $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: '$eWayBill.status',
-            count: { $sum: 1 },
-            totalValue: { $sum: '$totalAmount' }
-          }
-        }
-      ]);
-    } catch (aggError) {
-      logger.warn('Aggregation error, returning empty stats', aggError);
-      stats = [];
-    }
-
-    // Get expiring soon (within 7 days)
-    const today = new Date();
-    const expiringDate = new Date();
-    expiringDate.setDate(expiringDate.getDate() + 7);
-
-    const expiringSoon = await Bill.find({
-      'eWayBill.validityDate': {
-        $gte: today,
-        $lte: expiringDate
-      },
-      'eWayBill.status': 'active'
-    })
-      .populate('customerId', 'name city state')
-      .sort({ 'eWayBill.validityDate': 1 })
-      .limit(10);
-
-    // Get recently generated E-Way Bills
-    const recentEWayBills = await Bill.find({
-      'eWayBill.number': { $exists: true, $ne: null }
-    })
-      .populate('customerId', 'name city state')
-      .sort({ 'eWayBill.generatedDate': -1 })
-      .limit(10);
-
-    // Get transport mode distribution
-    const transportModes = await Bill.aggregate([
-      {
-        $match: {
-          ...dateFilter,
-          'eWayBill.transportMode': { $exists: true, $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: '$eWayBill.transportMode',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // Calculate totals
-    const totalActive = stats.find(s => s._id === 'active')?.count || 0;
-    const totalExpired = stats.find(s => s._id === 'expired')?.count || 0;
-    const totalJsonGenerated = stats.find(s => s._id === 'json_generated')?.count || 0;
-    const totalValue = stats.reduce((sum, s) => sum + (s.totalValue || 0), 0);
-
-    res.json({
-      stats: {
-        totalActive,
-        totalExpired,
-        totalJsonGenerated,
-        totalValue,
-        expiringSoonCount: expiringSoon.length
-      },
-      expiringSoon,
-      recentEWayBills,
-      transportModes,
-      statusBreakdown: stats
-    });
-  } catch (error) {
-    logger.error('Error fetching E-Way Bill dashboard', error);
-    res.status(500).json({ message: 'Unable to fetch dashboard data', error: error.message });
-  }
-});
-
-// Get E-Way Bill monthly trend
-router.get('/eway-trend', async (req, res) => {
-  try {
-    const { months = 6 } = req.query;
-
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - parseInt(months));
-
-    // Use createdAt instead of billDate, with error handling
-    let trend = [];
-    try {
-      trend = await Bill.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate },
-            'eWayBill.number': { $exists: true, $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: {
-              month: { $month: '$createdAt' },
-              year: { $year: '$createdAt' }
-            },
-            count: { $sum: 1 },
-            totalValue: { $sum: '$totalAmount' }
-          }
-        },
-        {
-          $sort: { '_id.year': 1, '_id.month': 1 }
-        }
-      ]);
-    } catch (aggError) {
-      logger.warn('Trend aggregation error, returning empty array', aggError);
-      trend = [];
-    }
-
-    res.json(trend);
-  } catch (error) {
-    logger.error('Error fetching E-Way Bill trend', error);
-    res.json([]); // Return empty array instead of error
-  }
-});
+// E-Way Bill routes moved above to avoid route conflicts
 
 // ==================== E-WAY BILL DASHBOARD ====================
-
-// Get E-Way Bill Dashboard Statistics
-router.get('/eway-dashboard', async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    // Return empty data if no bills exist
-    const billCount = await Bill.countDocuments();
-    if (billCount === 0) {
-      return res.json({
-        stats: {
-          totalActive: 0,
-          totalExpired: 0,
-          totalJsonGenerated: 0,
-          totalValue: 0,
-          expiringSoonCount: 0
-        },
-        expiringSoon: [],
-        recentEWayBills: [],
-        transportModes: [],
-        statusBreakdown: []
-      });
-    }
-
-    // Build date filter
-    let dateFilter = {};
-    if (startDate && endDate) {
-      dateFilter.billDate = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
-
-    // Get statistics by status
-    let stats = [];
-    try {
-      stats = await Bill.aggregate([
-        {
-          $match: {
-            ...dateFilter,
-            'eWayBill.status': { $exists: true, $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: '$eWayBill.status',
-            count: { $sum: 1 },
-            totalValue: { $sum: '$totalAmount' }
-          }
-        }
-      ]);
-    } catch (aggError) {
-      logger.warn('Aggregation error, returning empty stats', aggError);
-      stats = [];
-    }
-
-    // Get expiring soon (within 7 days)
-    const today = new Date();
-    const expiringDate = new Date();
-    expiringDate.setDate(expiringDate.getDate() + 7);
-
-    const expiringSoon = await Bill.find({
-      'eWayBill.validityDate': {
-        $gte: today,
-        $lte: expiringDate
-      },
-      'eWayBill.status': 'active'
-    })
-      .populate('customerId', 'name city state')
-      .sort({ 'eWayBill.validityDate': 1 })
-      .limit(10)
-      .catch(err => {
-        logger.warn('Error fetching expiring bills', err);
-        return [];
-      });
-
-    // Get recently generated E-Way Bills
-    const recentEWayBills = await Bill.find({
-      'eWayBill.number': { $exists: true, $ne: null }
-    })
-      .populate('customerId', 'name city state')
-      .sort({ 'eWayBill.generatedDate': -1 })
-      .limit(10)
-      .catch(err => {
-        logger.warn('Error fetching recent bills', err);
-        return [];
-      });
-
-    // Get transport mode distribution
-    let transportModes = [];
-    try {
-      transportModes = await Bill.aggregate([
-        {
-          $match: {
-            ...dateFilter,
-            'eWayBill.transportMode': { $exists: true, $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: '$eWayBill.transportMode',
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-    } catch (aggError) {
-      logger.warn('Transport mode aggregation error', aggError);
-      transportModes = [];
-    }
-
-    // Calculate totals
-    const totalActive = stats.find(s => s._id === 'active')?.count || 0;
-    const totalExpired = stats.find(s => s._id === 'expired')?.count || 0;
-    const totalJsonGenerated = stats.find(s => s._id === 'json_generated')?.count || 0;
-    const totalValue = stats.reduce((sum, s) => sum + (s.totalValue || 0), 0);
-
-    res.json({
-      stats: {
-        totalActive,
-        totalExpired,
-        totalJsonGenerated,
-        totalValue,
-        expiringSoonCount: expiringSoon.length
-      },
-      expiringSoon: expiringSoon || [],
-      recentEWayBills: recentEWayBills || [],
-      transportModes: transportModes || [],
-      statusBreakdown: stats || []
-    });
-  } catch (error) {
-    logger.error('Error fetching E-Way Bill dashboard', error);
-    // Return empty data instead of error
-    res.json({
-      stats: {
-        totalActive: 0,
-        totalExpired: 0,
-        totalJsonGenerated: 0,
-        totalValue: 0,
-        expiringSoonCount: 0
-      },
-      expiringSoon: [],
-      recentEWayBills: [],
-      transportModes: [],
-      statusBreakdown: []
-    });
-  }
-});
-
-// Get E-Way Bill monthly trend
-router.get('/eway-trend', async (req, res) => {
-  try {
-    const { months = 6 } = req.query;
-
-    // Return empty array if no bills exist
-    const billCount = await Bill.countDocuments();
-    if (billCount === 0) {
-      return res.json([]);
-    }
-
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - parseInt(months));
-
-    let trend = [];
-    try {
-      trend = await Bill.aggregate([
-        {
-          $match: {
-            billDate: { $gte: startDate },
-            'eWayBill.number': { $exists: true, $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: {
-              month: { $month: '$billDate' },
-              year: { $year: '$billDate' }
-            },
-            count: { $sum: 1 },
-            totalValue: { $sum: '$totalAmount' }
-          }
-        },
-        {
-          $sort: { '_id.year': 1, '_id.month': 1 }
-        }
-      ]);
-    } catch (aggError) {
-      logger.warn('Trend aggregation error', aggError);
-      trend = [];
-    }
-
-    res.json(trend || []);
-  } catch (error) {
-    logger.error('Error fetching E-Way Bill trend', error);
-    // Return empty array instead of error
-    res.json([]);
-  }
-});
+// Duplicate endpoints removed - using the corrected ones above
 
 // ==================== PRINT HISTORY TRACKING ====================
 

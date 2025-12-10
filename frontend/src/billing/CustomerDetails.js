@@ -233,14 +233,14 @@ const BillHistory = ({ bills, customer }) => {
   const getPaymentStatusIcon = (status) => {
     switch (status) {
       case 'Completed':
-        return '✅';
+        return '';
       case 'Processing':
-        return '🔄';
+        return '';
       case 'Failed':
-        return '❌';
+        return '';
       case 'Pending':
       default:
-        return '⏳';
+        return '';
     }
   };
 
@@ -298,14 +298,14 @@ const BillHistory = ({ bills, customer }) => {
                 {bill.eWayBill?.generated ? (
                   <div style={{ fontSize: '0.85rem' }}>
                     <span className="badge bg-success" style={{ display: 'block', marginBottom: '5px' }}>
-                      ✅ {bill.eWayBill.eWayBillNo}
+                      {bill.eWayBill.eWayBillNo}
                     </span>
                     <small style={{ color: 'rgba(255,255,255,0.7)' }}>
                       Valid: {new Date(bill.eWayBill.validUpto).toLocaleDateString()}
                     </small>
                   </div>
                 ) : bill.eWayBill?.jsonGenerated ? (
-                  <span className="badge bg-warning">📥 JSON Generated</span>
+                  <span className="badge bg-warning">JSON Generated</span>
                 ) : (
                   <span className="badge bg-secondary">Not Generated</span>
                 )}
@@ -317,14 +317,14 @@ const BillHistory = ({ bills, customer }) => {
                     onClick={() => downloadBillPDF(bill)}
                     title="Download and print invoice PDF"
                   >
-                    🖨️ Reprint Bill
+                    Reprint Bill
                   </button>
                   <button
                     className="btn btn-info btn-sm"
                     onClick={() => downloadBillPDF(bill)}
                     title="Download invoice as PDF"
                   >
-                    📄 Download PDF
+                    Download PDF
                   </button>
                   {!bill.eWayBill?.generated && (
                     <button
@@ -337,7 +337,7 @@ const BillHistory = ({ bills, customer }) => {
                       }}
                       title="Generate E-Way Bill"
                     >
-                      🚛 E-Way Bill
+                      E-Way Bill
                     </button>
                   )}
                 </div>
@@ -993,7 +993,7 @@ function CustomerDetails() {
                 fontSize: "30px",
                 boxShadow: "0 4px 12px rgba(251, 191, 36, 0.4)"
               }}>
-                👤
+                {customer.name.charAt(0).toUpperCase()}
               </div>
               <div>
                 <h2 style={{
@@ -1010,7 +1010,7 @@ function CustomerDetails() {
               style={buttonStyle}
               onClick={() => setIsEditingCustomer(!isEditingCustomer)}
             >
-              {isEditingCustomer ? "❌ Cancel" : "✏️ Edit Details"}
+              {isEditingCustomer ? "Cancel" : "Edit Details"}
             </button>
           </div>
 
@@ -1023,25 +1023,25 @@ function CustomerDetails() {
             marginBottom: isEditingCustomer ? "20px" : "0"
           }}>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📍 Address:</span> {customer.address}
+              <span style={{ opacity: 0.8 }}>Address:</span> {customer.address}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏙️ City:</span> {customer.city}
+              <span style={{ opacity: 0.8 }}>City:</span> {customer.city}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🗺️ State:</span> {customer.state}
+              <span style={{ opacity: 0.8 }}>State:</span> {customer.state}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>🏢 GST No:</span> {customer.gstNo || "N/A"}
+              <span style={{ opacity: 0.8 }}>GST No:</span> {customer.gstNo || "N/A"}
             </p>
             <p style={{ margin: "8px 0" }}>
-              <span style={{ opacity: 0.8 }}>📞 Phone:</span> {customer.phoneNumber || "N/A"}
+              <span style={{ opacity: 0.8 }}>Phone:</span> {customer.phoneNumber || "N/A"}
             </p>
           </div>
 
           {/* Opening & Closing Balance */}
           <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(76, 175, 80, 0.1)", borderRadius: "8px", border: "2px solid rgba(76, 175, 80, 0.3)" }}>
-            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>💰 Account Balance:</p>
+            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>Account Balance:</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
               <p style={{ margin: "0" }}>
                 <span style={{ opacity: 0.8 }}>Opening Balance:</span>{' '}
@@ -1067,7 +1067,7 @@ function CustomerDetails() {
                   }}
                   className="custom-btn"
                 >
-                  ✏️ Set Opening Balance
+                  Set Opening Balance
                 </button>
               </p>
             </div>
@@ -1087,7 +1087,7 @@ function CustomerDetails() {
                 : "2px solid rgba(34, 197, 94, 0.3)"
             }}>
               <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>
-                {customer.closingBalance > customer.creditLimit ? '🚫' : '✅'} Credit Limit Status:
+                Credit Limit Status:
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "15px", fontSize: "14px" }}>
                 <p style={{ margin: "0" }}>
@@ -1119,7 +1119,7 @@ function CustomerDetails() {
                   borderRadius: "6px",
                   fontSize: "13px"
                 }}>
-                  <strong>⚠️ Warning:</strong> Credit limit exceeded by ₹{((customer.closingBalance || 0) - (customer.creditLimit || 0)).toLocaleString()}
+                  <strong>Warning:</strong> Credit limit exceeded by ₹{((customer.closingBalance || 0) - (customer.creditLimit || 0)).toLocaleString()}
                 </div>
               )}
             </div>
@@ -1127,14 +1127,14 @@ function CustomerDetails() {
 
           {/* Always show special pricing dates */}
           <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "8px" }}>
-            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>🏷️ Special Pricing Period:</p>
+            <p style={{ margin: "0 0 10px 0", fontWeight: "bold", fontSize: "14px" }}>Special Pricing Period:</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", fontSize: "14px" }}>
               <p style={{ margin: "0" }}>
-                <span style={{ opacity: 0.8 }}>📅 Start Date:</span>{' '}
+                <span style={{ opacity: 0.8 }}>Start Date:</span>{' '}
                 {customer.specialPriceStartDate ? new Date(customer.specialPriceStartDate).toLocaleDateString() : 'Not Set'}
               </p>
               <p style={{ margin: "0" }}>
-                <span style={{ opacity: 0.8 }}>📅 End Date:</span>{' '}
+                <span style={{ opacity: 0.8 }}>End Date:</span>{' '}
                 {customer.specialPriceEndDate ? new Date(customer.specialPriceEndDate).toLocaleDateString() : 'Not Set'}
               </p>
             </div>
@@ -1149,7 +1149,7 @@ function CustomerDetails() {
               paddingTop: "20px",
               borderTop: "2px solid rgba(255,255,255,0.3)"
             }}>
-              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem" }}>🏷️ Edit Special Pricing Dates</h4>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem" }}>Edit Special Pricing Dates</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                 <div>
                   <label style={{ display: "block", marginBottom: "5px", fontSize: "12px", fontWeight: "600" }}>START DATE</label>
@@ -1171,7 +1171,7 @@ function CustomerDetails() {
                 </div>
               </div>
 
-              <h4 style={{ margin: "20px 0 15px 0", fontSize: "1.1rem" }}>💳 Credit Limit Settings</h4>
+              <h4 style={{ margin: "20px 0 15px 0", fontSize: "1.1rem" }}>Credit Limit Settings</h4>
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "15px", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <input
@@ -1216,19 +1216,18 @@ function CustomerDetails() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
                 <button type="submit" style={buttonStyle} className="custom-btn">
-                  💾 Save Changes
+                  Save Changes
                 </button>
               </div>
             </form>
           )}
         </div>
 
-        {/* Excel Download/Upload Buttons */}
+        {/* Data Management Section */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📊</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
-              Data Management
+              Invoice Data Management
             </h3>
           </div>
           <div style={{
@@ -1237,23 +1236,8 @@ function CustomerDetails() {
             flexWrap: "wrap",
             gap: "12px",
           }}>
-            <button
-              style={buttonStyle}
-              className="custom-btn"
-              onClick={handleDownloadExcel}
-              disabled={!items.length}
-            >
-              📥 Download Excel
-            </button>
-            <button
-              style={buttonStyle}
-              className="custom-btn"
-              onClick={handleDownloadTemplate}
-            >
-              📋 Download Template
-            </button>
             <label style={{ ...buttonStyle, display: "inline-block" }} className="custom-btn">
-              📤 Upload Excel
+              Upload Excel File
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -1261,6 +1245,44 @@ function CustomerDetails() {
                 onChange={handleExcelUpload}
               />
             </label>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={() => {
+                // Navigate to billing page to create bill
+                window.location.href = '/billing';
+              }}
+            >
+              Create Bill
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={() => {
+                // Scroll to bill history section
+                const billHistorySection = document.querySelector('[data-section="bill-history"]');
+                if (billHistorySection) {
+                  billHistorySection.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+            >
+              Bill History
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={handleDownloadExcel}
+              disabled={!items.length}
+            >
+              Download Excel
+            </button>
+            <button
+              style={buttonStyle}
+              className="custom-btn"
+              onClick={handleDownloadTemplate}
+            >
+              Download Template
+            </button>
             {excelFileName && (
               <span style={{
                 color: "rgba(255, 255, 255, 0.9)",
@@ -1277,7 +1299,7 @@ function CustomerDetails() {
         {showExcelPreview && (
           <div style={cardStyle}>
             <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-              📋 Excel Preview
+              Excel Preview
             </h3>
             <div className="table-responsive">
               <table className="table table-bordered">
@@ -1305,14 +1327,14 @@ function CustomerDetails() {
                 className="custom-btn"
                 onClick={handleSaveExcelData}
               >
-                💾 Save
+                Save
               </button>
               <button
                 style={buttonStyle}
                 className="custom-btn"
                 onClick={() => setShowExcelPreview(false)}
               >
-                ❌ Cancel
+                Cancel
               </button>
             </div>
           </div>
@@ -1321,7 +1343,6 @@ function CustomerDetails() {
         {/* Add New Item Section */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>➕</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Add New Item
             </h3>
@@ -1413,7 +1434,7 @@ function CustomerDetails() {
             <div style={{ display: "flex", gap: "15px", marginBottom: "15px", alignItems: "flex-end", paddingLeft: "0" }}>
               <div style={{ flex: "0 0 180px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
-                  📅 Start Date
+                  Start Date
                 </label>
                 <input
                   type="date"
@@ -1437,7 +1458,7 @@ function CustomerDetails() {
               </div>
               <div style={{ flex: "0 0 180px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", opacity: 0.9 }}>
-                  📅 End Date
+                  End Date
                 </label>
                 <input
                   type="date"
@@ -1460,7 +1481,7 @@ function CustomerDetails() {
                 />
               </div>
               <button type="submit" style={{ ...buttonStyle, width: "auto", marginBottom: "0" }} className="custom-btn">
-                ➕ Add Item
+                Add Item
               </button>
             </div>
           </form>
@@ -1469,7 +1490,6 @@ function CustomerDetails() {
         {/* Items Table */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📦</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Items
             </h3>
@@ -1478,7 +1498,7 @@ function CustomerDetails() {
           {/* Items Search */}
           <input
             type="text"
-            placeholder="🔍 Search items by name, price, or special price..."
+            placeholder="Search items by name, price, or special price..."
             value={itemSearchTerm}
             onChange={(e) => setItemSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -1529,16 +1549,15 @@ function CustomerDetails() {
                 className="custom-btn"
                 onClick={() => setShowAllItems(!showAllItems)}
               >
-                {showAllItems ? "👆 View Less" : `👇 View All (${filteredItems.length} items)`}
+                {showAllItems ? "View Less" : `View All (${filteredItems.length} items)`}
               </button>
             </div>
           )}
         </div>
 
         {/* Bill History Section */}
-        <div style={cardStyle}>
+        <div style={cardStyle} data-section="bill-history">
           <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "20px" }}>
-            <span style={{ fontSize: "24px" }}>📄</span>
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
               Bill History
             </h3>
@@ -1547,7 +1566,7 @@ function CustomerDetails() {
           {/* Bills Search */}
           <input
             type="text"
-            placeholder="🔍 Search bills by bill number, amount, price type, or date..."
+            placeholder="Search bills by bill number, amount, price type, or date..."
             value={billSearchTerm}
             onChange={(e) => setBillSearchTerm(e.target.value)}
             style={searchInputStyle}
@@ -1580,7 +1599,7 @@ function CustomerDetails() {
             width: '90%',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
           }}>
-            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>💰 Set Opening Balance</h2>
+            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>Set Opening Balance</h2>
 
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
@@ -1669,7 +1688,7 @@ function CustomerDetails() {
                   cursor: 'pointer'
                 }}
               >
-                💾 Save Balance
+                Save Balance
               </button>
             </div>
           </div>

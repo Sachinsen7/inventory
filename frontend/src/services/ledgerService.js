@@ -62,7 +62,7 @@ export const ledgerService = {
             throw error;
         }
     },
-
+    
     /**
      * Log invoice creation
      * @param {Object} invoice - Invoice data

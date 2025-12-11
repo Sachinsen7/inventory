@@ -219,62 +219,63 @@ const Dashboard = () => {
   return (
     <div style={styles.container}>
       <style>{globalStyles}</style>
-      <h2 style={styles.header}>Admin Dashboard</h2>
+      <h2 className="dashboard-header" style={styles.header}>Admin Dashboard</h2>
 
 
 
-      <div style={styles.buttonContainer}>
+      <div className="button-container" style={styles.buttonContainer}>
         {canAccessInventory && (
           <Link to="/itemCountSummary" style={styles.link}>
-            <button style={styles.button}>Inventory</button>
+            <button className="dashboard-button" style={styles.button}>Inventory</button>
           </Link>
         )}
         <Link to="/signupstaff" style={styles.link}>
-          <button style={styles.button}>Staff</button>
+          <button className="dashboard-button" style={styles.button}>Staff</button>
         </Link>
         {canAccessInventory && (
           <Link to="/godown" style={styles.link}>
-            <button style={styles.button}>Godown</button>
+            <button className="dashboard-button" style={styles.button}>Godown</button>
           </Link>
         )}
         <Link to="/sales" style={styles.link}>
-          <button style={styles.button}>Sale</button>
+          <button className="dashboard-button" style={styles.button}>Sale</button>
         </Link>
         <Link to="/purchases" style={styles.link}>
-          <button style={styles.button}>Purchases</button>
+          <button className="dashboard-button" style={styles.button}>Purchases</button>
         </Link>
 
         <Link to="/data-management" style={styles.link}>
-          <button style={styles.button}>Data Management</button>
+          <button className="dashboard-button" style={styles.button}>Data Management</button>
         </Link>
         <Link to="/bank-reconciliation" style={styles.link}>
-          <button style={styles.button}>Bank Reconciliation</button>
+          <button className="dashboard-button" style={styles.button}>Bank Reconciliation</button>
         </Link>
         <Link to="/day-book" style={styles.link}>
-          <button style={styles.button}>Day Book</button>
+          <button className="dashboard-button" style={styles.button}>Day Book</button>
         </Link>
         <Link to="/enhanced-vouchers" style={styles.link}>
-          <button style={styles.button}>Enhanced Vouchers</button>
+          <button className="dashboard-button" style={styles.button}>Enhanced Vouchers</button>
         </Link>
         <Link to="/cheque-management" style={styles.link}>
-          <button style={styles.button}>Cheque Management</button>
+          <button className="dashboard-button" style={styles.button}>Cheque Management</button>
         </Link>
         <Link to="/ratio-analysis" style={styles.link}>
-          <button style={styles.button}>Ratio Analysis</button>
+          <button className="dashboard-button" style={styles.button}>Ratio Analysis</button>
         </Link>
         {canAccessInventory && (
           <Link to="/transit" style={styles.link}>
-            <button style={styles.button}>Transit</button>
+            <button className="dashboard-button" style={styles.button}>Transit</button>
           </Link>
         )}
 
-        <button style={styles.button} onClick={() => setShowUploadModal(true)}>
+        <button className="dashboard-button" style={styles.button} onClick={() => setShowUploadModal(true)}>
           Upload Excel
         </button>
-        <button style={styles.button} onClick={() => setShowFilesModal(true)}>
+        <button className="dashboard-button" style={styles.button} onClick={() => setShowFilesModal(true)}>
           View Files
         </button>
         <button
+          className="dashboard-button"
           style={styles.button}
           onClick={() => handleDownloadTemplate("products")}
         >
@@ -385,14 +386,16 @@ const Dashboard = () => {
         </div>
       )}
       {/* Analytics Widgets */}
-      <PaymentOverdueWidget />
-      <PendingOrdersWidget />
-      <BillSyncStatusWidget />
-      {canAccessInventory && <LowStockAlertWidget />}
-      <OutstandingWidget />
-      <SalesComparisonWidget />
-      <TopCustomersWidget />
-      {canAccessInventory && <StockValueWidget />}
+      <div className="widgets-grid" style={styles.widgetsGrid}>
+        <PaymentOverdueWidget />
+        <PendingOrdersWidget />
+        <BillSyncStatusWidget />
+        {canAccessInventory && <LowStockAlertWidget />}
+        <OutstandingWidget />
+        <SalesComparisonWidget />
+        <TopCustomersWidget />
+        {canAccessInventory && <StockValueWidget />}
+      </div>
 
 
 
@@ -405,10 +408,10 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     minHeight: "100vh",
     background: "linear-gradient(-45deg, #fcb900, #9900ef, #ff6900, #00ff07)",
-    padding: "20px",
+    padding: "20px 10px",
     backgroundSize: "400% 400%",
     animation: "gradientAnimation 12s ease infinite",
   },
@@ -589,6 +592,16 @@ const styles = {
     cursor: "pointer",
     fontSize: "12px",
   },
+  widgetsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: "20px",
+    width: "100%",
+    maxWidth: "1600px",
+    margin: "0 auto",
+    padding: "0 10px",
+    alignItems: "start",
+  },
   "@keyframes fadeIn": {
     "0%": {
       opacity: 0,
@@ -606,6 +619,60 @@ const globalStyles = `
   50% { background-position: 100% 50%; }
   75% { background-position: 50% 0%; }
   100% { background-position: 0% 50%; }
+}
+
+@media (min-width: 1400px) {
+  .widgets-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .widgets-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+    gap: 15px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .widgets-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+    padding: 0 5px !important;
+  }
+  
+  .dashboard-header {
+    font-size: 2.5rem !important;
+    margin-bottom: 20px !important;
+  }
+  
+  .button-container {
+    gap: 15px !important;
+  }
+  
+  .dashboard-button {
+    padding: 12px 24px !important;
+    font-size: 1.4rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .widgets-grid {
+    gap: 10px !important;
+    grid-template-columns: 1fr !important;
+  }
+  
+  .payment-overdue-widget,
+  .pending-orders-widget,
+  .bill-sync-widget,
+  .low-stock-widget,
+  .outstanding-widget,
+  .sales-comparison-widget,
+  .top-customers-widget,
+  .stock-value-widget {
+    min-height: 200px !important;
+    padding: 12px !important;
+  }
 }
 `;
 

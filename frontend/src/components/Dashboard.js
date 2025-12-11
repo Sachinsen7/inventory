@@ -292,14 +292,14 @@ const Dashboard = () => {
             {/* Template Download Section */}
             <div style={styles.templateSection}>
               <p style={styles.templateText}>
-                📥 Don't have a template? Download one:
+                Don't have a template? Download one:
               </p>
               <div style={styles.templateButtons}>
                 <button
                   onClick={() => handleDownloadTemplate("products")}
                   style={styles.templateButton}
                 >
-                  � Produtcts Template
+                  Products Template
                 </button>
 
               </div>
@@ -414,6 +414,7 @@ const styles = {
     padding: "20px 10px",
     backgroundSize: "400% 400%",
     animation: "gradientAnimation 12s ease infinite",
+    width: "100%",
   },
   header: {
     fontSize: "44px",
@@ -428,6 +429,17 @@ const styles = {
     flexWrap: "wrap",
     gap: "20px",
     justifyContent: "center",
+    width: "100%",
+    maxWidth: "1400px",
+    marginBottom: "30px",
+  },
+  widgetsContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: "1400px",
+    gap: "20px",
   },
   button: {
     padding: "15px 30px",

@@ -61,10 +61,176 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get voucher by ID
+// Get post-dated vouchers (alternative route to avoid conflicts)
+router.get('/list/postdated', async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+
+        const postDatedVouchers = await Voucher.find({
+            isPostDated: true,
+            status: 'draft'
+        })
+            .sort({ effectiveDate: 1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const total = await Voucher.countDocuments({
+            isPostDated: true,
+            status: 'draft'
+        });
+
+        res.json({
+            vouchers: postDatedVouchers,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            total
+        });
+    } catch (error) {
+        console.error('Error fetching post-dated vouchers:', error);
+        res.status(500).json({ message: 'Error fetching post-dated vouchers', error: error.message });
+    }
+});
+
+// Get provisional vouchers (alternative route to avoid conflicts)
+router.get('/list/provisional', async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+
+        const provisionalVouchers = await Voucher.find({
+            status: 'provisional'
+        })
+            .sort({ provisionalDate: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const total = await Voucher.countDocuments({
+            status: 'provisional'
+        });
+
+        res.json({
+            vouchers: provisionalVouchers,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            total
+        });
+    } catch (error) {
+        console.error('Error fetching provisional vouchers:', error);
+        res.status(500).json({ message: 'Error fetching provisional vouchers', error: error.message });
+    }
+});
+
+// Keep original routes for backward compatibility but make them work
+router.get('/postdated', async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+
+        const postDatedVouchers = await Voucher.find({
+            isPostDated: true,
+            status: 'draft'
+        })
+            .sort({ effectiveDate: 1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const total = await Voucher.countDocuments({
+            isPostDated: true,
+            status: 'draft'
+        });
+
+        res.json({
+            vouchers: postDatedVouchers,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            total
+        });
+    } catch (error) {
+        console.error('Error fetching post-dated vouchers:', error);
+        res.status(500).json({ message: 'Error fetching post-dated vouchers', error: error.message });
+    }
+});
+
+// Get provisional vouchers
+router.get('/provisional', async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+
+        const provisionalVouchers = await Voucher.find({
+            status: 'provisional'
+        })
+            .sort({ provisionalDate: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const total = await Voucher.countDocuments({
+            status: 'provisional'
+        });
+
+        res.json({
+            vouchers: provisionalVouchers,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            total
+        });
+    } catch (error) {
+        console.error('Error fetching provisional vouchers:', error);
+        res.status(500).json({ message: 'Error fetching provisional vouchers', error: error.message });
+    }
+});
+
+// Get voucher by ID (with special handling for postdated/provisional)
 router.get('/:id', async (req, res) => {
     try {
-        const voucher = await Voucher.findById(req.params.id)
+        const { id } = req.params;
+
+        // Handle special cases that should be separate routes
+        if (id === 'postdated') {
+            const { page = 1, limit = 20 } = req.query;
+
+            const postDatedVouchers = await Voucher.find({
+                isPostDated: true,
+                status: 'draft'
+            })
+                .sort({ effectiveDate: 1 })
+                .limit(limit * 1)
+                .skip((page - 1) * limit);
+
+            const total = await Voucher.countDocuments({
+                isPostDated: true,
+                status: 'draft'
+            });
+
+            return res.json({
+                vouchers: postDatedVouchers,
+                totalPages: Math.ceil(total / limit),
+                currentPage: page,
+                total
+            });
+        }
+
+        if (id === 'provisional') {
+            const { page = 1, limit = 20 } = req.query;
+
+            const provisionalVouchers = await Voucher.find({
+                status: 'provisional'
+            })
+                .sort({ provisionalDate: -1 })
+                .limit(limit * 1)
+                .skip((page - 1) * limit);
+
+            const total = await Voucher.countDocuments({
+                status: 'provisional'
+            });
+
+            return res.json({
+                vouchers: provisionalVouchers,
+                totalPages: Math.ceil(total / limit),
+                currentPage: page,
+                total
+            });
+        }
+
+        // Regular voucher ID lookup
+        const voucher = await Voucher.findById(id)
             .populate('createdBy', 'name')
             .populate('updatedBy', 'name')
             .populate('items.account');
@@ -486,62 +652,4 @@ router.post('/process-postdated', async (req, res) => {
     }
 });
 
-// Get post-dated vouchers
-router.get('/postdated', async (req, res) => {
-    try {
-        const { page = 1, limit = 20 } = req.query;
-
-        const postDatedVouchers = await Voucher.find({
-            isPostDated: true,
-            status: 'draft'
-        })
-            .sort({ effectiveDate: 1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-
-        const total = await Voucher.countDocuments({
-            isPostDated: true,
-            status: 'draft'
-        });
-
-        res.json({
-            vouchers: postDatedVouchers,
-            totalPages: Math.ceil(total / limit),
-            currentPage: page,
-            total
-        });
-    } catch (error) {
-        console.error('Error fetching post-dated vouchers:', error);
-        res.status(500).json({ message: 'Error fetching post-dated vouchers', error: error.message });
-    }
-});
-
-// Get provisional vouchers
-router.get('/provisional', async (req, res) => {
-    try {
-        const { page = 1, limit = 20 } = req.query;
-
-        const provisionalVouchers = await Voucher.find({
-            status: 'provisional'
-        })
-            .sort({ provisionalDate: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-
-        const total = await Voucher.countDocuments({
-            status: 'provisional'
-        });
-
-        res.json({
-            vouchers: provisionalVouchers,
-            totalPages: Math.ceil(total / limit),
-            currentPage: page,
-            total
-        });
-    } catch (error) {
-        console.error('Error fetching provisional vouchers:', error);
-        res.status(500).json({ message: 'Error fetching provisional vouchers', error: error.message });
-    }
-});
-
-module.exports = router;// Mark voucher as provisional
+module.exports = router;

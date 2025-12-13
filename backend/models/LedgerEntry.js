@@ -38,6 +38,7 @@ const ledgerEntrySchema = new mongoose.Schema({
     referenceNumber: String,
     description: String,
     notes: String,
+    accountName: String, // Account name for reporting purposes
 
     // Related Documents
     billId: {

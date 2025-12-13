@@ -29,8 +29,22 @@ const ledgerEntrySchema = new mongoose.Schema({
         required: true
     },
 
+    // Separate debit/credit amounts for cash/bank book reports
+    debitAmount: {
+        type: Number,
+        default: 0
+    },
+    creditAmount: {
+        type: Number,
+        default: 0
+    },
+
     // Transaction Details
     transactionDate: {
+        type: Date,
+        default: Date.now
+    },
+    date: {
         type: Date,
         default: Date.now
     },
@@ -39,8 +53,15 @@ const ledgerEntrySchema = new mongoose.Schema({
     description: String,
     notes: String,
     accountName: String, // Account name for reporting purposes
+    accountModel: String, // Account model type for cash/bank book reports
+    accountType: String, // Asset, Liability, Income, Expense, Equity
+    accountCategory: String, // Current Assets, Fixed Assets, etc.
 
     // Related Documents
+    voucherId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Voucher'
+    },
     billId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Bill'
@@ -49,6 +70,9 @@ const ledgerEntrySchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'PurchaseBill'
     },
+
+    // Additional fields for cash/bank book reports
+    narration: String,
 
     // Metadata
     createdBy: String,

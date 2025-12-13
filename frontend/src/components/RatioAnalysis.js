@@ -10,7 +10,7 @@ const RatioAnalysis = () => {
         financialYear: '2024-25'
     });
 
-    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://inventory.works';
 
     useEffect(() => {
         generateRatioAnalysis();
@@ -83,32 +83,46 @@ const RatioAnalysis = () => {
     };
 
     const renderFinancialSummary = () => {
-        if (!ratioData?.accounts) return null;
+        if (!ratioData?.summary) return null;
+
+        const equity = ratioData.summary.totalAssets - ratioData.summary.totalLiabilities;
 
         return (
             <div className="financial-summary">
-                <h3>Financial Summary</h3>
+                <h3>📊 Financial Summary</h3>
                 <div className="summary-grid">
                     <div className="summary-item">
                         <label>Total Assets</label>
-                        <span>{formatCurrency(ratioData.accounts.totalAssets)}</span>
+                        <span>{formatCurrency(ratioData.summary.totalAssets)}</span>
+                    </div>
+                    <div className="summary-item">
+                        <label>Current Assets</label>
+                        <span>{formatCurrency(ratioData.summary.currentAssets)}</span>
                     </div>
                     <div className="summary-item">
                         <label>Total Liabilities</label>
-                        <span>{formatCurrency(ratioData.accounts.totalLiabilities)}</span>
+                        <span>{formatCurrency(ratioData.summary.totalLiabilities)}</span>
+                    </div>
+                    <div className="summary-item">
+                        <label>Current Liabilities</label>
+                        <span>{formatCurrency(ratioData.summary.currentLiabilities)}</span>
                     </div>
                     <div className="summary-item">
                         <label>Equity</label>
-                        <span>{formatCurrency(ratioData.accounts.equity)}</span>
+                        <span>{formatCurrency(equity)}</span>
                     </div>
                     <div className="summary-item">
-                        <label>Revenue</label>
-                        <span>{formatCurrency(ratioData.accounts.revenue)}</span>
+                        <label>Total Income</label>
+                        <span>{formatCurrency(ratioData.summary.totalIncome)}</span>
                     </div>
                     <div className="summary-item">
-                        <label>Net Income</label>
-                        <span className={ratioData.accounts.netIncome >= 0 ? 'positive' : 'negative'}>
-                            {formatCurrency(ratioData.accounts.netIncome)}
+                        <label>Total Expenses</label>
+                        <span>{formatCurrency(ratioData.summary.totalExpenses)}</span>
+                    </div>
+                    <div className="summary-item">
+                        <label>Net Profit</label>
+                        <span className={ratioData.summary.netProfit >= 0 ? 'positive' : 'negative'}>
+                            {formatCurrency(ratioData.summary.netProfit)}
                         </span>
                     </div>
                 </div>
@@ -183,21 +197,21 @@ const RatioAnalysis = () => {
                         <div className="ratios-grid">
                             {renderRatioCard(
                                 'Current Ratio',
-                                ratioData.ratios.currentRatio,
-                                ratioData.benchmarks.currentRatio.good,
+                                ratioData.ratios?.liquidityRatios?.currentRatio,
+                                '> 2.0',
                                 'Measures ability to pay short-term obligations',
                                 'liquidity'
                             )}
                             {renderRatioCard(
                                 'Quick Ratio',
-                                ratioData.ratios.quickRatio,
-                                ratioData.benchmarks.quickRatio.good,
+                                ratioData.ratios?.liquidityRatios?.quickRatio,
+                                '> 1.0',
                                 'Measures immediate liquidity without inventory',
                                 'liquidity'
                             )}
                             {renderRatioCard(
                                 'Cash Ratio',
-                                ratioData.ratios.cashRatio,
+                                'N/A',
                                 '> 0.2',
                                 'Measures ability to pay with cash and equivalents',
                                 'liquidity'
@@ -210,29 +224,29 @@ const RatioAnalysis = () => {
                         <div className="ratios-grid">
                             {renderRatioCard(
                                 'Gross Profit Margin',
-                                ratioData.ratios.grossProfitMargin,
+                                ratioData.ratios?.profitabilityRatios?.grossProfitMargin,
                                 '> 20%',
                                 'Percentage of revenue after cost of goods sold',
                                 'profitability'
                             )}
                             {renderRatioCard(
                                 'Net Profit Margin',
-                                ratioData.ratios.netProfitMargin,
-                                ratioData.benchmarks.netProfitMargin.good,
+                                ratioData.ratios?.profitabilityRatios?.netProfitMargin,
+                                '> 10%',
                                 'Percentage of revenue remaining as profit',
                                 'profitability'
                             )}
                             {renderRatioCard(
                                 'Return on Assets',
-                                ratioData.ratios.returnOnAssets,
-                                ratioData.benchmarks.returnOnAssets.good,
+                                ratioData.ratios?.profitabilityRatios?.returnOnAssets,
+                                '> 5%',
                                 'How efficiently assets generate profit',
                                 'profitability'
                             )}
                             {renderRatioCard(
                                 'Return on Equity',
-                                ratioData.ratios.returnOnEquity,
-                                ratioData.benchmarks.returnOnEquity.good,
+                                'N/A',
+                                '> 15%',
                                 'Return generated on shareholders equity',
                                 'profitability'
                             )}
@@ -244,21 +258,21 @@ const RatioAnalysis = () => {
                         <div className="ratios-grid">
                             {renderRatioCard(
                                 'Asset Turnover',
-                                ratioData.ratios.assetTurnover,
+                                'N/A',
                                 '> 1.0',
                                 'How efficiently assets generate revenue',
                                 'efficiency'
                             )}
                             {renderRatioCard(
                                 'Inventory Turnover',
-                                ratioData.ratios.inventoryTurnover,
+                                'N/A',
                                 '> 6.0',
                                 'How quickly inventory is sold',
                                 'efficiency'
                             )}
                             {renderRatioCard(
                                 'Receivables Turnover',
-                                ratioData.ratios.receivablesTurnover,
+                                'N/A',
                                 '> 8.0',
                                 'How quickly receivables are collected',
                                 'efficiency'
@@ -271,21 +285,21 @@ const RatioAnalysis = () => {
                         <div className="ratios-grid">
                             {renderRatioCard(
                                 'Debt to Assets',
-                                ratioData.ratios.debtToAssets,
-                                ratioData.benchmarks.debtToAssets.good,
+                                ratioData.ratios?.leverageRatios?.debtToAssetRatio,
+                                '< 50%',
                                 'Percentage of assets financed by debt',
                                 'leverage'
                             )}
                             {renderRatioCard(
                                 'Debt to Equity',
-                                ratioData.ratios.debtToEquity,
-                                '< 1.0',
+                                ratioData.ratios?.leverageRatios?.debtToEquityRatio,
+                                '< 100%',
                                 'Amount of debt relative to equity',
                                 'leverage'
                             )}
                             {renderRatioCard(
                                 'Equity Ratio',
-                                ratioData.ratios.equityRatio,
+                                'N/A',
                                 '> 50%',
                                 'Percentage of assets financed by equity',
                                 'leverage'
@@ -301,7 +315,7 @@ const RatioAnalysis = () => {
                                     <h4>Working Capital</h4>
                                 </div>
                                 <div className="ratio-value">
-                                    <span className="value">{formatCurrency(ratioData.ratios.workingCapital)}</span>
+                                    <span className="value">{formatCurrency((ratioData.summary?.currentAssets || 0) - (ratioData.summary?.currentLiabilities || 0))}</span>
                                 </div>
                                 <div className="ratio-interpretation">
                                     <p>Available short-term liquidity</p>
@@ -312,7 +326,7 @@ const RatioAnalysis = () => {
                                     <h4>Days in Inventory</h4>
                                 </div>
                                 <div className="ratio-value">
-                                    <span className="value">{ratioData.ratios.daysInInventory}</span>
+                                    <span className="value">N/A</span>
                                 </div>
                                 <div className="ratio-interpretation">
                                     <p>Average days to sell inventory</p>
@@ -323,7 +337,7 @@ const RatioAnalysis = () => {
                                     <h4>Days in Receivables</h4>
                                 </div>
                                 <div className="ratio-value">
-                                    <span className="value">{ratioData.ratios.daysInReceivables}</span>
+                                    <span className="value">N/A</span>
                                 </div>
                                 <div className="ratio-interpretation">
                                     <p>Average days to collect receivables</p>

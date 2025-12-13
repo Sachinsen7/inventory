@@ -68,16 +68,41 @@ function VoucherManagement() {
     const fetchVouchers = async () => {
         try {
             setLoading(true);
+            setMessage('');
             const params = new URLSearchParams();
             Object.keys(filters).forEach(key => {
                 if (filters[key]) params.append(key, filters[key]);
             });
 
+            console.log('Fetching vouchers from:', `${backendUrl}/api/vouchers?${params}`);
             const response = await axios.get(`${backendUrl}/api/vouchers?${params}`);
-            setVouchers(response.data.vouchers || []);
+
+            console.log('API Response:', response.data);
+
+            // Handle both response formats
+            let vouchersData = [];
+            if (response.data.vouchers) {
+                // Standard format: { vouchers: [...] }
+                vouchersData = response.data.vouchers;
+            } else if (Array.isArray(response.data)) {
+                // Direct array format: [...]
+                vouchersData = response.data;
+            } else {
+                console.error('Unexpected response format:', response.data);
+                setMessage('❌ Unexpected response format from server');
+                return;
+            }
+
+            console.log('Setting vouchers:', vouchersData.length, 'items');
+            setVouchers(vouchersData);
+
+            if (vouchersData.length === 0) {
+                setMessage('ℹ️ No vouchers found. Try adjusting your filters.');
+            }
         } catch (error) {
             console.error('Error fetching vouchers:', error);
-            setMessage('❌ Error loading vouchers');
+            setMessage('❌ Error loading vouchers: ' + (error.response?.data?.message || error.message));
+            setVouchers([]);
         } finally {
             setLoading(false);
         }
